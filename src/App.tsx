@@ -11,6 +11,7 @@ import Profile from './pages/Profile'
 import Chat from './pages/Chat'
 import Search from './pages/Search'
 import Voice from './pages/Voice'
+import DirectMessages from './pages/DirectMessages'
 
 export default function App() {
   return (
@@ -29,6 +30,8 @@ export default function App() {
           <Route path="search" element={<Search />} />
           <Route path="voice" element={<Voice />} />
           <Route path="voice/:roomId" element={<Voice />} />
+          <Route path="dm" element={<DirectMessages />} />
+          <Route path="dm/:recipientId" element={<DirectMessages />} />
         </Route>
       </Routes>
     </AuthProvider>
