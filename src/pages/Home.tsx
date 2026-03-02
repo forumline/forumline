@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase, isConfigured } from '../lib/supabase'
+import Avatar from '../components/Avatar'
 import type { ThreadWithAuthor } from '../types'
 
 // Demo threads for when Supabase is not configured
@@ -131,10 +132,8 @@ export default function Home() {
                 to={`/t/${thread.id}`}
                 className="flex items-start gap-3 px-3 py-3 transition-colors hover:bg-slate-700/30 sm:gap-4 sm:px-4 sm:py-4"
               >
-                {/* Author Avatar */}
-                <div className="h-9 w-9 shrink-0 rounded-full bg-indigo-500 flex items-center justify-center text-sm font-medium text-white sm:h-10 sm:w-10">
-                  {thread.author.display_name?.[0] || thread.author.username[0]}
-                </div>
+                {/* Thread Avatar */}
+                <Avatar seed={thread.id} type="thread" size={40} className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
@@ -152,7 +151,10 @@ export default function Home() {
                     {thread.title}
                   </h3>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-400 sm:gap-3 sm:text-sm">
-                    <span>{thread.author.display_name || thread.author.username}</span>
+                    <span className="flex items-center gap-1">
+                      <Avatar seed={thread.author_id} type="user" size={16} />
+                      {thread.author.display_name || thread.author.username}
+                    </span>
                     <span className="hidden sm:inline">·</span>
                     <span>{formatTimeAgo(thread.created_at)}</span>
                     <span>·</span>

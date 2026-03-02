@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase, isConfigured } from '../lib/supabase'
+import Avatar from '../components/Avatar'
 import type { Profile } from '../types'
 
 interface Conversation {
@@ -436,9 +437,7 @@ export default function DirectMessages() {
                   }`}
                 >
                   <div className="relative">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-sm font-medium text-white">
-                      {conversation.recipientAvatar}
-                    </div>
+                    <Avatar seed={conversation.recipientId} type="user" size={40} />
                     {conversation.unreadCount > 0 && (
                       <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-xs font-medium text-white">
                         {conversation.unreadCount}
@@ -478,9 +477,7 @@ export default function DirectMessages() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </Link>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-sm font-medium text-white">
-                  {activeConversation.recipientAvatar}
-                </div>
+                <Avatar seed={activeConversation.recipientId} type="user" size={32} />
                 <div>
                   <h3 className="font-medium text-white">{activeConversation.recipientName}</h3>
                 </div>
@@ -613,9 +610,7 @@ export default function DirectMessages() {
                   onClick={() => handleSelectUser(profile)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-700/50"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-sm font-medium text-white">
-                    {(profile.display_name?.[0] || profile.username[0]).toUpperCase()}
-                  </div>
+                  <Avatar seed={profile.id} type="user" size={40} className="shrink-0" />
                   <div className="min-w-0">
                     <div className="font-medium text-white">
                       {profile.display_name || profile.username}

@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase, isConfigured } from '../lib/supabase'
+import Avatar from '../components/Avatar'
 import type { Profile, ThreadWithAuthor, PostWithAuthor } from '../types'
 
 // Demo profiles
@@ -321,9 +322,7 @@ export default function ProfilePage() {
       <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 sm:p-6">
         <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left sm:gap-6">
           {/* Avatar */}
-          <div className="h-20 w-20 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white sm:h-24 sm:w-24 sm:text-4xl">
-            {(profile.display_name?.[0] || profile.username[0]).toUpperCase()}
-          </div>
+          <Avatar seed={profile.id} type="user" size={96} className="h-20 w-20 shrink-0 sm:h-24 sm:w-24" />
 
           {/* Info */}
           <div className="mt-4 flex-1 sm:mt-0">

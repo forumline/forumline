@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase, isConfigured } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useVoice } from '../lib/voice'
+import Avatar from '../components/Avatar'
 import type { VoiceRoom } from '../types'
 import type { VoiceParticipant } from '../lib/voice'
 
@@ -171,12 +172,12 @@ export default function Voice() {
                       {roomParticipants.slice(0, 5).map((p) => (
                         <div
                           key={p.id}
-                          className={`h-8 w-8 rounded-full border-2 border-slate-800 flex items-center justify-center text-xs font-medium text-white ${
-                            p.isSpeaking ? 'bg-green-500 ring-2 ring-green-400' : 'bg-indigo-500'
+                          className={`h-8 w-8 rounded-full border-2 border-slate-800 ${
+                            p.isSpeaking ? 'ring-2 ring-green-400' : ''
                           }`}
                           title={p.name}
                         >
-                          {p.avatar}
+                          <Avatar seed={p.id} type="user" size={32} />
                         </div>
                       ))}
                     </div>
@@ -249,12 +250,12 @@ export default function Voice() {
         </h2>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {isConnectedToThisRoom && (
+          {isConnectedToThisRoom && user && (
             <div className="flex flex-col items-center gap-2 rounded-lg bg-slate-700/50 p-4">
-              <div className={`relative h-16 w-16 rounded-full flex items-center justify-center text-2xl font-bold text-white ${
-                voice.isSpeaking ? 'bg-green-500 ring-2 ring-green-400 animate-pulse' : voice.isMuted ? 'bg-indigo-500' : 'bg-green-500'
+              <div className={`relative h-16 w-16 rounded-full ${
+                voice.isSpeaking ? 'ring-2 ring-green-400 animate-pulse' : ''
               }`}>
-                Y
+                <Avatar seed={user.id} type="user" size={64} />
                 {voice.isMuted && (
                   <div className="absolute -bottom-1 -right-1 rounded-full bg-red-500 p-1">
                     <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -275,10 +276,10 @@ export default function Voice() {
 
           {displayParticipants.map((participant) => (
             <div key={participant.id} className="flex flex-col items-center gap-2 rounded-lg bg-slate-700/50 p-4">
-              <div className={`relative h-16 w-16 rounded-full flex items-center justify-center text-2xl font-bold text-white ${
-                participant.isSpeaking ? 'bg-green-500 ring-2 ring-green-400' : 'bg-indigo-500'
+              <div className={`relative h-16 w-16 rounded-full ${
+                participant.isSpeaking ? 'ring-2 ring-green-400' : ''
               }`}>
-                {participant.avatar}
+                <Avatar seed={participant.id} type="user" size={64} />
                 {participant.isMuted && (
                   <div className="absolute -bottom-1 -right-1 rounded-full bg-red-500 p-1">
                     <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

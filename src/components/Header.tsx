@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../lib/auth'
+import Avatar from '../components/Avatar'
 import { supabase, isConfigured } from '../lib/supabase'
 import type { Notification as DBNotification } from '../types'
 
@@ -367,9 +368,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 to={`/u/${user.user_metadata?.username || 'me'}`}
                 className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-700 sm:px-3"
               >
-                <div className="h-6 w-6 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-medium text-white">
-                  {user.email?.[0].toUpperCase()}
-                </div>
+                <Avatar seed={user.id} type="user" size={24} />
                 <span className="hidden sm:inline">{user.user_metadata?.username || user.email}</span>
               </Link>
               <button

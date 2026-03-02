@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase, isConfigured } from '../lib/supabase'
+import Avatar from '../components/Avatar'
 import type { Profile } from '../types'
 
 type Tab = 'overview' | 'users' | 'content' | 'reports'
@@ -253,9 +254,7 @@ export default function Admin() {
                       <tr key={u.id} className="hover:bg-slate-700/30">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-sm font-medium text-white">
-                              {(u.display_name?.[0] || u.username[0]).toUpperCase()}
-                            </div>
+                            <Avatar seed={u.id} type="user" size={32} />
                             <div>
                               <span className="font-medium text-white">{u.display_name || u.username}</span>
                               <p className="text-xs text-slate-400">@{u.username}</p>

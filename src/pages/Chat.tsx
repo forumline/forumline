@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase, isConfigured } from '../lib/supabase'
+import Avatar from '../components/Avatar'
 import type { ChatChannel, Profile } from '../types'
 
 interface ChatMsg {
@@ -242,9 +243,7 @@ export default function Chat() {
                       <span className="text-[10px] text-slate-500">{formatTime(message.createdAt)}</span>
                     </div>
                   ) : (
-                    <div className="h-10 w-10 shrink-0 rounded-full bg-indigo-500 flex items-center justify-center text-sm font-medium text-white">
-                      {message.authorAvatar}
-                    </div>
+                    <Avatar seed={message.authorId} type="user" size={40} className="h-10 w-10 shrink-0" />
                   )}
 
                   {/* Content */}

@@ -19,6 +19,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@dicebear/collection": "^9.3.2",
+    "@dicebear/core": "^9.3.2",
     "@supabase/supabase-js": "^2.98.0",
     "livekit-client": "^2.17.2",
     "livekit-server-sdk": "^2.15.0",
