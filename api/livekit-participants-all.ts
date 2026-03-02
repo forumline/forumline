@@ -18,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const activeRooms = await roomService.listRooms()
-    const result: Record<string, { count: number; names: string[] }> = {}
+    const result: Record<string, { count: number; names: string[]; identities: string[] }> = {}
 
     await Promise.all(activeRooms.map(async (room) => {
       try {
@@ -27,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           result[room.name] = {
             count: participants.length,
             names: participants.map(p => p.name || p.identity),
+            identities: participants.map(p => p.identity),
           }
         }
       } catch {

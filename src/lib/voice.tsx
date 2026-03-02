@@ -15,6 +15,7 @@ export interface VoiceParticipant {
 interface RoomParticipantInfo {
   count: number
   names: string[]
+  identities: string[]
 }
 
 interface VoiceContextType {
@@ -31,6 +32,9 @@ interface VoiceContextType {
 
   // Sidebar data — participant counts for all rooms
   roomParticipantCounts: Record<string, RoomParticipantInfo>
+
+  // Avatar lookup for polled participants
+  getAvatarUrl: (identity: string) => string | null | undefined
 
   // Actions
   joinRoom: (slug: string, name: string) => Promise<void>
@@ -68,6 +72,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const [connectError, setConnectError] = useState<string | null>(null)
   const [participants, setParticipants] = useState<VoiceParticipant[]>([])
   const [roomParticipantCounts, setRoomParticipantCounts] = useState<Record<string, RoomParticipantInfo>>({})
+  const [avatarCache, setAvatarCache] = useState<Record<string, string | null>>({})
 
   // Ref to track connected room slug for use in polling without triggering re-renders
   const connectedRoomSlugRef = useRef<string | null>(null)
@@ -146,6 +151,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setConnectError(null)
     connectedRoomSlugRef.current = null
     avatarCacheRef.current = {}
+    setAvatarCache({})
   }, [])
 
   const joinRoom = useCallback(async (slug: string, name: string) => {
@@ -297,15 +303,42 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
         const resp = await fetch('/api/livekit-participants-all')
         if (!resp.ok || cancelled) return
         const data = await resp.json()
-        const rooms: Record<string, { count: number; names: string[] }> = data.rooms || {}
+        const rooms: Record<string, { count: number; names: string[]; identities?: string[] }> = data.rooms || {}
 
         if (cancelled) return
 
         const counts: Record<string, RoomParticipantInfo> = {}
+        const allIdentities: string[] = []
         for (const [slug, info] of Object.entries(rooms)) {
-          counts[slug] = { count: info.count, names: info.names }
+          const identities = info.identities || []
+          counts[slug] = { count: info.count, names: info.names, identities }
+          allIdentities.push(...identities)
         }
         setRoomParticipantCounts(counts)
+
+        // Fetch avatar URLs for any identities not in cache
+        const uncached = allIdentities.filter(id => avatarCacheRef.current[id] === undefined)
+        if (uncached.length > 0) {
+          supabase
+            .from('profiles')
+            .select('id, avatar_url')
+            .in('id', uncached)
+            .then(({ data: profiles }) => {
+              if (!profiles || cancelled) return
+              const updates: Record<string, string | null> = {}
+              for (const p of profiles) {
+                avatarCacheRef.current[p.id] = p.avatar_url
+                updates[p.id] = p.avatar_url
+              }
+              for (const id of uncached) {
+                if (avatarCacheRef.current[id] === undefined) {
+                  avatarCacheRef.current[id] = null
+                  updates[id] = null
+                }
+              }
+              setAvatarCache(prev => ({ ...prev, ...updates }))
+            })
+        }
       } catch {
         // ignore
       }
@@ -340,6 +373,10 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const getAvatarUrl = useCallback((identity: string) => {
+    return avatarCache[identity] ?? undefined
+  }, [avatarCache])
+
   return (
     <VoiceContext.Provider value={{
       isConnected,
@@ -352,6 +389,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       connectError,
       participants,
       roomParticipantCounts,
+      getAvatarUrl,
       joinRoom,
       leaveRoom,
       toggleMute,

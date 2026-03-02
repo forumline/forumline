@@ -96,9 +96,10 @@ export default function Voice() {
     const info = voice.roomParticipantCounts[slug]
     if (!info || info.count === 0) return []
     return info.names.map((name, i) => ({
-      id: `${slug}-${i}`,
+      id: info.identities[i] || `${slug}-${i}`,
       name,
       avatar: name.charAt(0).toUpperCase(),
+      avatarUrl: info.identities[i] ? voice.getAvatarUrl(info.identities[i]) : undefined,
       isSpeaking: false,
       isMuted: false,
     }))
