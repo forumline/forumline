@@ -35,24 +35,17 @@ export default function Sidebar() {
   const [unreadDmCount, setUnreadDmCount] = useState(isConfigured ? 0 : 2)
 
   useEffect(() => {
-    console.log('[Sidebar] useEffect running, isConfigured:', isConfigured)
     if (!isConfigured) return
 
     const fetchData = async () => {
-      console.log('[Sidebar] fetching data...')
-      try {
-        const [catRes, chanRes, roomRes] = await Promise.all([
-          supabase.from('categories').select('*').order('sort_order'),
-          supabase.from('chat_channels').select('*').order('name'),
-          supabase.from('voice_rooms').select('*').order('name'),
-        ])
-        console.log('[Sidebar] fetch results:', { cats: catRes.data?.length, chans: chanRes.data?.length, rooms: roomRes.data?.length, catErr: catRes.error?.message })
-        if (catRes.data) setCategories(catRes.data)
-        if (chanRes.data) setChannels(chanRes.data)
-        if (roomRes.data) setRooms(roomRes.data)
-      } catch (err) {
-        console.error('[Sidebar] fetch error:', err)
-      }
+      const [catRes, chanRes, roomRes] = await Promise.all([
+        supabase.from('categories').select('*').order('sort_order'),
+        supabase.from('chat_channels').select('*').order('name'),
+        supabase.from('voice_rooms').select('*').order('name'),
+      ])
+      if (catRes.data) setCategories(catRes.data)
+      if (chanRes.data) setChannels(chanRes.data)
+      if (roomRes.data) setRooms(roomRes.data)
     }
 
     fetchData()

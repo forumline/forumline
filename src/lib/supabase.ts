@@ -6,16 +6,18 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 export const isConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
-// Debug: log config status at startup
-console.log('[supabase] url:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'MISSING')
-console.log('[supabase] key:', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : 'MISSING')
-console.log('[supabase] isConfigured:', isConfigured)
-
 let supabase: SupabaseClient<Database>
 
 if (isConfigured) {
-  supabase = createClient<Database>(supabaseUrl!, supabaseAnonKey!)
-  console.log('[supabase] Client created successfully')
+  supabase = createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      // Bypass navigator.locks which can deadlock in production bundles.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      lock: (async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+        return fn()
+      }) as any,
+    },
+  } as any)
 } else {
   console.warn(
     'Supabase credentials not found. Running in demo mode.\n' +
