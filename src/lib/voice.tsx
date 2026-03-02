@@ -150,8 +150,6 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setIsSpeaking(false)
     setConnectError(null)
     connectedRoomSlugRef.current = null
-    avatarCacheRef.current = {}
-    setAvatarCache({})
   }, [])
 
   const joinRoom = useCallback(async (slug: string, name: string) => {
