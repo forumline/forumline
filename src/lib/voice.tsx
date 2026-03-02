@@ -76,6 +76,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
   // Ref to track connected room slug for use in polling without triggering re-renders
   const connectedRoomSlugRef = useRef<string | null>(null)
+  // Ref to allow leaveRoom/joinRoom to trigger a re-poll without declaration-order issues
+  const fetchParticipantCountsRef = useRef<() => void>(() => {})
 
   // Cache of participant avatar URLs so we don't re-fetch every update
   const avatarCacheRef = useRef<Record<string, string | null>>({})
@@ -150,6 +152,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setIsSpeaking(false)
     setConnectError(null)
     connectedRoomSlugRef.current = null
+    // Re-poll immediately so the lobby reflects the change
+    setTimeout(() => fetchParticipantCountsRef.current(), 500)
   }, [])
 
   const joinRoom = useCallback(async (slug: string, name: string) => {
@@ -248,6 +252,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       setConnectedRoomName(name)
       connectedRoomSlugRef.current = slug
       updateParticipants()
+      // Re-poll so sidebar count updates immediately
+      setTimeout(() => fetchParticipantCountsRef.current(), 500)
     } catch (err) {
       setConnectError(err instanceof Error ? err.message : 'Failed to connect')
       livekitRoomRef.current = null
@@ -290,65 +296,62 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     }
   }, [isDeafened, isMuted])
 
-  // Poll participant counts for all rooms (single batch request for sidebar)
-  useEffect(() => {
+  // Fetch participant counts for all rooms
+  const fetchParticipantCounts = useCallback(async () => {
     if (!isConfigured) return
+    try {
+      const resp = await fetch('/api/livekit-participants-all')
+      if (!resp.ok) return
+      const data = await resp.json()
+      const rooms: Record<string, { count: number; names: string[]; identities?: string[] }> = data.rooms || {}
 
-    let cancelled = false
-
-    const fetchCounts = async () => {
-      try {
-        const resp = await fetch('/api/livekit-participants-all')
-        if (!resp.ok || cancelled) return
-        const data = await resp.json()
-        const rooms: Record<string, { count: number; names: string[]; identities?: string[] }> = data.rooms || {}
-
-        if (cancelled) return
-
-        const counts: Record<string, RoomParticipantInfo> = {}
-        const allIdentities: string[] = []
-        for (const [slug, info] of Object.entries(rooms)) {
-          const identities = info.identities || []
-          counts[slug] = { count: info.count, names: info.names, identities }
-          allIdentities.push(...identities)
-        }
-        setRoomParticipantCounts(counts)
-
-        // Fetch avatar URLs for any identities not in cache
-        const uncached = allIdentities.filter(id => avatarCacheRef.current[id] === undefined)
-        if (uncached.length > 0) {
-          supabase
-            .from('profiles')
-            .select('id, avatar_url')
-            .in('id', uncached)
-            .then(({ data: profiles }) => {
-              if (!profiles || cancelled) return
-              const updates: Record<string, string | null> = {}
-              for (const p of profiles) {
-                avatarCacheRef.current[p.id] = p.avatar_url
-                updates[p.id] = p.avatar_url
-              }
-              for (const id of uncached) {
-                if (avatarCacheRef.current[id] === undefined) {
-                  avatarCacheRef.current[id] = null
-                  updates[id] = null
-                }
-              }
-              setAvatarCache(prev => ({ ...prev, ...updates }))
-            })
-        }
-      } catch {
-        // ignore
+      const counts: Record<string, RoomParticipantInfo> = {}
+      const allIdentities: string[] = []
+      for (const [slug, info] of Object.entries(rooms)) {
+        const identities = info.identities || []
+        counts[slug] = { count: info.count, names: info.names, identities }
+        allIdentities.push(...identities)
       }
-    }
+      setRoomParticipantCounts(counts)
 
-    fetchCounts()
-    const interval = setInterval(fetchCounts, 30000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
+      // Fetch avatar URLs for any identities not in cache
+      const uncached = allIdentities.filter(id => avatarCacheRef.current[id] === undefined)
+      if (uncached.length > 0) {
+        supabase
+          .from('profiles')
+          .select('id, avatar_url')
+          .in('id', uncached)
+          .then(({ data: profiles }) => {
+            if (!profiles) return
+            const updates: Record<string, string | null> = {}
+            for (const p of profiles) {
+              avatarCacheRef.current[p.id] = p.avatar_url
+              updates[p.id] = p.avatar_url
+            }
+            for (const id of uncached) {
+              if (avatarCacheRef.current[id] === undefined) {
+                avatarCacheRef.current[id] = null
+                updates[id] = null
+              }
+            }
+            setAvatarCache(prev => ({ ...prev, ...updates }))
+          })
+      }
+    } catch {
+      // ignore
     }
   }, [])
+
+  // Keep ref in sync so leaveRoom/joinRoom can trigger a re-poll
+  fetchParticipantCountsRef.current = fetchParticipantCounts
+
+  // Poll participant counts every 5 seconds
+  useEffect(() => {
+    if (!isConfigured) return
+    fetchParticipantCounts()
+    const interval = setInterval(fetchParticipantCounts, 5000)
+    return () => clearInterval(interval)
+  }, [fetchParticipantCounts])
 
   // Graceful disconnect on page unload
   useEffect(() => {
