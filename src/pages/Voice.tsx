@@ -264,15 +264,10 @@ export default function Voice() {
                 )}
               </div>
               <span className="text-sm font-medium text-white">You</span>
-              {voice.isSpeaking ? (
+              {voice.isSpeaking && (
                 <div className="flex items-center gap-1 text-xs text-green-400">
                   <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                   Speaking
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 text-xs text-green-400">
-                  <span className="h-2 w-2 rounded-full bg-green-400" />
-                  Connected
                 </div>
               )}
             </div>
