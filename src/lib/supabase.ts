@@ -10,10 +10,20 @@ export const isConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 // production bundles) while still serializing token refresh operations.
 const locks = new Map<string, Promise<unknown>>()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function inMemoryLock(_name: string, _acquireTimeout: number, fn: () => Promise<any>) {
+async function inMemoryLock(_name: string, acquireTimeout: number, fn: () => Promise<any>) {
   const name = _name
+  const timeout = acquireTimeout > 0 ? acquireTimeout : 5000
+
   while (locks.has(name)) {
-    await locks.get(name)
+    const existing = locks.get(name)!
+    const result = await Promise.race([
+      existing.then(() => 'resolved' as const, () => 'resolved' as const),
+      new Promise<'timeout'>(r => setTimeout(() => r('timeout'), timeout)),
+    ])
+    if (result === 'timeout') {
+      // Previous lock holder hung — force-release so we can proceed
+      locks.delete(name)
+    }
   }
   const promise = fn()
   locks.set(name, promise)

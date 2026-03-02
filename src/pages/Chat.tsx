@@ -62,8 +62,9 @@ function toMsg(row: { id: string; channel_id: string; author_id: string; content
 export default function Chat() {
   const { channelId: channelSlug = 'general' } = useParams()
   const { user } = useAuth()
-  const [channels, setChannels] = useState<ChatChannel[]>(demoChannels)
+  const [channels, setChannels] = useState<ChatChannel[]>(!isConfigured ? demoChannels : [])
   const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [loading, setLoading] = useState(isConfigured)
   const [inputValue, setInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -82,13 +83,17 @@ export default function Chat() {
   useEffect(() => {
     if (!isConfigured) {
       setMessages(demoMessages[channelSlug] || [])
+      setLoading(false)
       return
     }
 
     if (!channel) {
-      setMessages([])
+      // Channels haven't loaded yet — stay in loading state
       return
     }
+
+    let cancelled = false
+    setLoading(true)
 
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -97,7 +102,10 @@ export default function Chat() {
         .eq('channel_id', channel.id)
         .order('created_at')
         .limit(100)
-      if (data) setMessages(data.map(toMsg))
+      if (!cancelled) {
+        setMessages(data ? data.map(toMsg) : [])
+        setLoading(false)
+      }
     }
 
     fetchMessages()
@@ -113,14 +121,17 @@ export default function Chat() {
             .select('*, author:profiles(*)')
             .eq('id', payload.new.id)
             .single()
-          if (data) {
+          if (data && !cancelled) {
             setMessages(prev => [...prev, toMsg(data)])
           }
         }
       )
       .subscribe()
 
-    return () => { sub.unsubscribe() }
+    return () => {
+      cancelled = true
+      sub.unsubscribe()
+    }
   }, [channelSlug, channel?.id])
 
   // Scroll to bottom on new messages
@@ -214,6 +225,11 @@ export default function Chat() {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
+        {loading && (
+          <div className="flex h-full items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-indigo-500" />
+          </div>
+        )}
         {groupedMessages.map((group) => (
           <div key={group.date}>
             {/* Date Divider */}
