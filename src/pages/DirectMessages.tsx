@@ -141,7 +141,7 @@ export default function DirectMessages() {
         .from('profiles')
         .select('*')
         .neq('id', user?.id ?? '')
-        .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
+        .or(`username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*`)
         .limit(10)
 
       setSearchResults(data ?? [])
