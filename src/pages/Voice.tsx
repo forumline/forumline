@@ -177,7 +177,7 @@ export default function Voice() {
                           }`}
                           title={p.name}
                         >
-                          <Avatar seed={p.id} type="user" size={32} />
+                          <Avatar seed={p.id} type="user" avatarUrl={p.avatarUrl} size={32} />
                         </div>
                       ))}
                     </div>
@@ -279,7 +279,7 @@ export default function Voice() {
               <div className={`relative h-16 w-16 rounded-full ${
                 participant.isSpeaking ? 'ring-2 ring-green-400' : ''
               }`}>
-                <Avatar seed={participant.id} type="user" size={64} />
+                <Avatar seed={participant.id} type="user" avatarUrl={participant.avatarUrl} size={64} />
                 {participant.isMuted && (
                   <div className="absolute -bottom-1 -right-1 rounded-full bg-red-500 p-1">
                     <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

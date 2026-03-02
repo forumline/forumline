@@ -7,6 +7,7 @@ export interface VoiceParticipant {
   id: string
   name: string
   avatar: string
+  avatarUrl?: string | null
   isSpeaking: boolean
   isMuted: boolean
 }
@@ -71,12 +72,55 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   // Ref to track connected room slug for use in polling without triggering re-renders
   const connectedRoomSlugRef = useRef<string | null>(null)
 
+  // Cache of participant avatar URLs so we don't re-fetch every update
+  const avatarCacheRef = useRef<Record<string, string | null>>({})
+
   const updateParticipants = useCallback(() => {
     const room = livekitRoomRef.current
     if (!room) return
-    const remotes = Array.from(room.remoteParticipants.values()).map(participantToVoice)
+    const remotes = Array.from(room.remoteParticipants.values()).map(p => {
+      const vp = participantToVoice(p)
+      // Apply cached avatar URL if available
+      if (avatarCacheRef.current[vp.id] !== undefined) {
+        vp.avatarUrl = avatarCacheRef.current[vp.id]
+      }
+      return vp
+    })
     setParticipants(remotes)
     setIsSpeaking(room.localParticipant.isSpeaking)
+
+    // Fetch avatar URLs for any participants not yet in cache
+    const uncached = remotes.filter(p => avatarCacheRef.current[p.id] === undefined)
+    if (uncached.length > 0) {
+      supabase
+        .from('profiles')
+        .select('id, avatar_url')
+        .in('id', uncached.map(p => p.id))
+        .then(({ data }) => {
+          if (!data) return
+          let changed = false
+          for (const profile of data) {
+            if (avatarCacheRef.current[profile.id] === undefined) {
+              avatarCacheRef.current[profile.id] = profile.avatar_url
+              changed = true
+            }
+          }
+          // Also mark participants with no profile as null so we don't re-fetch
+          for (const p of uncached) {
+            if (avatarCacheRef.current[p.id] === undefined) {
+              avatarCacheRef.current[p.id] = null
+              changed = true
+            }
+          }
+          if (changed) {
+            // Re-apply cached URLs
+            setParticipants(prev => prev.map(p => ({
+              ...p,
+              avatarUrl: avatarCacheRef.current[p.id] ?? p.avatarUrl,
+            })))
+          }
+        })
+    }
   }, [])
 
   const leaveRoom = useCallback(() => {
@@ -101,6 +145,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setIsSpeaking(false)
     setConnectError(null)
     connectedRoomSlugRef.current = null
+    avatarCacheRef.current = {}
   }, [])
 
   const joinRoom = useCallback(async (slug: string, name: string) => {
