@@ -711,46 +711,40 @@ export default function Thread() {
         </div>
       )}
 
-      {/* New replies banner */}
-      {pendingPosts.length > 0 && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
+      {/* Live updates bar */}
+      {isConfigured && (
+        <div className={`mt-4 flex items-center justify-between rounded-lg border px-4 py-2.5 ${
+          pendingPosts.length > 0
+            ? 'border-indigo-500/30 bg-indigo-500/10'
+            : 'border-slate-700 bg-slate-800/50'
+        }`}>
           <div className="flex items-center gap-2">
-            <svg className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            <span className="text-sm text-indigo-300">
-              {pendingPosts.length} new {pendingPosts.length === 1 ? 'reply' : 'replies'} available
-            </span>
+            {pendingPosts.length > 0 ? (
+              <>
+                <svg className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span className="text-sm text-indigo-300">
+                  {pendingPosts.length} new {pendingPosts.length === 1 ? 'reply' : 'replies'} available
+                </span>
+                <button
+                  onClick={loadPendingPosts}
+                  className="ml-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
+                >
+                  Load
+                </button>
+              </>
+            ) : (
+              <span className="text-xs text-slate-500">
+                {autoUpdate ? 'Auto-updating replies' : 'Checking for new replies'}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoUpdate}
-                onChange={(e) => handleAutoUpdateToggle(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
-              />
-              Auto-update
-            </label>
-            <button
-              onClick={loadPendingPosts}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
-            >
-              Load
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-update indicator (when enabled but no pending posts) */}
-      {autoUpdate && pendingPosts.length === 0 && isConfigured && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2">
-          <span className="text-xs text-slate-500">Auto-updating replies</span>
           <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
             <input
               type="checkbox"
               checked={autoUpdate}
-              onChange={(e) => setAutoUpdate(e.target.checked)}
+              onChange={(e) => handleAutoUpdateToggle(e.target.checked)}
               className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
             />
             Auto-update
