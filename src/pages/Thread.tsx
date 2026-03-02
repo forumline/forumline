@@ -235,7 +235,10 @@ export default function Thread() {
               .eq('id', payload.new.id)
               .single()
             if (data) {
-              setAllPosts((prev) => [...prev, data as PostWithAuthor])
+              setAllPosts((prev) => {
+                if (prev.some(p => p.id === data.id)) return prev
+                return [...prev, data as PostWithAuthor]
+              })
             }
           }
         )
@@ -350,6 +353,29 @@ export default function Thread() {
     })
 
     if (!error) {
+      // Fetch the newly created post with author data and add to local state
+      const { data: newPostData } = await supabase
+        .from('posts')
+        .select('*, author:profiles(*)')
+        .eq('thread_id', thread.id)
+        .eq('author_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (newPostData) {
+        setAllPosts(prev => {
+          if (prev.some(p => p.id === newPostData.id)) return prev
+          const updated = [...prev, newPostData as PostWithAuthor]
+          // Navigate to last page to see the new post
+          const newTotalPages = Math.ceil(updated.length / POSTS_PER_PAGE)
+          if (newTotalPages > currentPage) {
+            goToPage(newTotalPages)
+          }
+          return updated
+        })
+      }
+
       setReplyContent('')
       setReplyingTo(null)
       // Update thread's last_post_at
