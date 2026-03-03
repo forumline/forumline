@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { useVoice } from '../lib/voice'
 import Avatar from '../components/Avatar'
+import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 import type { VoiceRoom } from '../types'
 import type { VoiceParticipant } from '../lib/voice'
 
@@ -17,28 +17,21 @@ export default function Voice() {
   const { roomId } = useParams()
   const { user } = useAuth()
   const voice = useVoice()
-  const [rooms, setRooms] = useState<RoomWithParticipants[]>([])
 
-  // Fetch rooms from Supabase
-  useEffect(() => {
-    const fetchRooms = async () => {
-      const { data } = await supabase
-        .from('voice_rooms')
-        .select('*')
-        .order('name')
+  // Use React Query for rooms - cached globally, instant navigation!
+  const { data: rawRooms = [] } = useQuery({
+    queryKey: queryKeys.voiceRooms,
+    queryFn: fetchers.voiceRooms,
+    ...queryOptions.static,
+  })
 
-      if (data) {
-        setRooms(data.map(r => ({
-          ...r,
-          description: '',
-          participants: [],
-          maxParticipants: 25,
-        })))
-      }
-    }
-
-    fetchRooms()
-  }, [])
+  // Transform rooms with participant info
+  const rooms: RoomWithParticipants[] = rawRooms.map(r => ({
+    ...r,
+    description: '',
+    participants: [],
+    maxParticipants: 25,
+  }))
 
   // Derive participant data for room list from voice context
   const getRoomParticipants = (slug: string): VoiceParticipant[] => {
