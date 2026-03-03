@@ -8,9 +8,12 @@ Do NOT use local dev server for testing. Use Playwright to interact with the pro
 
 ## Deployment
 
-**Forum app** (forum-chat-voice.vercel.app): Auto-deploys from GitHub on push to main. Do NOT deploy via Vercel CLI.
+Both projects deploy via GitHub Actions on push to main. Do NOT deploy via Vercel CLI or Vercel dashboard.
 
-**Forumline Hub** (forumline-hub.vercel.app): Auto-deploys via GitHub Action (`.github/workflows/deploy-hub.yml`) when files in `hub/` change on main. The action uses the `VERCEL_TOKEN` GitHub secret.
+- **Forum** (forum-chat-voice.vercel.app): `.github/workflows/deploy-forum.yml` — triggers on all changes except `hub/`
+- **Hub** (forumline-hub.vercel.app): `.github/workflows/deploy-hub.yml` — triggers only on `hub/` changes
+
+Both use the `VERCEL_TOKEN` GitHub secret.
 
 ## Vercel
 The Vercel CLI token is stored in macOS Keychain under `vercel-token`.
