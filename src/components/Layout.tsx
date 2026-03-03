@@ -50,6 +50,16 @@ export default function Layout() {
     })
   }, [queryClient])
 
+  // Prefetch bookmarks once user is known
+  useEffect(() => {
+    if (!user) return
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.bookmarks(user.id),
+      queryFn: () => fetchers.bookmarksWithMeta(user.id),
+      ...queryOptions.threads,
+    })
+  }, [user, queryClient])
+
   // Prefetch all category threads once categories are loaded
   useEffect(() => {
     if (categories.length === 0) return
