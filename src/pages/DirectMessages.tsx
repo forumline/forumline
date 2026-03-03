@@ -1,21 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
 import { formatShortTimeAgo, formatMessageTime } from '../lib/dateFormatters'
+import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 import type { Profile } from '../types'
-
-interface Conversation {
-  id: string
-  recipientId: string
-  recipientName: string
-  recipientAvatar: string
-  recipientAvatarUrl?: string | null
-  lastMessage: string
-  lastMessageTime: Date
-  unreadCount: number
-}
 
 interface DM {
   id: string
@@ -28,7 +19,7 @@ export default function DirectMessages() {
   const { recipientId } = useParams()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
-  const [conversations, setConversations] = useState<Conversation[]>([])
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<DM[]>([])
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -39,32 +30,25 @@ export default function DirectMessages() {
   const [searchResults, setSearchResults] = useState<Profile[]>([])
   const [searching, setSearching] = useState(false)
 
-  // Fallback profile for new conversations with no prior messages
-  const [recipientProfile, setRecipientProfile] = useState<Profile | null>(null)
+  // Use React Query for conversations list - cached globally!
+  const { data: conversations = [] } = useQuery({
+    queryKey: queryKeys.dmConversationsList(user?.id ?? ''),
+    queryFn: () => fetchers.dmConversations(user!.id),
+    enabled: !!user,
+    ...queryOptions.realtime,
+  })
 
   const currentConversation = recipientId
-    ? conversations.find(c => c.id === recipientId || c.recipientId === recipientId)
+    ? conversations.find(c => c.recipientId === recipientId)
     : null
 
-  // Fetch recipient profile when navigating to a new conversation
-  useEffect(() => {
-    if (!recipientId || !user || currentConversation) {
-      setRecipientProfile(null)
-      return
-    }
-
-    const fetchRecipient = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', recipientId)
-        .single()
-
-      if (data) setRecipientProfile(data)
-    }
-
-    fetchRecipient()
-  }, [recipientId, user, currentConversation])
+  // Use React Query for recipient profile (for new conversations)
+  const { data: recipientProfile } = useQuery({
+    queryKey: queryKeys.profile(recipientId ?? ''),
+    queryFn: () => fetchers.profile(recipientId!),
+    enabled: !!recipientId && !!user && !currentConversation,
+    ...queryOptions.profiles,
+  })
 
   // Debounced user search
   useEffect(() => {
@@ -89,69 +73,24 @@ export default function DirectMessages() {
     return () => clearTimeout(timer)
   }, [searchQuery, user])
 
-  // Fetch conversations
+  // Subscribe to new DMs for real-time updates to conversation list
   useEffect(() => {
     if (!user) return
 
-    const fetchConversations = async () => {
-      // Get all DMs involving this user, grouped by the other person
-      const { data } = await supabase
-        .from('direct_messages')
-        .select('*, sender:profiles!direct_messages_sender_id_fkey(*), recipient:profiles!direct_messages_recipient_id_fkey(*)')
-        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-        .order('created_at', { ascending: false })
-
-      if (!data) return
-
-      // Group by other user
-      const convMap = new Map<string, Conversation>()
-      for (const dm of data) {
-        const other: Profile = dm.sender_id === user.id ? dm.recipient : dm.sender
-        if (!convMap.has(other.id)) {
-          convMap.set(other.id, {
-            id: other.id,
-            recipientId: other.id,
-            recipientName: other.display_name || other.username,
-            recipientAvatar: (other.display_name?.[0] || other.username[0]).toUpperCase(),
-            recipientAvatarUrl: other.avatar_url,
-            lastMessage: dm.content,
-            lastMessageTime: new Date(dm.created_at),
-            unreadCount: 0,
-          })
-        }
-      }
-
-      // Count unreads
-      const { data: unreads } = await supabase
-        .from('direct_messages')
-        .select('sender_id')
-        .eq('recipient_id', user.id)
-        .eq('read', false)
-
-      if (unreads) {
-        for (const u of unreads) {
-          const conv = convMap.get(u.sender_id)
-          if (conv) conv.unreadCount++
-        }
-      }
-
-      setConversations(Array.from(convMap.values()))
-    }
-
-    fetchConversations()
-
-    // Subscribe to new DMs
     const sub = supabase
       .channel('dm-conversations')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'direct_messages' },
-        () => fetchConversations()
+        () => {
+          // Invalidate to refetch conversations
+          queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
+        }
       )
       .subscribe()
 
     return () => { sub.unsubscribe() }
-  }, [user])
+  }, [user, queryClient])
 
   // Fetch messages for selected conversation
   useEffect(() => {
@@ -188,10 +127,8 @@ export default function DirectMessages() {
         .eq('recipient_id', user.id)
         .eq('read', false)
 
-      // Update local unread count
-      setConversations(prev =>
-        prev.map(c => (c.id === recipientId || c.recipientId === otherId) ? { ...c, unreadCount: 0 } : c)
-      )
+      // Invalidate conversations to update unread count
+      queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
     }
 
     fetchMessages()
@@ -273,13 +210,11 @@ export default function DirectMessages() {
 
   // The active conversation: either an existing one or built from the fetched recipient profile
   const activeConversation = currentConversation || (recipientProfile ? {
-    id: recipientProfile.id,
     recipientId: recipientProfile.id,
     recipientName: recipientProfile.display_name || recipientProfile.username,
-    recipientAvatar: (recipientProfile.display_name?.[0] || recipientProfile.username[0]).toUpperCase(),
     recipientAvatarUrl: recipientProfile.avatar_url,
     lastMessage: '',
-    lastMessageTime: new Date(),
+    lastMessageTime: new Date().toISOString(),
     unreadCount: 0,
   } : null)
 
@@ -315,10 +250,10 @@ export default function DirectMessages() {
             ) : (
               conversations.map(conversation => (
                 <Link
-                  key={conversation.id}
+                  key={conversation.recipientId}
                   to={`/dm/${conversation.recipientId}`}
                   className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-700/50 ${
-                    recipientId === conversation.id || recipientId === conversation.recipientId ? 'bg-slate-700/50' : ''
+                    recipientId === conversation.recipientId ? 'bg-slate-700/50' : ''
                   }`}
                 >
                   <div className="relative">
@@ -335,7 +270,7 @@ export default function DirectMessages() {
                         {conversation.recipientName}
                       </span>
                       <span className="text-xs text-slate-500">
-                        {formatShortTimeAgo(conversation.lastMessageTime)}
+                        {formatShortTimeAgo(new Date(conversation.lastMessageTime))}
                       </span>
                     </div>
                     <p className={`truncate text-sm ${conversation.unreadCount > 0 ? 'font-medium text-slate-300' : 'text-slate-400'}`}>

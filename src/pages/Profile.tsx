@@ -1,68 +1,42 @@
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
-import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
 import { formatTimeAgo } from '../lib/dateFormatters'
-import type { Profile, ThreadWithAuthor, PostWithAuthor } from '../types'
+import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 
 type ActivityTab = 'threads' | 'posts'
 
 export default function ProfilePage() {
   const { username } = useParams()
   const { user } = useAuth()
-  const [profile, setProfile] = useState<(Profile & { threadCount?: number; postCount?: number }) | null>(null)
-  const [threads, setThreads] = useState<ThreadWithAuthor[]>([])
-  const [posts, setPosts] = useState<PostWithAuthor[]>([])
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<ActivityTab>('threads')
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true)
+  // Use React Query for profile - cached globally!
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: queryKeys.profileByUsername(username!),
+    queryFn: () => fetchers.profileByUsername(username!),
+    enabled: !!username,
+    ...queryOptions.profiles,
+  })
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('username', username!)
-        .single()
+  // Fetch threads and posts once we have the profile
+  const { data: threads = [] } = useQuery({
+    queryKey: queryKeys.userThreads(profile?.id ?? ''),
+    queryFn: () => fetchers.userThreads(profile!.id),
+    enabled: !!profile?.id,
+    ...queryOptions.threads,
+  })
 
-      if (profileData) {
-        setProfile(profileData)
+  const { data: posts = [] } = useQuery({
+    queryKey: queryKeys.userPosts(profile?.id ?? ''),
+    queryFn: () => fetchers.userPosts(profile!.id),
+    enabled: !!profile?.id,
+    ...queryOptions.threads,
+  })
 
-        // Fetch user's threads
-        const { data: threadsData } = await supabase
-          .from('threads')
-          .select(`
-            *,
-            author:profiles(*),
-            category:categories(*)
-          `)
-          .eq('author_id', profileData.id)
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        if (threadsData) setThreads(threadsData as ThreadWithAuthor[])
-
-        // Fetch user's posts
-        const { data: postsData } = await supabase
-          .from('posts')
-          .select(`
-            *,
-            author:profiles(*)
-          `)
-          .eq('author_id', profileData.id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-
-        if (postsData) setPosts(postsData as PostWithAuthor[])
-      }
-
-      setLoading(false)
-    }
-
-    fetchProfile()
-  }, [username])
+  const loading = profileLoading
 
   const formatJoinDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -130,11 +104,11 @@ export default function ProfilePage() {
             {/* Stats */}
             <div className="mt-4 flex flex-wrap justify-center gap-6 sm:justify-start">
               <div>
-                <span className="text-xl font-bold text-white">{profile.threadCount ?? threads.length}</span>
+                <span className="text-xl font-bold text-white">{threads.length}</span>
                 <span className="ml-1 text-slate-400">threads</span>
               </div>
               <div>
-                <span className="text-xl font-bold text-white">{profile.postCount ?? posts.length}</span>
+                <span className="text-xl font-bold text-white">{posts.length}</span>
                 <span className="ml-1 text-slate-400">posts</span>
               </div>
               <div className="hidden sm:block">
