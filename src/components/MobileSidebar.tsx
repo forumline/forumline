@@ -60,7 +60,7 @@ export default function MobileSidebar({ isOpen, onClose, categories, channels, r
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+        className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden"
         onClick={onClose}
       />
 
