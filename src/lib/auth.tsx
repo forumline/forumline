@@ -4,6 +4,9 @@ import { uploadDefaultAvatar } from './avatars'
 import type { Profile } from '../types/database'
 import type { User } from '@supabase/supabase-js'
 
+// Use configured site URL or fall back to current origin
+const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
+
 interface AppUser {
   id: string
   email: string
@@ -162,13 +165,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGitHub = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'github',
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: siteUrl },
     })
   }
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${siteUrl}/reset-password`,
     })
     return { error: error ? new Error(error.message) : null }
   }
