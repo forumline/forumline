@@ -1,8 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { useVoice } from '../lib/voice'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 import type { Category, ChatChannel, VoiceRoom } from '../types'
 
 interface MobileSidebarProps {
@@ -17,25 +15,6 @@ interface MobileSidebarProps {
 export default function MobileSidebar({ isOpen, onClose, categories, channels, rooms, unreadDmCount }: MobileSidebarProps) {
   const location = useLocation()
   const voice = useVoice()
-  const queryClient = useQueryClient()
-
-  // Prefetch category threads on hover
-  const prefetchCategory = (categorySlug: string) => {
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threadsByCategory(categorySlug),
-      queryFn: () => fetchers.threadsByCategory(categorySlug),
-      ...queryOptions.threads,
-    })
-  }
-
-  // Prefetch home threads on hover
-  const prefetchHome = () => {
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads(20),
-      queryFn: () => fetchers.threads(20),
-      ...queryOptions.threads,
-    })
-  }
 
   // Close sidebar on route change
   useEffect(() => {
@@ -88,7 +67,6 @@ export default function MobileSidebar({ isOpen, onClose, categories, channels, r
           <div className="mb-4 space-y-1">
             <Link
               to="/"
-              onMouseEnter={prefetchHome}
               className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 location.pathname === '/'
                   ? 'bg-indigo-600 text-white'
@@ -147,7 +125,6 @@ export default function MobileSidebar({ isOpen, onClose, categories, channels, r
                   <Link
                     key={category.id}
                     to={`/c/${category.slug}`}
-                    onMouseEnter={() => prefetchCategory(category.slug)}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                       isActive
                         ? 'bg-slate-700 text-white'
