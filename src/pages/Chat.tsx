@@ -141,7 +141,7 @@ export default function Chat() {
   return (
     <div className="chat-page-wrapper flex flex-col overflow-hidden">
       {/* Channel Header */}
-      <div className="flex items-center gap-3 border-b border-slate-700 px-4 py-3">
+      <div className="shrink-0 flex items-center gap-3 border-b border-slate-700 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-xl text-green-400">#</span>
           <h1 className="text-lg font-semibold text-white">{channel?.name || channelSlug}</h1>
@@ -155,7 +155,7 @@ export default function Chat() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {loading && (
           <div className="flex h-full items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-indigo-500" />
@@ -212,7 +212,7 @@ export default function Chat() {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-slate-700 px-3 py-3 sm:px-4 sm:py-4">
+      <div className="shrink-0 border-t border-slate-700 px-3 py-3 sm:px-4 sm:py-4">
         {!user ? (
           <div className="flex items-center justify-center gap-2 rounded-lg bg-slate-700/50 px-4 py-3">
             <span className="text-slate-400">Sign in to chat</span>
