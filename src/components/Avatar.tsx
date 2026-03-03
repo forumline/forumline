@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 interface AvatarProps {
   seed?: string
   type?: 'user' | 'thread'
@@ -6,7 +8,7 @@ interface AvatarProps {
   avatarUrl?: string | null
 }
 
-export default function Avatar({ size = 40, className = '', avatarUrl }: AvatarProps) {
+function Avatar({ size = 40, className = '', avatarUrl }: AvatarProps) {
   if (!avatarUrl) {
     // Generic placeholder when no avatar URL is available
     return (
@@ -25,8 +27,12 @@ export default function Avatar({ size = 40, className = '', avatarUrl }: AvatarP
     <img
       src={avatarUrl}
       alt=""
+      loading="lazy"
+      decoding="async"
       className={`rounded-full object-cover ${className}`}
       style={!className.includes('h-') ? { width: size, height: size } : undefined}
     />
   )
 }
+
+export default memo(Avatar)

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { formatTimeAgo, formatDate } from '../lib/dateFormatters'
 import type { ThreadWithAuthor } from '../types'
 
 interface BookmarkWithThread {
@@ -47,27 +48,6 @@ export default function Bookmarks() {
       await supabase.from('bookmarks').delete().eq('id', bookmarkId)
     }
     setBookmarks(prev => prev.filter(b => b.id !== bookmarkId))
-  }
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
-  const formatTimeAgo = (date: string) => {
-    const now = new Date()
-    const then = new Date(date)
-    const diff = now.getTime() - then.getTime()
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-
-    if (minutes < 60) return `${minutes}m ago`
-    if (hours < 24) return `${hours}h ago`
-    return `${days}d ago`
   }
 
   // Auth guard

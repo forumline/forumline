@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { formatShortTimeAgo, formatMessageTime } from '../lib/dateFormatters'
 import type { Profile } from '../types'
 
 interface Conversation {
@@ -249,27 +250,6 @@ export default function DirectMessages() {
     navigate(`/dm/${profile.id}`)
   }, [navigate])
 
-  const formatTime = (date: Date) => {
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-
-    if (minutes < 1) return 'now'
-    if (minutes < 60) return `${minutes}m`
-    if (hours < 24) return `${hours}h`
-    if (days < 7) return `${days}d`
-    return date.toLocaleDateString()
-  }
-
-  const formatMessageTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-
   // Auth guard
   if (!authLoading && !user) {
     return (
@@ -355,7 +335,7 @@ export default function DirectMessages() {
                         {conversation.recipientName}
                       </span>
                       <span className="text-xs text-slate-500">
-                        {formatTime(conversation.lastMessageTime)}
+                        {formatShortTimeAgo(conversation.lastMessageTime)}
                       </span>
                     </div>
                     <p className={`truncate text-sm ${conversation.unreadCount > 0 ? 'font-medium text-slate-300' : 'text-slate-400'}`}>

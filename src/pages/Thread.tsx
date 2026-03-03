@@ -7,6 +7,7 @@ import { uploadAvatar } from '../lib/avatars'
 import Avatar from '../components/Avatar'
 import ImageCropModal from '../components/ImageCropModal'
 import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { formatDate } from '../lib/dateFormatters'
 import type { ThreadWithAuthor, PostWithAuthor } from '../types'
 
 const POSTS_PER_PAGE = 5
@@ -267,16 +268,6 @@ export default function Thread() {
     }
 
     setSubmitting(false)
-  }
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
   }
 
   if (loading) {

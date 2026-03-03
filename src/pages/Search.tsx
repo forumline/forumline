@@ -2,22 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { formatTimeAgo } from '../lib/dateFormatters'
+import { useDebounce } from '../lib/hooks'
 import type { ThreadWithAuthor, PostWithAuthor } from '../types'
 
 type SearchFilter = 'all' | 'threads' | 'posts'
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value)
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value)
-    }, delay)
-    return () => clearTimeout(handler)
-  }, [value, delay])
-
-  return debouncedValue
-}
 
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -68,17 +57,6 @@ export default function Search() {
       setSearchParams({}, { replace: true })
     }
   }, [debouncedSearch, filter, performSearch, setSearchParams, searchParams])
-
-  const formatTimeAgo = (date: string) => {
-    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
-  }
 
   const highlightMatch = (text: string, query: string) => {
     if (!query.trim()) return text

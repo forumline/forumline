@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import Avatar from '../components/Avatar'
 import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { formatTimeAgo } from '../lib/dateFormatters'
 
 export default function Category() {
   const { categorySlug } = useParams()
@@ -45,17 +46,6 @@ export default function Category() {
       })
     })
   }, [threads, queryClient])
-
-  const formatTimeAgo = (date: string) => {
-    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
-  }
 
   if (loading) {
     return (

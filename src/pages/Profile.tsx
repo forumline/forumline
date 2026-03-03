@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { formatTimeAgo } from '../lib/dateFormatters'
 import type { Profile, ThreadWithAuthor, PostWithAuthor } from '../types'
 
 type ActivityTab = 'threads' | 'posts'
@@ -63,25 +64,12 @@ export default function ProfilePage() {
     fetchProfile()
   }, [username])
 
-  const formatDate = (date: string) => {
+  const formatJoinDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     })
-  }
-
-  const formatTimeAgo = (date: string) => {
-    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    if (days < 30) return `${days}d ago`
-    const months = Math.floor(days / 30)
-    return `${months}mo ago`
   }
 
   if (loading) {
@@ -151,13 +139,13 @@ export default function ProfilePage() {
               </div>
               <div className="hidden sm:block">
                 <span className="text-slate-400">Joined</span>
-                <span className="ml-1 text-white">{formatDate(profile.created_at)}</span>
+                <span className="ml-1 text-white">{formatJoinDate(profile.created_at)}</span>
               </div>
             </div>
 
             {/* Mobile join date */}
             <p className="mt-3 text-sm text-slate-500 sm:hidden">
-              Joined {formatDate(profile.created_at)}
+              Joined {formatJoinDate(profile.created_at)}
             </p>
 
             {/* Message button - shown when viewing someone else's profile */}

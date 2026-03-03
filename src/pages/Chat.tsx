@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
 import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { formatTime, formatDateLabel } from '../lib/dateFormatters'
 import type { Profile, ChatMessageWithAuthor } from '../types'
 
 interface ChatMsg {
@@ -113,27 +114,6 @@ export default function Chat() {
     inputRef.current?.focus()
   }, [channelSlug])
 
-  const formatTime = (date: string) => {
-    return new Date(date).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-
-  const formatDate = (date: string) => {
-    const d = new Date(date)
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-
-    if (d.toDateString() === today.toDateString()) {
-      return 'Today'
-    } else if (d.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday'
-    }
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inputValue.trim() || !user || !channel) return
@@ -149,7 +129,7 @@ export default function Chat() {
   // Group messages by date
   const groupedMessages: { date: string; messages: ChatMsg[] }[] = []
   messages.forEach(msg => {
-    const date = formatDate(msg.createdAt)
+    const date = formatDateLabel(msg.createdAt)
     const lastGroup = groupedMessages[groupedMessages.length - 1]
     if (lastGroup && lastGroup.date === date) {
       lastGroup.messages.push(msg)

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { formatTimeAgo } from '../lib/dateFormatters'
 import type { Profile } from '../types'
 
 type Tab = 'overview' | 'users' | 'content' | 'reports'
@@ -49,16 +50,6 @@ export default function Admin() {
     fetchStats()
     fetchUsers()
   }, [user])
-
-  const formatTimeAgo = (date: string) => {
-    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-    if (seconds < 60) return 'just now'
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
-  }
 
   // Auth guard: must be logged in
   if (!authLoading && !user) {
