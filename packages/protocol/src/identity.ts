@@ -52,3 +52,52 @@ export interface AuthSession {
   refresh_token?: string
   expires_at: string
 }
+
+// ============================================================================
+// Hub OAuth Flow Types
+// ============================================================================
+
+/** Parameters for the hub OAuth authorize redirect */
+export interface HubAuthorizeParams {
+  /** OAuth client ID assigned to the forum */
+  client_id: string
+
+  /** Where to redirect after authorization */
+  redirect_uri: string
+
+  /** CSRF protection token */
+  state: string
+
+  /** Optional: pre-authenticated hub access token */
+  access_token?: string
+}
+
+/** Request body for exchanging an auth code for an identity token */
+export interface HubTokenRequest {
+  /** Authorization code received from the hub */
+  code: string
+
+  /** Forum's OAuth client ID */
+  client_id: string
+
+  /** Forum's OAuth client secret */
+  client_secret: string
+
+  /** Must match the redirect_uri used in the authorize request */
+  redirect_uri?: string
+}
+
+/** Response from the hub token endpoint */
+export interface HubTokenResponse {
+  /** Signed JWT containing the user's ForumlineIdentity */
+  identity_token: string
+
+  /** The user's identity (also embedded in the JWT) */
+  identity: ForumlineIdentity
+
+  /** Token type (always "Bearer") */
+  token_type: 'Bearer'
+
+  /** Token lifetime in seconds */
+  expires_in: number
+}

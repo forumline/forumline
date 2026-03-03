@@ -16,7 +16,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@forumline/protocol": ["./packages/protocol/src/index.ts"]
     }
   },
   "include": ["src"],

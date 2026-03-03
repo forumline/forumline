@@ -61,6 +61,11 @@ export const queryKeys = {
 
   // Notifications
   notifications: (userId: string) => ['notifications', userId] as const,
+
+  // Hub DMs
+  hubDmConversations: ['hub', 'dm', 'conversations'] as const,
+  hubDmMessages: (recipientId: string) => ['hub', 'dm', 'messages', recipientId] as const,
+  hubProfileSearch: (query: string) => ['hub', 'profiles', 'search', query] as const,
 }
 
 // ============================================================================

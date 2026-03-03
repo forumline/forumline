@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/auth'
+import { useHub } from '../lib/hub-context'
 import { supabase } from '../lib/supabase'
 import { getDataProvider } from '../lib/data-provider'
 import Avatar from '../components/Avatar'
@@ -13,6 +14,7 @@ import Skeleton from '../components/ui/Skeleton'
 import { formatShortTimeAgo, formatMessageTime } from '../lib/dateFormatters'
 import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 import type { Profile } from '../types'
+import type { HubProfile } from '@forumline/protocol'
 
 interface DM {
   id: string
@@ -21,43 +23,82 @@ interface DM {
   timestamp: Date
 }
 
+interface MergedConversation {
+  recipientId: string
+  recipientName: string
+  recipientAvatarUrl: string | null
+  lastMessage: string
+  lastMessageTime: string
+  unreadCount: number
+  source: 'local' | 'hub'
+}
+
 export default function DirectMessages() {
-  const { recipientId } = useParams()
+  const { recipientId: rawRecipientId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { hubClient, hubSupabase, hubUserId, isHubConnected } = useHub()
   const queryClient = useQueryClient()
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Parse hub: prefix from route param
+  const isHub = rawRecipientId?.startsWith('hub:') ?? false
+  const recipientId = isHub ? rawRecipientId!.slice(4) : rawRecipientId
 
   // New message modal state
   const [showNewMessage, setShowNewMessage] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Profile[]>([])
+  const [hubSearchResults, setHubSearchResults] = useState<HubProfile[]>([])
   const [searching, setSearching] = useState(false)
+  const [searchTab, setSearchTab] = useState<'local' | 'hub'>('local')
 
-  // Use React Query for conversations list - cached globally!
-  const { data: conversations = [], isError: conversationsError } = useQuery({
+  // ===== LOCAL CONVERSATIONS =====
+  const { data: localConversations = [], isError: conversationsError } = useQuery({
     queryKey: queryKeys.dmConversationsList(user?.id ?? ''),
     queryFn: () => fetchers.dmConversations(user!.id),
     enabled: !!user,
     ...queryOptions.realtime,
   })
 
-  const currentConversation = recipientId
-    ? conversations.find(c => c.recipientId === recipientId)
+  // ===== HUB CONVERSATIONS =====
+  const { data: hubConversations = [] } = useQuery({
+    queryKey: queryKeys.hubDmConversations,
+    queryFn: () => hubClient!.getConversations(),
+    enabled: !!hubClient && isHubConnected,
+    ...queryOptions.realtime,
+  })
+
+  // ===== MERGED CONVERSATIONS =====
+  const allConversations: MergedConversation[] = useMemo(() => {
+    const local: MergedConversation[] = localConversations.map(c => ({ ...c, source: 'local' as const }))
+    const hub: MergedConversation[] = hubConversations.map(c => ({
+      ...c,
+      recipientId: `hub:${c.recipientId}`,
+      source: 'hub' as const,
+    }))
+    return [...local, ...hub].sort(
+      (a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
+    )
+  }, [localConversations, hubConversations])
+
+  const currentConversation = rawRecipientId
+    ? allConversations.find(c => c.recipientId === rawRecipientId || (isHub && c.recipientId === `hub:${recipientId}`))
     : null
 
-  // Use React Query for recipient profile (for new conversations)
+  // Use React Query for recipient profile (for new local conversations)
   const { data: recipientProfile } = useQuery({
     queryKey: queryKeys.profile(recipientId ?? ''),
     queryFn: () => fetchers.profile(recipientId!),
-    enabled: !!recipientId && !!user && !currentConversation,
+    enabled: !!recipientId && !!user && !currentConversation && !isHub,
     ...queryOptions.profiles,
   })
 
-  // Debounced user search
+  // ===== USER SEARCH =====
+  // Debounced local user search
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery.trim() || searchTab !== 'local') {
       setSearchResults([])
       return
     }
@@ -76,9 +117,31 @@ export default function DirectMessages() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchQuery, user])
+  }, [searchQuery, user, searchTab])
 
-  // Subscribe to new DMs for real-time updates to conversation list
+  // Debounced hub profile search
+  useEffect(() => {
+    if (!searchQuery.trim() || searchTab !== 'hub' || !hubClient) {
+      setHubSearchResults([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const results = await hubClient.searchProfiles(searchQuery)
+        setHubSearchResults(results)
+      } catch (err) {
+        console.error('[FCV:DM] Hub profile search failed:', err)
+        setHubSearchResults([])
+      }
+      setSearching(false)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, hubClient, searchTab])
+
+  // ===== REALTIME: LOCAL =====
   useEffect(() => {
     if (!user) return
 
@@ -88,7 +151,6 @@ export default function DirectMessages() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'direct_messages' },
         () => {
-          // Invalidate to refetch conversations
           queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
         }
       )
@@ -97,14 +159,50 @@ export default function DirectMessages() {
     return () => { sub.unsubscribe() }
   }, [user, queryClient])
 
-  // Fetch messages for selected conversation via React Query
-  const otherId = currentConversation?.recipientId || recipientId
-  const { data: rawMessages = [] } = useQuery({
+  // ===== REALTIME: HUB =====
+  useEffect(() => {
+    if (!hubSupabase || !isHubConnected) return
+
+    const sub = hubSupabase
+      .channel('hub-dm-conversations')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'hub_direct_messages' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.hubDmConversations })
+          // If viewing a hub conversation, also invalidate its messages
+          if (isHub && recipientId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.hubDmMessages(recipientId) })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { sub.unsubscribe() }
+  }, [hubSupabase, isHubConnected, queryClient, isHub, recipientId])
+
+  // ===== MESSAGES =====
+  const otherId = currentConversation
+    ? (isHub ? recipientId : (currentConversation.recipientId || recipientId))
+    : recipientId
+
+  // Local messages
+  const { data: localRawMessages = [] } = useQuery({
     queryKey: queryKeys.dmMessages(otherId ?? ''),
     queryFn: () => fetchers.dmMessages(user!.id, otherId!),
-    enabled: !!recipientId && !!user && !!otherId,
+    enabled: !!recipientId && !!user && !!otherId && !isHub,
     ...queryOptions.realtime,
   })
+
+  // Hub messages
+  const { data: hubRawMessages = [] } = useQuery({
+    queryKey: queryKeys.hubDmMessages(otherId ?? ''),
+    queryFn: () => hubClient!.getMessages(otherId!),
+    enabled: !!recipientId && !!user && !!otherId && isHub && !!hubClient,
+    ...queryOptions.realtime,
+  })
+
+  const rawMessages = isHub ? hubRawMessages : localRawMessages
 
   const messages: DM[] = rawMessages.map(dm => ({
     id: dm.id,
@@ -113,25 +211,30 @@ export default function DirectMessages() {
     timestamp: new Date(dm.created_at),
   }))
 
-  // Mark messages as read when conversation is opened or messages change
+  // ===== MARK READ =====
   useEffect(() => {
     if (!recipientId || !user || !otherId || rawMessages.length === 0) return
 
     const markAsRead = async () => {
       try {
-        await getDataProvider().markDmsReadFrom(otherId, user.id)
-        queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
+        if (isHub && hubClient) {
+          await hubClient.markRead(otherId)
+          queryClient.invalidateQueries({ queryKey: queryKeys.hubDmConversations })
+        } else {
+          await getDataProvider().markDmsReadFrom(otherId, user.id)
+          queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
+        }
       } catch (error) {
         console.error('[FCV:DM] Failed to mark messages as read:', error)
       }
     }
 
     markAsRead()
-  }, [recipientId, user, otherId, rawMessages.length, queryClient])
+  }, [recipientId, user, otherId, rawMessages.length, queryClient, isHub, hubClient])
 
-  // Subscribe to new messages in this conversation — invalidate query on new messages
+  // ===== LOCAL REALTIME: per-conversation =====
   useEffect(() => {
-    if (!recipientId || !user || !otherId) return
+    if (!recipientId || !user || !otherId || isHub) return
 
     const sub = supabase
       .channel(`dm:${otherId}`)
@@ -144,9 +247,7 @@ export default function DirectMessages() {
             (dm.sender_id === user.id && dm.recipient_id === otherId) ||
             (dm.sender_id === otherId && dm.recipient_id === user.id)
           if (isRelevant) {
-            // Invalidate to refetch messages
             queryClient.invalidateQueries({ queryKey: queryKeys.dmMessages(otherId) })
-            // Mark incoming as read
             if (dm.sender_id === otherId) {
               getDataProvider().markDmRead(dm.id).catch((error) => {
                 console.error('[FCV:DM] Failed to mark realtime DM as read:', error)
@@ -158,67 +259,72 @@ export default function DirectMessages() {
       .subscribe()
 
     return () => { sub.unsubscribe() }
-  }, [recipientId, user, otherId, queryClient])
+  }, [recipientId, user, otherId, queryClient, isHub])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
+  // ===== SEND MUTATION =====
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!recipientId || !user) throw new Error('Not authenticated')
-      const targetId = currentConversation?.recipientId || recipientId
-      await getDataProvider().sendDm({
-        sender_id: user.id,
-        recipient_id: targetId,
-        content,
-      })
+      if (isHub) {
+        if (!hubClient) throw new Error('Hub not connected')
+        await hubClient.sendMessage(recipientId, content)
+      } else {
+        const targetId = currentConversation?.recipientId || recipientId
+        await getDataProvider().sendDm({
+          sender_id: user.id,
+          recipient_id: targetId,
+          content,
+        })
+      }
     },
     onMutate: async (content: string) => {
       if (!recipientId || !user || !otherId) return
 
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.dmMessages(otherId) })
+      const queryKey = isHub ? queryKeys.hubDmMessages(otherId) : queryKeys.dmMessages(otherId)
 
-      // Snapshot previous messages
-      const previousMessages = queryClient.getQueryData<typeof rawMessages>(queryKeys.dmMessages(otherId))
+      await queryClient.cancelQueries({ queryKey })
+      const previousMessages = queryClient.getQueryData<typeof rawMessages>(queryKey)
 
-      // Build a temporary optimistic DM
       const tempId = `temp-${Date.now()}`
       const now = new Date().toISOString()
+      const senderId = isHub ? (hubUserId || user.id) : user.id
 
       const optimisticDM = {
         id: tempId,
-        sender_id: user.id,
+        sender_id: senderId,
         recipient_id: otherId,
         content,
         created_at: now,
         read: false,
       }
 
-      // Optimistically add the DM
       queryClient.setQueryData(
-        queryKeys.dmMessages(otherId),
+        queryKey,
         (old: typeof rawMessages = []) => [...old, optimisticDM]
       )
 
-      // Clear input immediately
       setNewMessage('')
 
-      return { previousMessages }
+      return { previousMessages, queryKey }
     },
     onError: (error, _content, context) => {
       toast.error('Failed to send message')
       console.error('[FCV:DM] Failed to send message:', error)
-      // Roll back to previous messages
-      if (context?.previousMessages && otherId) {
-        queryClient.setQueryData(queryKeys.dmMessages(otherId), context.previousMessages)
+      if (context?.previousMessages && context.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previousMessages)
       }
     },
     onSettled: () => {
-      if (user) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
-        if (otherId) {
+      if (user && otherId) {
+        if (isHub) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.hubDmConversations })
+          queryClient.invalidateQueries({ queryKey: queryKeys.hubDmMessages(otherId) })
+        } else {
+          queryClient.invalidateQueries({ queryKey: queryKeys.dmConversationsList(user.id) })
           queryClient.invalidateQueries({ queryKey: queryKeys.dmMessages(otherId) })
         }
       }
@@ -235,7 +341,16 @@ export default function DirectMessages() {
     setShowNewMessage(false)
     setSearchQuery('')
     setSearchResults([])
+    setHubSearchResults([])
     navigate(`/dm/${profile.id}`)
+  }, [navigate])
+
+  const handleSelectHubUser = useCallback((profile: HubProfile) => {
+    setShowNewMessage(false)
+    setSearchQuery('')
+    setSearchResults([])
+    setHubSearchResults([])
+    navigate(`/dm/hub:${profile.id}`)
   }, [navigate])
 
   // Close new message modal on Escape
@@ -246,24 +361,36 @@ export default function DirectMessages() {
         setShowNewMessage(false)
         setSearchQuery('')
         setSearchResults([])
+        setHubSearchResults([])
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [showNewMessage])
 
-  const showConversationList = !recipientId
-  const showMessages = !!recipientId
+  const showConversationList = !rawRecipientId
+  const showMessages = !!rawRecipientId
 
   // The active conversation: either an existing one or built from the fetched recipient profile
-  const activeConversation = currentConversation || (recipientProfile ? {
+  const activeConversation = currentConversation || (recipientProfile && !isHub ? {
     recipientId: recipientProfile.id,
     recipientName: recipientProfile.display_name || recipientProfile.username,
     recipientAvatarUrl: recipientProfile.avatar_url,
     lastMessage: '',
     lastMessageTime: new Date().toISOString(),
     unreadCount: 0,
+    source: 'local' as const,
   } : null)
+
+  // For hub conversations without an existing conversation entry, show a minimal header
+  const activeIsHub = activeConversation?.source === 'hub' || isHub
+
+  // Globe icon for hub conversations
+  const GlobeIcon = () => (
+    <svg className="h-3.5 w-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+    </svg>
+  )
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -295,7 +422,7 @@ export default function DirectMessages() {
                   Try again
                 </button>
               </div>
-            ) : conversations.length === 0 ? (
+            ) : allConversations.length === 0 ? (
               <div className="p-4 text-center text-slate-400">
                 <p>No conversations yet</p>
                 <button
@@ -306,37 +433,46 @@ export default function DirectMessages() {
                 </button>
               </div>
             ) : (
-              conversations.map(conversation => (
-                <Link
-                  key={conversation.recipientId}
-                  to={`/dm/${conversation.recipientId}`}
-                  className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-700/50 ${
-                    recipientId === conversation.recipientId ? 'bg-slate-700/50' : ''
-                  }`}
-                >
-                  <div className="relative">
-                    <Avatar seed={conversation.recipientId} type="user" avatarUrl={conversation.recipientAvatarUrl} size={40} />
-                    {conversation.unreadCount > 0 && (
-                      <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-xs font-medium text-white">
-                        {conversation.unreadCount}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className={`font-medium ${conversation.unreadCount > 0 ? 'text-white' : 'text-slate-200'}`}>
-                        {conversation.recipientName}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {formatShortTimeAgo(new Date(conversation.lastMessageTime))}
-                      </span>
+              allConversations.map(conversation => {
+                const convRouteId = conversation.source === 'hub'
+                  ? conversation.recipientId  // already has hub: prefix
+                  : conversation.recipientId
+                const avatarSeed = conversation.source === 'hub'
+                  ? conversation.recipientId.replace('hub:', '')
+                  : conversation.recipientId
+                return (
+                  <Link
+                    key={conversation.recipientId}
+                    to={`/dm/${convRouteId}`}
+                    className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-700/50 ${
+                      rawRecipientId === convRouteId ? 'bg-slate-700/50' : ''
+                    }`}
+                  >
+                    <div className="relative">
+                      <Avatar seed={avatarSeed} type="user" avatarUrl={conversation.recipientAvatarUrl} size={40} />
+                      {conversation.unreadCount > 0 && (
+                        <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-xs font-medium text-white">
+                          {conversation.unreadCount}
+                        </div>
+                      )}
                     </div>
-                    <p className={`truncate text-sm ${conversation.unreadCount > 0 ? 'font-medium text-slate-300' : 'text-slate-400'}`}>
-                      {conversation.lastMessage}
-                    </p>
-                  </div>
-                </Link>
-              ))
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`flex items-center gap-1.5 font-medium ${conversation.unreadCount > 0 ? 'text-white' : 'text-slate-200'}`}>
+                          {conversation.recipientName}
+                          {conversation.source === 'hub' && <GlobeIcon />}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {formatShortTimeAgo(new Date(conversation.lastMessageTime))}
+                        </span>
+                      </div>
+                      <p className={`truncate text-sm ${conversation.unreadCount > 0 ? 'font-medium text-slate-300' : 'text-slate-400'}`}>
+                        {conversation.lastMessage}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })
             )}
           </div>
         </div>
@@ -356,9 +492,15 @@ export default function DirectMessages() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </Link>
-                <Avatar seed={activeConversation.recipientId} type="user" avatarUrl={activeConversation.recipientAvatarUrl} size={32} />
-                <div>
+                <Avatar
+                  seed={activeIsHub ? (recipientId || '') : activeConversation.recipientId}
+                  type="user"
+                  avatarUrl={activeConversation.recipientAvatarUrl}
+                  size={32}
+                />
+                <div className="flex items-center gap-2">
                   <h3 className="font-medium text-white">{activeConversation.recipientName}</h3>
+                  {activeIsHub && <GlobeIcon />}
                 </div>
               </div>
 
@@ -371,7 +513,9 @@ export default function DirectMessages() {
                     </div>
                   )}
                   {messages.map(message => {
-                    const isMe = message.senderId === 'me' || message.senderId === user?.id
+                    const isMe = isHub
+                      ? message.senderId === hubUserId
+                      : (message.senderId === 'me' || message.senderId === user?.id)
                     return (
                       <div
                         key={message.id}
@@ -444,14 +588,14 @@ export default function DirectMessages() {
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
           <div
             className="fixed inset-0 bg-black/60"
-            onClick={() => { setShowNewMessage(false); setSearchQuery(''); setSearchResults([]) }}
+            onClick={() => { setShowNewMessage(false); setSearchQuery(''); setSearchResults([]); setHubSearchResults([]) }}
             aria-hidden="true"
           />
           <div role="dialog" aria-modal="true" aria-labelledby="new-message-title" className="relative w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
               <h3 id="new-message-title" className="font-semibold text-white">New Message</h3>
               <button
-                onClick={() => { setShowNewMessage(false); setSearchQuery(''); setSearchResults([]) }}
+                onClick={() => { setShowNewMessage(false); setSearchQuery(''); setSearchResults([]); setHubSearchResults([]) }}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
                 aria-label="Close dialog"
               >
@@ -461,12 +605,40 @@ export default function DirectMessages() {
               </button>
             </div>
 
+            {/* Tab toggle: This Forum / Forumline */}
+            {isHubConnected && (
+              <div className="flex border-b border-slate-700">
+                <button
+                  onClick={() => { setSearchTab('local'); setSearchQuery(''); setSearchResults([]); setHubSearchResults([]) }}
+                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    searchTab === 'local'
+                      ? 'border-b-2 border-indigo-500 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  This Forum
+                </button>
+                <button
+                  onClick={() => { setSearchTab('hub'); setSearchQuery(''); setSearchResults([]); setHubSearchResults([]) }}
+                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    searchTab === 'hub'
+                      ? 'border-b-2 border-indigo-500 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <GlobeIcon /> Forumline
+                  </span>
+                </button>
+              </div>
+            )}
+
             <div className="p-4">
               <Input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by username or display name..."
+                placeholder={searchTab === 'hub' ? 'Search Forumline users...' : 'Search by username or display name...'}
                 aria-label="Search users"
                 className="w-full"
                 autoFocus
@@ -487,24 +659,55 @@ export default function DirectMessages() {
                   ))}
                 </div>
               )}
-              {!searching && searchQuery.trim() && searchResults.length === 0 && (
-                <div className="px-4 py-3 text-center text-sm text-slate-400">No users found</div>
+
+              {/* Local search results */}
+              {searchTab === 'local' && (
+                <>
+                  {!searching && searchQuery.trim() && searchResults.length === 0 && (
+                    <div className="px-4 py-3 text-center text-sm text-slate-400">No users found</div>
+                  )}
+                  {searchResults.map(profile => (
+                    <button
+                      key={profile.id}
+                      onClick={() => handleSelectUser(profile)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-700/50"
+                    >
+                      <Avatar seed={profile.id} type="user" avatarUrl={profile.avatar_url} size={40} className="shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-white">
+                          {profile.display_name || profile.username}
+                        </div>
+                        <div className="text-sm text-slate-400">@{profile.username}</div>
+                      </div>
+                    </button>
+                  ))}
+                </>
               )}
-              {searchResults.map(profile => (
-                <button
-                  key={profile.id}
-                  onClick={() => handleSelectUser(profile)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-700/50"
-                >
-                  <Avatar seed={profile.id} type="user" avatarUrl={profile.avatar_url} size={40} className="shrink-0" />
-                  <div className="min-w-0">
-                    <div className="font-medium text-white">
-                      {profile.display_name || profile.username}
-                    </div>
-                    <div className="text-sm text-slate-400">@{profile.username}</div>
-                  </div>
-                </button>
-              ))}
+
+              {/* Hub search results */}
+              {searchTab === 'hub' && (
+                <>
+                  {!searching && searchQuery.trim() && hubSearchResults.length === 0 && (
+                    <div className="px-4 py-3 text-center text-sm text-slate-400">No Forumline users found</div>
+                  )}
+                  {hubSearchResults.map(profile => (
+                    <button
+                      key={profile.id}
+                      onClick={() => handleSelectHubUser(profile)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-700/50"
+                    >
+                      <Avatar seed={profile.id} type="user" avatarUrl={profile.avatar_url} size={40} className="shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 font-medium text-white">
+                          {profile.display_name || profile.username}
+                          <GlobeIcon />
+                        </div>
+                        <div className="text-sm text-slate-400">@{profile.username}</div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
 
           </div>

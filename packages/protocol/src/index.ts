@@ -11,6 +11,9 @@ export type {
   ForumlineMembership,
   AuthResult,
   AuthSession,
+  HubAuthorizeParams,
+  HubTokenRequest,
+  HubTokenResponse,
 } from './identity'
 export type {
   ForumNotification,
@@ -22,3 +25,8 @@ export type {
   ForumlineApiEndpoints,
   ForumlineAuthEndpoints,
 } from './api'
+export type {
+  HubDirectMessage,
+  HubDmConversation,
+  HubProfile,
+} from './hub-dms'
