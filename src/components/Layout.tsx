@@ -53,8 +53,27 @@ export default function Layout() {
         queryFn: () => fetchers.threadsByCategory(category.slug),
         ...queryOptions.threads,
       })
+      // Also prefetch the category metadata
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.category(category.slug),
+        queryFn: () => fetchers.category(category.slug),
+        ...queryOptions.static,
+      })
     })
   }, [categories, queryClient])
+
+  // Prefetch all chat channel messages once channels are loaded
+  useEffect(() => {
+    if (channels.length === 0) return
+
+    channels.forEach((channel) => {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.chatMessages(channel.slug),
+        queryFn: () => fetchers.chatMessagesBySlug(channel.slug),
+        ...queryOptions.realtime,
+      })
+    })
+  }, [channels, queryClient])
 
   useEffect(() => {
     if (!user) {
