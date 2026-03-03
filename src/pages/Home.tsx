@@ -1,33 +1,61 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
+import { useCachedData, usePreload, cacheKeys } from '../lib/useCache'
 import type { ThreadWithAuthor } from '../types'
 
+// Fetcher function for threads (reusable for preloading)
+const fetchThreads = async (): Promise<ThreadWithAuthor[]> => {
+  const { data } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      author:profiles(*),
+      category:categories(*)
+    `)
+    .order('is_pinned', { ascending: false })
+    .order('last_post_at', { ascending: false })
+    .limit(20)
+  return (data || []) as ThreadWithAuthor[]
+}
+
+// Fetcher for individual thread (for preloading on hover)
+export const fetchThread = async (threadId: string) => {
+  const { data } = await supabase
+    .from('threads')
+    .select(`
+      *,
+      author:profiles(*),
+      category:categories(*)
+    `)
+    .eq('id', threadId)
+    .single()
+  return data
+}
+
+// Fetcher for thread posts (for preloading on hover)
+export const fetchPosts = async (threadId: string) => {
+  const { data } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      author:profiles(*)
+    `)
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: true })
+  return data || []
+}
+
 export default function Home() {
-  const [threads, setThreads] = useState<ThreadWithAuthor[]>([])
-  const [loading, setLoading] = useState(true)
+  // Use cached data - instant on return visits!
+  const { data: threads = [], loading } = useCachedData<ThreadWithAuthor[]>(
+    cacheKeys.threads(20),
+    'threads',
+    fetchThreads
+  )
 
-  useEffect(() => {
-    const fetchThreads = async () => {
-      setLoading(true)
-      const { data } = await supabase
-        .from('threads')
-        .select(`
-          *,
-          author:profiles(*),
-          category:categories(*)
-        `)
-        .order('is_pinned', { ascending: false })
-        .order('last_post_at', { ascending: false })
-        .limit(20)
-
-      if (data) setThreads(data as ThreadWithAuthor[])
-      setLoading(false)
-    }
-
-    fetchThreads()
-  }, [])
+  // Preload hook for thread hover
+  const preload = usePreload()
 
   const formatTimeAgo = (date: string) => {
     const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
@@ -90,6 +118,11 @@ export default function Home() {
                 key={thread.id}
                 to={`/t/${thread.id}`}
                 className="flex items-start gap-3 px-3 py-3 transition-colors hover:bg-slate-700/30 sm:gap-4 sm:px-4 sm:py-4"
+                onMouseEnter={() => {
+                  // Preload thread and posts on hover for instant navigation
+                  preload(cacheKeys.thread(thread.id), 'threads', () => fetchThread(thread.id))
+                  preload(cacheKeys.posts(thread.id), 'posts', () => fetchPosts(thread.id))
+                }}
               >
                 {/* Thread Avatar */}
                 <Avatar seed={thread.id} type="thread" avatarUrl={thread.image_url} className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
