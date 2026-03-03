@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import Avatar from '../components/Avatar'
@@ -27,7 +28,25 @@ export default function Category() {
 
   const loading = categoryLoading || threadsLoading
 
-  // Prefetch thread data on hover
+  // Prefetch all visible threads once they load
+  useEffect(() => {
+    if (threads.length === 0) return
+
+    threads.forEach((thread) => {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.thread(thread.id),
+        queryFn: () => fetchers.thread(thread.id),
+        ...queryOptions.threads,
+      })
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.posts(thread.id),
+        queryFn: () => fetchers.posts(thread.id),
+        ...queryOptions.posts,
+      })
+    })
+  }, [threads, queryClient])
+
+  // Prefetch thread data on hover (backup for stale data)
   const prefetchThread = (threadId: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.thread(threadId),

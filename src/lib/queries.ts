@@ -158,12 +158,21 @@ export const fetchers = {
     return data
   },
 
-  // Chat messages
-  chatMessages: async (channelId: string): Promise<ChatMessage[]> => {
+  // Chat messages - fetch by channel slug
+  chatMessagesBySlug: async (channelSlug: string): Promise<ChatMessage[]> => {
+    // First get the channel by slug
+    const { data: channel } = await supabase
+      .from('chat_channels')
+      .select('id')
+      .eq('slug', channelSlug)
+      .single()
+
+    if (!channel) return []
+
     const { data } = await supabase
       .from('chat_messages')
       .select(`*, author:profiles(*)`)
-      .eq('channel_id', channelId)
+      .eq('channel_id', channel.id)
       .order('created_at', { ascending: true })
       .limit(100)
     return (data || []) as ChatMessage[]
