@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { uploadAvatar } from '../lib/avatars'
 import Avatar from '../components/Avatar'
 import ImageCropModal from '../components/ImageCropModal'
+import { useCachedData, useCacheInvalidation, cacheKeys } from '../lib/useCache'
 import type { ThreadWithAuthor, PostWithAuthor } from '../types'
 
 const POSTS_PER_PAGE = 5
@@ -13,9 +14,58 @@ export default function Thread() {
   const { threadId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
+  const invalidateCache = useCacheInvalidation()
+
+  // Use cached data for thread - instant on back navigation!
+  const { data: cachedThread, loading: threadLoading } = useCachedData<ThreadWithAuthor>(
+    cacheKeys.thread(threadId!),
+    'threads',
+    async () => {
+      const { data } = await supabase
+        .from('threads')
+        .select(`
+          *,
+          author:profiles(*),
+          category:categories(*)
+        `)
+        .eq('id', threadId!)
+        .single()
+      return data as ThreadWithAuthor
+    },
+    { skip: !threadId }
+  )
+
+  // Use cached data for posts - instant on back navigation!
+  const { data: cachedPosts, loading: postsLoading } = useCachedData<PostWithAuthor[]>(
+    cacheKeys.posts(threadId!),
+    'posts',
+    async () => {
+      const { data } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          author:profiles(*)
+        `)
+        .eq('thread_id', threadId!)
+        .order('created_at')
+      return (data || []) as PostWithAuthor[]
+    },
+    { skip: !threadId }
+  )
+
+  // Local state that can be updated by real-time events
   const [thread, setThread] = useState<ThreadWithAuthor | null>(null)
   const [allPosts, setAllPosts] = useState<PostWithAuthor[]>([])
-  const [loading, setLoading] = useState(true)
+  const loading = threadLoading || postsLoading
+
+  // Sync cached data to local state
+  useEffect(() => {
+    if (cachedThread) setThread(cachedThread)
+  }, [cachedThread])
+
+  useEffect(() => {
+    if (cachedPosts) setAllPosts(cachedPosts)
+  }, [cachedPosts])
   const [replyContent, setReplyContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [replyingTo, setReplyingTo] = useState<PostWithAuthor | null>(null)
@@ -51,41 +101,9 @@ export default function Thread() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Set up real-time subscription for new posts
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-
-      // Fetch thread
-      const { data: threadData } = await supabase
-        .from('threads')
-        .select(`
-          *,
-          author:profiles(*),
-          category:categories(*)
-        `)
-        .eq('id', threadId!)
-        .single()
-
-      if (threadData) {
-        setThread(threadData as ThreadWithAuthor)
-
-        // Fetch posts
-        const { data: postsData } = await supabase
-          .from('posts')
-          .select(`
-            *,
-            author:profiles(*)
-          `)
-          .eq('thread_id', threadId!)
-          .order('created_at')
-
-        if (postsData) setAllPosts(postsData as PostWithAuthor[])
-      }
-
-      setLoading(false)
-    }
-
-    fetchData()
+    if (!threadId) return
 
     // Set up real-time subscription
     const subscription = supabase
@@ -105,6 +123,9 @@ export default function Thread() {
               const known = allPostsRef.current.some(p => p.id === post.id)
                 || pendingPostsRef.current.some(p => p.id === post.id)
               if (known) return
+
+              // Invalidate cache so next visit gets fresh data
+              invalidateCache(cacheKeys.posts(threadId))
 
               if (autoUpdateRef.current) {
                 setAllPosts(prev => {
@@ -259,6 +280,10 @@ export default function Thread() {
         .from('threads')
         .update({ last_post_at: new Date().toISOString(), post_count: thread.post_count + 1 })
         .eq('id', thread.id)
+
+      // Invalidate caches so home page shows updated post count/last activity
+      invalidateCache(cacheKeys.threads(20))
+      invalidateCache(cacheKeys.posts(thread.id))
     }
 
     setSubmitting(false)

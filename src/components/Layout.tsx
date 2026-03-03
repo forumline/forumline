@@ -5,30 +5,41 @@ import Sidebar from './Sidebar'
 import MobileSidebar from './MobileSidebar'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { useCachedData, cacheKeys } from '../lib/useCache'
 import type { Category, ChatChannel, VoiceRoom } from '../types'
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user } = useAuth()
-  const [categories, setCategories] = useState<Category[]>([])
-  const [channels, setChannels] = useState<ChatChannel[]>([])
-  const [rooms, setRooms] = useState<VoiceRoom[]>([])
   const [unreadDmCount, setUnreadDmCount] = useState(0)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const [catRes, chanRes, roomRes] = await Promise.all([
-        supabase.from('categories').select('*').order('sort_order'),
-        supabase.from('chat_channels').select('*').order('name'),
-        supabase.from('voice_rooms').select('*').order('name'),
-      ])
-      if (catRes.data) setCategories(catRes.data)
-      if (chanRes.data) setChannels(chanRes.data)
-      if (roomRes.data) setRooms(roomRes.data)
+  // Use cached data for static sidebar content - instant on tab switch!
+  const { data: categories = [] } = useCachedData<Category[]>(
+    cacheKeys.categories(),
+    'categories',
+    async () => {
+      const { data } = await supabase.from('categories').select('*').order('sort_order')
+      return data || []
     }
+  )
 
-    fetchData()
-  }, [])
+  const { data: channels = [] } = useCachedData<ChatChannel[]>(
+    cacheKeys.channels(),
+    'channels',
+    async () => {
+      const { data } = await supabase.from('chat_channels').select('*').order('name')
+      return data || []
+    }
+  )
+
+  const { data: rooms = [] } = useCachedData<VoiceRoom[]>(
+    cacheKeys.voiceRooms(),
+    'voiceRooms',
+    async () => {
+      const { data } = await supabase.from('voice_rooms').select('*').order('name')
+      return data || []
+    }
+  )
 
   useEffect(() => {
     if (!user) {
