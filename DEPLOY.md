@@ -4,21 +4,48 @@ This app is deployed on **Vercel** with **Supabase** as the backend.
 
 ## Production URLs
 
-- **Frontend**: Deployed via Vercel (auto-deploys from main branch)
+- **Frontend**: https://forum-chat-voice.vercel.app
 - **Database**: Supabase PostgreSQL
 - **Voice**: LiveKit Cloud
+
+## Vercel CLI
+
+The Vercel CLI token is stored in macOS Keychain under `vercel-token`.
+
+```bash
+# Get token from keychain
+VERCEL_TOKEN=$(security find-generic-password -s "vercel-token" -a "vercel-cli" -w)
+
+# List projects
+vercel project ls --token "$VERCEL_TOKEN"
+
+# List deployments
+vercel ls --token "$VERCEL_TOKEN"
+
+# List environment variables
+vercel env ls --token "$VERCEL_TOKEN"
+
+# Add environment variable
+echo "value" | vercel env add VAR_NAME production --token "$VERCEL_TOKEN"
+
+# Deploy to production
+vercel --prod --token "$VERCEL_TOKEN"
+
+# View deployment logs
+vercel logs <deployment-url> --token "$VERCEL_TOKEN"
+```
 
 ## Environment Variables
 
 ### Required for Vercel
 
-Set these in Vercel Dashboard → Settings → Environment Variables:
+Set via CLI or Vercel Dashboard:
 
 | Variable | Description |
 |----------|-------------|
 | `VITE_SUPABASE_URL` | Your Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
-| `VITE_SITE_URL` | Your production URL (e.g., `https://forum-chat-voice.vercel.app`) |
+| `VITE_SITE_URL` | Production URL (`https://forum-chat-voice.vercel.app`) |
 | `LIVEKIT_URL` | LiveKit server URL (wss://...) |
 | `LIVEKIT_API_KEY` | LiveKit API key |
 | `LIVEKIT_API_SECRET` | LiveKit API secret |
@@ -49,8 +76,7 @@ Vercel auto-deploys when you push to the main branch.
 
 Manual deploy:
 ```bash
-npm run build
-vercel --prod
+vercel --prod --token "$VERCEL_TOKEN"
 ```
 
 ## Supabase Setup
@@ -65,10 +91,10 @@ vercel --prod
 
 In Supabase Dashboard → Authentication → URL Configuration:
 
-- **Site URL**: `https://your-app.vercel.app`
+- **Site URL**: `https://forum-chat-voice.vercel.app`
 - **Redirect URLs**:
-  - `https://your-app.vercel.app`
-  - `https://your-app.vercel.app/reset-password`
+  - `https://forum-chat-voice.vercel.app`
+  - `https://forum-chat-voice.vercel.app/reset-password`
   - `http://localhost:3000` (for local dev)
   - `http://localhost:3000/reset-password` (for local dev)
 
