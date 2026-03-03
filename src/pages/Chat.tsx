@@ -41,6 +41,14 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Prevent body scroll on chat page
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [])
+
   // Use React Query for channels - instant on tab switch!
   const { data: channels = [] } = useQuery({
     queryKey: queryKeys.channels,
