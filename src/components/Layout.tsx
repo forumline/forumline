@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useState, useCallback, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Header from './Header'
 import Sidebar from './Sidebar'
 import MobileSidebar from './MobileSidebar'
@@ -12,6 +12,7 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user } = useAuth()
   const [unreadDmCount, setUnreadDmCount] = useState(0)
+  const queryClient = useQueryClient()
 
   // Use React Query for sidebar data - cached globally, instant on tab switch!
   const { data: categories = [] } = useQuery({
@@ -31,6 +32,29 @@ export default function Layout() {
     queryFn: fetchers.voiceRooms,
     ...queryOptions.static,
   })
+
+  // Prefetch common data in background on app load
+  useEffect(() => {
+    // Prefetch home page threads
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads(20),
+      queryFn: () => fetchers.threads(20),
+      ...queryOptions.threads,
+    })
+  }, [queryClient])
+
+  // Prefetch all category threads once categories are loaded
+  useEffect(() => {
+    if (categories.length === 0) return
+
+    categories.forEach((category) => {
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.threadsByCategory(category.slug),
+        queryFn: () => fetchers.threadsByCategory(category.slug),
+        ...queryOptions.threads,
+      })
+    })
+  }, [categories, queryClient])
 
   useEffect(() => {
     if (!user) {
