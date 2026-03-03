@@ -57,6 +57,13 @@ export const queryKeys = {
   // Bookmarks
   bookmarks: (userId: string) => ['bookmarks', userId] as const,
   isBookmarked: (userId: string, threadId: string) => ['bookmark', userId, threadId] as const,
+
+  // Profile activity
+  userThreads: (userId: string) => ['userThreads', userId] as const,
+  userPosts: (userId: string) => ['userPosts', userId] as const,
+
+  // DM conversations
+  dmConversationsList: (userId: string) => ['dm', 'list', userId] as const,
 }
 
 // ============================================================================
@@ -178,14 +185,31 @@ export const fetchers = {
     return (data || []) as ChatMessageWithAuthor[]
   },
 
-  // Bookmarks
+  // Bookmarks - returns full bookmark with thread data
+  bookmarksWithMeta: async (userId: string): Promise<Array<{
+    id: string
+    created_at: string
+    thread: ThreadWithAuthor
+  }>> => {
+    const { data } = await supabase
+      .from('bookmarks')
+      .select(`id, created_at, thread:threads(*, author:profiles(*), category:categories(*))`)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    return (data?.map((b) => ({
+      id: b.id,
+      created_at: b.created_at,
+      thread: b.thread as unknown as ThreadWithAuthor,
+    })) || [])
+  },
+
+  // Legacy - just thread list
   bookmarks: async (userId: string): Promise<ThreadWithAuthor[]> => {
     const { data } = await supabase
       .from('bookmarks')
       .select(`thread:threads(*, author:profiles(*), category:categories(*))`)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-    // Extract threads from the nested structure
     return (data?.map((b: { thread: ThreadWithAuthor }) => b.thread) || []) as ThreadWithAuthor[]
   },
 
@@ -197,6 +221,86 @@ export const fetchers = {
       .eq('thread_id', threadId)
       .maybeSingle()
     return !!data
+  },
+
+  // Profile activity
+  userThreads: async (userId: string): Promise<ThreadWithAuthor[]> => {
+    const { data } = await supabase
+      .from('threads')
+      .select(`*, author:profiles(*), category:categories(*)`)
+      .eq('author_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    return (data || []) as ThreadWithAuthor[]
+  },
+
+  userPosts: async (userId: string): Promise<PostWithAuthor[]> => {
+    const { data } = await supabase
+      .from('posts')
+      .select(`*, author:profiles(*)`)
+      .eq('author_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    return (data || []) as PostWithAuthor[]
+  },
+
+  // DM conversations list
+  dmConversations: async (userId: string): Promise<Array<{
+    recipientId: string
+    recipientName: string
+    recipientAvatarUrl: string | null
+    lastMessage: string
+    lastMessageTime: string
+    unreadCount: number
+  }>> => {
+    // Get all DMs involving this user
+    const { data } = await supabase
+      .from('direct_messages')
+      .select('*, sender:profiles!direct_messages_sender_id_fkey(*), recipient:profiles!direct_messages_recipient_id_fkey(*)')
+      .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+
+    if (!data) return []
+
+    // Group by other user
+    const convMap = new Map<string, {
+      recipientId: string
+      recipientName: string
+      recipientAvatarUrl: string | null
+      lastMessage: string
+      lastMessageTime: string
+      unreadCount: number
+    }>()
+
+    for (const dm of data) {
+      const other: Profile = dm.sender_id === userId ? dm.recipient : dm.sender
+      if (!convMap.has(other.id)) {
+        convMap.set(other.id, {
+          recipientId: other.id,
+          recipientName: other.display_name || other.username,
+          recipientAvatarUrl: other.avatar_url,
+          lastMessage: dm.content,
+          lastMessageTime: dm.created_at,
+          unreadCount: 0,
+        })
+      }
+    }
+
+    // Count unreads
+    const { data: unreads } = await supabase
+      .from('direct_messages')
+      .select('sender_id')
+      .eq('recipient_id', userId)
+      .eq('read', false)
+
+    if (unreads) {
+      for (const u of unreads) {
+        const conv = convMap.get(u.sender_id)
+        if (conv) conv.unreadCount++
+      }
+    }
+
+    return Array.from(convMap.values())
   },
 }
 

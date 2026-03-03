@@ -1,53 +1,55 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import Avatar from '../components/Avatar'
 import { formatTimeAgo, formatDate } from '../lib/dateFormatters'
-import type { ThreadWithAuthor } from '../types'
-
-interface BookmarkWithThread {
-  id: string
-  thread: ThreadWithAuthor
-  created_at: string
-}
+import { queryKeys, fetchers, queryOptions } from '../lib/queries'
 
 export default function Bookmarks() {
   const { user, loading: authLoading } = useAuth()
-  const [bookmarks, setBookmarks] = useState<BookmarkWithThread[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
+  // Use React Query for bookmarks - cached globally!
+  const { data: bookmarks = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.bookmarks(user?.id ?? ''),
+    queryFn: () => fetchers.bookmarksWithMeta(user!.id),
+    enabled: !!user,
+    ...queryOptions.threads,
+  })
 
-    const fetchBookmarks = async () => {
-      const { data } = await supabase
-        .from('bookmarks')
-        .select('*, thread:threads(*, author:profiles(*), category:categories(*))')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (data) {
-        setBookmarks(data.map(b => ({
-          id: b.id,
-          thread: b.thread as unknown as ThreadWithAuthor,
-          created_at: b.created_at,
-        })))
-      }
-      setLoading(false)
-    }
-
-    fetchBookmarks()
-  }, [user])
-
-  const removeBookmark = async (bookmarkId: string) => {
-    if (user) {
+  // Optimistic removal mutation
+  const removeBookmarkMutation = useMutation({
+    mutationFn: async (bookmarkId: string) => {
       await supabase.from('bookmarks').delete().eq('id', bookmarkId)
-    }
-    setBookmarks(prev => prev.filter(b => b.id !== bookmarkId))
+    },
+    onMutate: async (bookmarkId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.bookmarks(user!.id) })
+
+      // Snapshot the previous value
+      const previousBookmarks = queryClient.getQueryData(queryKeys.bookmarks(user!.id))
+
+      // Optimistically update to remove the bookmark
+      queryClient.setQueryData(
+        queryKeys.bookmarks(user!.id),
+        (old: typeof bookmarks) => old?.filter(b => b.id !== bookmarkId) ?? []
+      )
+
+      return { previousBookmarks }
+    },
+    onError: (_err, _bookmarkId, context) => {
+      // Rollback on error
+      queryClient.setQueryData(queryKeys.bookmarks(user!.id), context?.previousBookmarks)
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: queryKeys.bookmarks(user!.id) })
+    },
+  })
+
+  const removeBookmark = (bookmarkId: string) => {
+    removeBookmarkMutation.mutate(bookmarkId)
   }
 
   // Auth guard
