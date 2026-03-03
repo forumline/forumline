@@ -111,10 +111,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         console.log('[FLD:Auth] Auth state changed:', event, session?.user?.id ?? '(no user)')
 
-        // INITIAL_SESSION is fully handled by getRawUser() above — always skip.
+        // INITIAL_SESSION is usually handled by getRawUser() above — skip if
+        // we already loaded a user. But if getRawUser() found no session and
+        // INITIAL_SESSION has one (e.g. from URL hash fragment), process it.
         if (event === 'INITIAL_SESSION') {
-          console.log('[FLD:Auth] INITIAL_SESSION handled by getRawUser, skipping')
-          return
+          if (loadedUserIdRef.current || !session?.user) {
+            console.log('[FLD:Auth] INITIAL_SESSION handled by getRawUser, skipping')
+            return
+          }
+          console.log('[FLD:Auth] INITIAL_SESSION has new session from URL hash, processing')
         }
 
         // For SIGNED_IN and TOKEN_REFRESHED: if we already loaded this exact
