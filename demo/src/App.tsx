@@ -6,7 +6,7 @@ import { VoiceProvider } from './lib/voice'
 import ScrollToTop from './components/ScrollToTop'
 import Layout from './components/Layout'
 import Skeleton from './components/ui/Skeleton'
-import { RequireAuth, RequireAdmin } from './components/RequireAuth'
+import { RequireAuth, RequireAdmin, RedirectIfAuth } from './components/RequireAuth'
 
 // Lazy-load all pages for code splitting
 const Home = lazy(() => import('./pages/Home'))
@@ -25,6 +25,7 @@ const DirectMessages = lazy(() => import('./pages/DirectMessages'))
 const Bookmarks = lazy(() => import('./pages/Bookmarks'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Admin = lazy(() => import('./pages/Admin'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 const HUB_SUPABASE_URL = import.meta.env.VITE_HUB_SUPABASE_URL as string
 const HUB_SUPABASE_ANON_KEY = import.meta.env.VITE_HUB_SUPABASE_ANON_KEY as string
@@ -69,9 +70,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Suspense fallback={<PageFallback />}><Home /></Suspense>} />
-          <Route path="login" element={<Suspense fallback={<PageFallback />}><Login /></Suspense>} />
-          <Route path="register" element={<Suspense fallback={<PageFallback />}><Register /></Suspense>} />
-          <Route path="forgot-password" element={<Suspense fallback={<PageFallback />}><ForgotPassword /></Suspense>} />
+          <Route path="login" element={<RedirectIfAuth><Suspense fallback={<PageFallback />}><Login /></Suspense></RedirectIfAuth>} />
+          <Route path="register" element={<RedirectIfAuth><Suspense fallback={<PageFallback />}><Register /></Suspense></RedirectIfAuth>} />
+          <Route path="forgot-password" element={<RedirectIfAuth><Suspense fallback={<PageFallback />}><ForgotPassword /></Suspense></RedirectIfAuth>} />
           <Route path="reset-password" element={<Suspense fallback={<PageFallback />}><ResetPassword /></Suspense>} />
           <Route path="c/:categorySlug" element={<Suspense fallback={<PageFallback />}><Category /></Suspense>} />
           <Route path="c/:categorySlug/new" element={<RequireAuth><Suspense fallback={<PageFallback />}><NewThread /></Suspense></RequireAuth>} />
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="bookmarks" element={<RequireAuth><Suspense fallback={<PageFallback />}><Bookmarks /></Suspense></RequireAuth>} />
           <Route path="settings" element={<RequireAuth><Suspense fallback={<PageFallback />}><Settings /></Suspense></RequireAuth>} />
           <Route path="admin" element={<RequireAdmin><Suspense fallback={<PageFallback />}><Admin /></Suspense></RequireAdmin>} />
+          <Route path="*" element={<Suspense fallback={<PageFallback />}><NotFound /></Suspense>} />
         </Route>
       </Routes>
       </AuthenticatedProviders>

@@ -122,7 +122,7 @@ export default function Home() {
                     <span className="hidden sm:inline">·</span>
                     <span>{formatTimeAgo(thread.created_at)}</span>
                     <span>·</span>
-                    <span>{thread.post_count} replies</span>
+                    <span>{thread.post_count} {thread.post_count === 1 ? 'reply' : 'replies'}</span>
                   </div>
                 </div>
 

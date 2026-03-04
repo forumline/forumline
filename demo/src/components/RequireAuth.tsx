@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import Card from './ui/Card'
 import Skeleton from './ui/Skeleton'
@@ -40,6 +40,27 @@ export function RequireAuth({ children }: RequireAuthProps) {
         </Card>
       </div>
     )
+  }
+
+  return <>{children}</>
+}
+
+export function RedirectIfAuth({ children }: RequireAuthProps) {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-32 rounded-xl" />
+        </div>
+      </div>
+    )
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>

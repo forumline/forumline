@@ -147,11 +147,11 @@ export default function ProfilePage() {
             <div className="mt-4 flex flex-wrap justify-center gap-6 sm:justify-start">
               <div>
                 <span className="text-xl font-bold text-white">{threads.length}</span>
-                <span className="ml-1 text-slate-400">threads</span>
+                <span className="ml-1 text-slate-400">{threads.length === 1 ? 'thread' : 'threads'}</span>
               </div>
               <div>
                 <span className="text-xl font-bold text-white">{posts.length}</span>
-                <span className="ml-1 text-slate-400">posts</span>
+                <span className="ml-1 text-slate-400">{posts.length === 1 ? 'post' : 'posts'}</span>
               </div>
               <div className="hidden sm:block">
                 <span className="text-slate-400">Joined</span>
@@ -237,7 +237,7 @@ export default function ProfilePage() {
                       </div>
                       <h3 className="mt-1 font-medium text-white">{thread.title}</h3>
                       <p className="mt-1 text-sm text-slate-400">
-                        {formatTimeAgo(thread.created_at)} · {thread.post_count} replies
+                        {formatTimeAgo(thread.created_at)} · {thread.post_count} {thread.post_count === 1 ? 'reply' : 'replies'}
                       </p>
                     </div>
                   </Link>
