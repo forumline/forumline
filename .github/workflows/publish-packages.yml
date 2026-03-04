@@ -33,7 +33,7 @@ jobs:
             cd "packages/$pkg"
             npm run build
             OUTPUT=$(npm publish 2>&1) && echo "$OUTPUT" || {
-              if echo "$OUTPUT" | grep -qi "cannot publish over the previously published"; then
+              if echo "$OUTPUT" | grep -qi "cannot publish over"; then
                 echo "Version already published, skipping"
               else
                 echo "$OUTPUT"
