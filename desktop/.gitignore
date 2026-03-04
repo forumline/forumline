@@ -2,8 +2,3 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
-
-# Frontend
-/frontend/node_modules/
-/frontend/dist/
-/frontend/.env.local

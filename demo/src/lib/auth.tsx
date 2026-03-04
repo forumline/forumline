@@ -26,6 +26,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Track which user ID getSession() already loaded so onAuthStateChange
   // can skip redundant ensureProfile calls for the same user.
   const loadedUserIdRef = useRef<string | null>(null)
+  // Store the parent frame's origin for secure postMessage targeting
+  const parentOriginRef = useRef<string | null>(null)
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     const data = await getDataProvider().getProfile(userId)
@@ -76,6 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username: prof?.username || (rawUser.user_metadata?.username as string | undefined),
       },
     }
+  }
+
+  const postToParent = (data: Record<string, unknown>) => {
+    if (window.parent === window) return
+    const targetOrigin = parentOriginRef.current || '*'
+    window.parent.postMessage(data, targetOrigin)
   }
 
   useEffect(() => {
@@ -129,9 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[FLD:Auth] Auth init complete, loading=false')
 
       // Notify parent frame (hub) of auth state
-      if (window.parent !== window) {
-        window.parent.postMessage({ type: 'forumline:auth_state', signedIn: !!rawUser }, '*')
-      }
+      postToParent({ type: 'forumline:auth_state', signedIn: !!rawUser })
     }).catch((err) => {
       console.error('[FLD:Auth] getSession() failed:', err)
       setLoading(false)
@@ -175,9 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           // Notify parent frame (hub) of sign-in
-          if (window.parent !== window) {
-            window.parent.postMessage({ type: 'forumline:auth_state', signedIn: true }, '*')
-          }
+          postToParent({ type: 'forumline:auth_state', signedIn: true })
 
           // Redirect to reset-password page on PASSWORD_RECOVERY event
           if (event === 'PASSWORD_RECOVERY') {
@@ -191,9 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loadedUserIdRef.current = null
 
           // Notify parent frame (hub) of sign-out
-          if (window.parent !== window) {
-            window.parent.postMessage({ type: 'forumline:auth_state', signedIn: false }, '*')
-          }
+          postToParent({ type: 'forumline:auth_state', signedIn: false })
         }
       }
     )
@@ -202,13 +204,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleAuthRequest = (event: MessageEvent) => {
       if (event.data?.type !== 'forumline:request_auth_state') return
       if (window.parent !== window) {
+        parentOriginRef.current = event.origin
         window.parent.postMessage({
           type: 'forumline:auth_state',
           signedIn: !!loadedUserIdRef.current,
-        }, '*')
+        }, event.origin)
       }
     }
     window.addEventListener('message', handleAuthRequest)
+
+    // Signal to parent that the forum is ready to receive messages
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'forumline:ready' }, '*')
+    }
 
     return () => {
       unsubscribe()

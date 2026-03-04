@@ -27,10 +27,23 @@ export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: 
   const [iframeSrc, setIframeSrc] = useState(forum.web_base)
   const [loggingIn, setLoggingIn] = useState(false)
   const hasCalledAuthed = useRef(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const forumOrigin = new URL(forum.web_base).origin
 
   // Listen for auth state messages from the forum iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== forumOrigin) return
+
+      if (event.data?.type === 'forumline:ready') {
+        iframeRef.current?.contentWindow?.postMessage(
+          { type: 'forumline:request_auth_state' },
+          forumOrigin,
+        )
+        return
+      }
+
       if (event.data?.type !== 'forumline:auth_state') return
       if (event.data.signedIn) {
         if (onAuthed && !hasCalledAuthed.current) {
@@ -46,7 +59,7 @@ export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: 
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [forum.domain, onAuthed, onSignedOut])
+  }, [forum.domain, forumOrigin, onAuthed, onSignedOut])
 
   const handleLogin = useCallback(() => {
     if (!authUrl) return
@@ -55,8 +68,6 @@ export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: 
     setIframeSrc(authUrl)
   }, [authUrl])
 
-  const iframeRef = useRef<HTMLIFrameElement>(null)
-
   const handleLoad = useCallback(() => {
     setLoading(false)
     if (loggingIn && onAuthed && !hasCalledAuthed.current) {
@@ -64,16 +75,13 @@ export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: 
       setLoggingIn(false)
       onAuthed(forum.domain)
     }
-    // Ask the forum for its current auth state (handles the race where
-    // the forum's postMessage fired before our listener was ready).
-    // Retry a few times since the forum's React app may still be mounting.
-    const requestAuthState = () => {
-      iframeRef.current?.contentWindow?.postMessage({ type: 'forumline:request_auth_state' }, '*')
-    }
-    requestAuthState()
-    setTimeout(requestAuthState, 500)
-    setTimeout(requestAuthState, 1500)
-  }, [loggingIn, onAuthed, forum.domain])
+    // Ask the forum for its current auth state as a fallback
+    // (the primary path is the forumline:ready event from the forum).
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'forumline:request_auth_state' },
+      forumOrigin,
+    )
+  }, [loggingIn, onAuthed, forum.domain, forumOrigin])
 
   const showBanner = !!authUrl && !loggingIn && !hasCalledAuthed.current
 
