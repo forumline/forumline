@@ -7,8 +7,9 @@ import type { DeepLinkTarget } from '@johnvondrashek/forumline-react'
 import WelcomePage from './WelcomePage'
 import DmPanel from './DmPanel'
 import SettingsPage from './SettingsPage'
+import MobileTabBar from './MobileTabBar'
 
-type AppView = 'forums' | 'settings'
+type AppView = 'forums' | 'settings' | 'dms'
 
 interface AppLayoutProps {
   hubSession: Session | null
@@ -88,13 +89,13 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
     : null
 
   const handleForumAuthed = useCallback((domain: string) => {
-    setAuthedForums(prev => new Set(prev ?? new Set()).add(domain))
+    setAuthedForums(prev => new Set<string>(prev ?? new Set<string>()).add(domain))
     if (hubSession) updateForumAuthState(hubSession.access_token, domain, true)
   }, [hubSession])
 
   const handleForumSignedOut = useCallback((domain: string) => {
     setAuthedForums(prev => {
-      const next = new Set(prev ?? new Set())
+      const next = new Set<string>(prev ?? new Set<string>())
       next.delete(domain)
       return next
     })
@@ -102,8 +103,8 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
   }, [hubSession])
 
   const handleForumNotification = useCallback(async (_domain: string, notification: ForumNotification) => {
-    // Only notify when window is not focused
-    if (document.hasFocus()) return
+    // Only notify when window is not visible (works on mobile too)
+    if (document.visibilityState === 'visible') return
 
     const { title, body } = notification
 
@@ -132,8 +133,9 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
   }, [])
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-dvh flex-col md:flex-row">
       <ForumRail
+        className="hidden md:flex"
         onDmClick={() => setShowDmPanel(prev => !prev)}
         dmUnreadCount={dmUnreadCount}
         onSettingsClick={() => {
@@ -141,9 +143,16 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
         }}
       />
 
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {view === 'settings' && (
           <SettingsPage hubSession={hubSession} onClose={() => setView('forums')} />
+        )}
+
+        {/* Mobile: full-screen DM panel */}
+        {view === 'dms' && (
+          <div className="flex flex-1 md:hidden">
+            <DmPanel fullScreen onClose={() => setView('forums')} />
+          </div>
         )}
 
         {activeForum && (
@@ -164,10 +173,19 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
           <WelcomePage hubSession={hubSession} isHubConnected={isHubConnected} />
         )}
 
+        {/* Desktop: overlay DM panel */}
         {showDmPanel && (
-          <DmPanel onClose={() => setShowDmPanel(false)} />
+          <div className="hidden md:block">
+            <DmPanel onClose={() => setShowDmPanel(false)} />
+          </div>
         )}
       </div>
+
+      <MobileTabBar
+        view={view}
+        onChangeView={setView}
+        dmUnreadCount={dmUnreadCount}
+      />
     </div>
   )
 }
