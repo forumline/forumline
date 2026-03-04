@@ -26,11 +26,28 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel
 
+      - name: Install workspace packages (for building from source)
+        run: npm install
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build monorepo packages from source
+        run: |
+          npm run --workspace=packages/protocol build
+          npm run --workspace=packages/central-services-client build
+          npm run --workspace=packages/react build
+
       - name: Install central-services dependencies
         run: npm install
         working-directory: central-services
         env:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync built packages into central-services node_modules
+        run: |
+          cp -r packages/protocol/dist/* central-services/node_modules/@johnvondrashek/forumline-protocol/dist/
+          cp -r packages/central-services-client/dist/* central-services/node_modules/@johnvondrashek/forumline-central-services-client/dist/
+          cp -r packages/react/dist/* central-services/node_modules/@johnvondrashek/forumline-react/dist/
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}
