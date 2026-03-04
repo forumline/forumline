@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
+    "tauri": "tauri",
     "tauri:dev": "TAURI_DIR=desktop tauri dev",
     "tauri:build": "TAURI_DIR=desktop tauri build"
   }
