@@ -361,7 +361,7 @@ export class ForumlineServer {
       // Verify JWT signature if hub secret is configured, otherwise fall back to decode-only
       let payload: Record<string, unknown> | null
       if (this.config.hubJwtSecret) {
-        payload = verifyJwt(identityToken, this.config.hubJwtSecret)
+        payload = await verifyJwt(identityToken, this.config.hubJwtSecret)
         // verifyJwt also checks expiry, so invalid/expired tokens return null
       } else {
         payload = decodeJwtPayload(identityToken)
