@@ -11,10 +11,9 @@ export default function WelcomePage({ hubSession, isHubConnected }: WelcomePageP
   const { forums } = useForum()
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto bg-slate-900 px-4 md:px-0">
-      {/* Mobile forum list */}
+    <div className="flex flex-1 flex-col overflow-y-auto bg-slate-900 px-4">
       {forums.length > 0 && (
-        <div className="mt-6 md:hidden">
+        <div className="mx-auto mt-6 w-full max-w-md">
           <MobileForumList />
         </div>
       )}
@@ -50,23 +49,16 @@ export default function WelcomePage({ hubSession, isHubConnected }: WelcomePageP
 
           {forums.length === 0 ? (
             <div className="mt-6">
-              <p className="hidden text-sm text-slate-400 md:block">
-                Click the <span className="font-medium text-green-400">+</span> button in the sidebar to add your first forum
-              </p>
-              <p className="text-sm text-slate-400 md:hidden">
+              <p className="text-sm text-slate-400">
                 Tap <span className="font-medium text-green-400">Add Forum</span> below to add your first forum
               </p>
-              {/* Mobile-only inline add forum */}
-              <div className="mt-4 md:hidden">
+              <div className="mx-auto mt-4 max-w-md">
                 <MobileForumList />
               </div>
             </div>
           ) : (
             <div className="mt-6">
-              <p className="hidden text-sm text-slate-400 md:block">
-                {forums.length} forum{forums.length !== 1 ? 's' : ''} connected. Select one from the sidebar.
-              </p>
-              <p className="text-sm text-slate-400 md:hidden">
+              <p className="text-sm text-slate-400">
                 {forums.length} forum{forums.length !== 1 ? 's' : ''} connected. Tap one above to open it.
               </p>
             </div>

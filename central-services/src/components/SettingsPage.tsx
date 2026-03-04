@@ -31,26 +31,16 @@ export default function SettingsPage({ hubSession, onClose }: SettingsPageProps)
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-700 px-4 py-4 md:px-6">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white md:hidden"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold text-white">Settings</h1>
-        </div>
+      <div className="flex items-center gap-2 border-b border-slate-700 px-4 py-4">
         <button
           onClick={onClose}
-          className="hidden rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white md:block"
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
+        <h1 className="text-xl font-bold text-white">Settings</h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl space-y-6 p-4 md:p-6">
@@ -92,7 +82,7 @@ export default function SettingsPage({ hubSession, onClose }: SettingsPageProps)
 
           {forums.length === 0 ? (
             <p className="mt-4 text-sm text-slate-500">
-              No forums added yet. Click the + button in the sidebar to add one.
+              No forums added yet. Go to Home and tap Add Forum to add one.
             </p>
           ) : (
             <div className="mt-4 space-y-2">

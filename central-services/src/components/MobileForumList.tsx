@@ -30,7 +30,7 @@ export default function MobileForumList() {
   }
 
   return (
-    <div className="md:hidden">
+    <div>
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Your Forums</h2>
       <div className="space-y-2">
         {forums.map((forum) => {
