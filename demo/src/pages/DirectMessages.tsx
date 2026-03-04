@@ -7,6 +7,7 @@ import Avatar from '../components/Avatar'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
+import { supabase } from '../lib/supabase'
 import Skeleton from '../components/ui/Skeleton'
 import { formatShortTimeAgo, formatMessageTime } from '../lib/dateFormatters'
 import { queryKeys, queryOptions } from '../lib/queries'
@@ -210,15 +211,22 @@ export default function DirectMessages() {
             <p className="mt-2 max-w-sm text-sm text-slate-400">
               Direct messages are powered by Forumline, enabling cross-forum conversations. Connect your account to get started.
             </p>
-            <a
-              href="/api/forumline/auth"
+            <button
+              onClick={async () => {
+                const { data: { session } } = await supabase.auth.getSession()
+                if (!session?.access_token) {
+                  toast.error('Session expired. Please sign in again.')
+                  return
+                }
+                window.location.href = `/api/forumline/auth?link_token=${session.access_token}`
+              }}
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
               </svg>
               Connect to Forumline
-            </a>
+            </button>
           </div>
         </Card>
       </div>
