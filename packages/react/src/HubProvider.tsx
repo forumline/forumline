@@ -33,6 +33,8 @@ interface HubProviderProps {
   hubUrl: string
   /** Endpoint to fetch the hub access token. Defaults to '/api/forumline/auth/hub-token'. */
   hubTokenEndpoint?: string
+  /** Interval in ms to poll hub-token endpoint for revocation. Set to 0 to disable. Defaults to 30000. */
+  heartbeatInterval?: number
   children: ReactNode
 }
 
@@ -42,6 +44,7 @@ export function HubProvider({
   hubSupabaseAnonKey,
   hubUrl,
   hubTokenEndpoint = '/api/forumline/auth/hub-token',
+  heartbeatInterval = 30000,
   children,
 }: HubProviderProps) {
   const [hubClient, setHubClient] = useState<CentralServicesClient | null>(null)
@@ -101,13 +104,17 @@ export function HubProvider({
     init()
   }, [user, hubSupabaseUrl, hubSupabaseAnonKey, hubUrl, hubTokenEndpoint])
 
-  const reconnect = useCallback(() => {
+  const teardown = useCallback(() => {
     setHubClient(null)
     setHubSupabase(null)
     setHubUserId(null)
     setIsHubConnected(false)
-    initRef.current = false
   }, [])
+
+  const reconnect = useCallback(() => {
+    teardown()
+    initRef.current = false
+  }, [teardown])
 
   // Reset when user logs out
   useEffect(() => {
@@ -115,6 +122,26 @@ export function HubProvider({
       reconnect()
     }
   }, [user, reconnect])
+
+  // Heartbeat: poll hub-token endpoint to detect revocation
+  useEffect(() => {
+    if (!isHubConnected || !user || !heartbeatInterval) return
+
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(hubTokenEndpoint, { credentials: 'include' })
+        const data = await res.json()
+        if (!data.hub_access_token) {
+          console.log('[FLD:Hub] Heartbeat detected hub revocation')
+          teardown()
+        }
+      } catch {
+        // Ignore network errors — don't tear down on transient failures
+      }
+    }, heartbeatInterval)
+
+    return () => clearInterval(id)
+  }, [isHubConnected, user, heartbeatInterval, hubTokenEndpoint, teardown])
 
   return (
     <HubContext.Provider value={{ hubClient, hubSupabase, hubUserId, isHubConnected, reconnect }}>
