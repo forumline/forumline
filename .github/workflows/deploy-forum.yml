@@ -25,11 +25,28 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel
 
+      - name: Install workspace packages (for building from source)
+        run: npm ci
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build monorepo packages from source
+        run: |
+          npm run --workspace=packages/protocol build
+          npm run --workspace=packages/server-sdk build
+
       - name: Install demo dependencies
         run: npm ci
         working-directory: demo
         env:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync built packages into demo node_modules
+        run: |
+          cp -r packages/protocol/dist/* demo/node_modules/@johnvondrashek/forumline-protocol/dist/
+          cp packages/protocol/package.json demo/node_modules/@johnvondrashek/forumline-protocol/package.json
+          cp -r packages/server-sdk/dist/* demo/node_modules/@johnvondrashek/forumline-server-sdk/dist/
+          cp packages/server-sdk/package.json demo/node_modules/@johnvondrashek/forumline-server-sdk/package.json
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}

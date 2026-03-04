@@ -46,6 +46,7 @@ jobs:
       - name: Sync built packages into central-services node_modules
         run: |
           cp -r packages/protocol/dist/* central-services/node_modules/@johnvondrashek/forumline-protocol/dist/
+          cp packages/protocol/package.json central-services/node_modules/@johnvondrashek/forumline-protocol/package.json
           cp -r packages/central-services-client/dist/* central-services/node_modules/@johnvondrashek/forumline-central-services-client/dist/
           cp -r packages/react/dist/* central-services/node_modules/@johnvondrashek/forumline-react/dist/
 
