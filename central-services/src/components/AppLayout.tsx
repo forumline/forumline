@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { useQuery } from '@tanstack/react-query'
 import type { ForumNotification } from '@johnvondrashek/forumline-protocol'
-import { ForumRail, ForumWebview, useForum, useHub, isTauri, getTauriNotification, useDeepLink } from '@johnvondrashek/forumline-react'
+import { ForumWebview, useForum, useHub, isTauri, getTauriNotification, useDeepLink } from '@johnvondrashek/forumline-react'
 import type { DeepLinkTarget } from '@johnvondrashek/forumline-react'
 import WelcomePage from './WelcomePage'
 import DmPanel from './DmPanel'
@@ -34,7 +34,6 @@ async function updateForumAuthState(accessToken: string, forumDomain: string, au
 export default function AppLayout({ hubSession }: AppLayoutProps) {
   const { activeForum, setUnreadCounts, switchForum } = useForum()
   const { hubClient, isHubConnected } = useHub()
-  const [showDmPanel, setShowDmPanel] = useState(false)
   const [view, setView] = useState<AppView>('forums')
   const [authedForums, setAuthedForums] = useState<Set<string> | null>(null)
   const [deepLinkPath, setDeepLinkPath] = useState<string | null>(null)
@@ -133,26 +132,14 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
   }, [])
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row">
-      <ForumRail
-        className="hidden md:flex"
-        onDmClick={() => setShowDmPanel(prev => !prev)}
-        dmUnreadCount={dmUnreadCount}
-        onSettingsClick={() => {
-          setView(view === 'settings' ? 'forums' : 'settings')
-        }}
-      />
-
+    <div className="flex h-dvh flex-col">
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {view === 'settings' && (
           <SettingsPage hubSession={hubSession} onClose={() => setView('forums')} />
         )}
 
-        {/* Mobile: full-screen DM panel */}
         {view === 'dms' && (
-          <div className="flex flex-1 md:hidden">
-            <DmPanel fullScreen onClose={() => setView('forums')} />
-          </div>
+          <DmPanel onClose={() => setView('forums')} />
         )}
 
         {activeForum && (
@@ -171,13 +158,6 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
 
         {view === 'forums' && !activeForum && (
           <WelcomePage hubSession={hubSession} isHubConnected={isHubConnected} />
-        )}
-
-        {/* Desktop: overlay DM panel */}
-        {showDmPanel && (
-          <div className="hidden md:block">
-            <DmPanel onClose={() => setShowDmPanel(false)} />
-          </div>
         )}
       </div>
 

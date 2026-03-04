@@ -31,7 +31,7 @@ export default function MobileTabBar({ view, onChangeView, dmUnreadCount }: Mobi
   const isForums = view === 'forums' && !!activeForum
 
   return (
-    <div className="flex border-t border-slate-700 bg-slate-900 pb-[env(safe-area-inset-bottom)] md:hidden">
+    <div className="flex border-t border-slate-700 bg-slate-900 pb-[env(safe-area-inset-bottom)]">
       {/* Home */}
       <button
         onClick={handleHomeClick}
