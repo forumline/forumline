@@ -27,6 +27,7 @@ interface ForumContextType {
   forums: ForumMembership[]
   activeForum: ForumMembership | null
   unreadCounts: Record<string, UnreadCounts>
+  setUnreadCounts: (domain: string, counts: UnreadCounts) => void
   switchForum: (domain: string) => Promise<void>
   goHome: () => void
   addForum: (url: string) => Promise<void>
@@ -114,7 +115,11 @@ export function useForum(): ForumContextType {
 export function ForumProvider({ children }: { children: ReactNode }) {
   const [forums, setForums] = useState<ForumMembership[]>([])
   const [activeForum, setActiveForum] = useState<ForumMembership | null>(null)
-  const [unreadCounts] = useState<Record<string, UnreadCounts>>({})
+  const [unreadCounts, setUnreadCountsState] = useState<Record<string, UnreadCounts>>({})
+
+  const setUnreadCounts = useCallback((domain: string, counts: UnreadCounts) => {
+    setUnreadCountsState(prev => ({ ...prev, [domain]: counts }))
+  }, [])
 
   // Load forum list from localStorage on mount
   useEffect(() => {
@@ -185,6 +190,7 @@ export function ForumProvider({ children }: { children: ReactNode }) {
       forums,
       activeForum,
       unreadCounts,
+      setUnreadCounts,
       switchForum,
       goHome,
       addForum,

@@ -30,3 +30,9 @@ export type {
   HubDmConversation,
   HubProfile,
 } from './hub-dms'
+export type {
+  ForumToHubMessage,
+  HubToForumMessage,
+  ForumlineMessage,
+} from './webview-messages'
+export { isForumlineMessage } from './webview-messages'

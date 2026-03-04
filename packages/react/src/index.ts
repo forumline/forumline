@@ -9,6 +9,8 @@ export { default as ForumWebview } from './ForumWebview'
 
 // Hooks
 export { useNativeNotifications } from './useNativeNotifications'
+export { useDeepLink, parseDeepLink } from './useDeepLink'
+export type { DeepLinkTarget } from './useDeepLink'
 
 // Utilities
 export { isTauri, openExternal, getTauriNotification, getTauriAutostart, getTauriShell } from './tauri'

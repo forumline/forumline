@@ -4,6 +4,7 @@ import { getDataProvider } from './data-provider'
 import { uploadDefaultAvatar } from './avatars'
 import { supabase } from './supabase'
 import type { Profile } from '../types/database'
+import type { ForumToHubMessage, HubToForumMessage } from '@johnvondrashek/forumline-protocol'
 
 interface AuthContextType {
   user: AppUser | null
@@ -80,10 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const postToParent = (data: Record<string, unknown>) => {
+  const postToParent = (msg: ForumToHubMessage) => {
     if (window.parent === window) return
     const targetOrigin = parentOriginRef.current || '*'
-    window.parent.postMessage(data, targetOrigin)
+    window.parent.postMessage(msg, targetOrigin)
   }
 
   useEffect(() => {
@@ -200,18 +201,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     )
 
-    // Listen for auth state requests from parent frame (hub)
-    const handleAuthRequest = (event: MessageEvent) => {
-      if (event.data?.type !== 'forumline:request_auth_state') return
-      if (window.parent !== window) {
-        parentOriginRef.current = event.origin
-        window.parent.postMessage({
-          type: 'forumline:auth_state',
-          signedIn: !!loadedUserIdRef.current,
-        }, event.origin)
+    // Listen for requests from parent frame (hub)
+    const handleHubMessage = (event: MessageEvent) => {
+      if (window.parent === window) return
+      const msg = event.data as HubToForumMessage
+      if (!msg?.type?.startsWith('forumline:')) return
+
+      parentOriginRef.current = event.origin
+
+      switch (msg.type) {
+        case 'forumline:request_auth_state':
+          window.parent.postMessage(
+            { type: 'forumline:auth_state', signedIn: !!loadedUserIdRef.current } satisfies ForumToHubMessage,
+            event.origin,
+          )
+          break
+        case 'forumline:request_unread_counts':
+          // Will be implemented in Phase 3 — no-op for now
+          break
       }
     }
-    window.addEventListener('message', handleAuthRequest)
+    window.addEventListener('message', handleHubMessage)
 
     // Signal to parent that the forum is ready to receive messages
     if (window.parent !== window) {
@@ -220,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       unsubscribe()
-      window.removeEventListener('message', handleAuthRequest)
+      window.removeEventListener('message', handleHubMessage)
     }
   }, [])
 

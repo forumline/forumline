@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import type { ForumToHubMessage, HubToForumMessage, UnreadCounts, ForumNotification } from '@johnvondrashek/forumline-protocol'
 import type { ForumMembership } from './ForumProvider'
 
 interface ForumWebviewProps {
@@ -20,46 +21,67 @@ interface ForumWebviewProps {
   onAuthed?: (domain: string) => void
   /** Called when the user signs out of the forum */
   onSignedOut?: (domain: string) => void
+  /** Called when the forum reports unread counts */
+  onUnreadCounts?: (domain: string, counts: UnreadCounts) => void
+  /** Called when the forum sends a notification */
+  onNotification?: (domain: string, notification: ForumNotification) => void
+  /** Optional path to navigate to within the forum (e.g. from a deep link) */
+  initialPath?: string | null
 }
 
-export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: ForumWebviewProps) {
+export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut, onUnreadCounts, onNotification, initialPath }: ForumWebviewProps) {
   const [loading, setLoading] = useState(true)
-  const [iframeSrc, setIframeSrc] = useState(forum.web_base)
+  const initialUrl = initialPath ? `${forum.web_base}${initialPath}` : forum.web_base
+  const [iframeSrc, setIframeSrc] = useState(initialUrl)
   const [loggingIn, setLoggingIn] = useState(false)
   const hasCalledAuthed = useRef(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const forumOrigin = new URL(forum.web_base).origin
 
-  // Listen for auth state messages from the forum iframe
+  // Listen for typed messages from the forum iframe
   useEffect(() => {
+    const postToForum = (msg: HubToForumMessage) => {
+      iframeRef.current?.contentWindow?.postMessage(msg, forumOrigin)
+    }
+
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== forumOrigin) return
+      const msg = event.data as ForumToHubMessage
+      if (!msg?.type?.startsWith('forumline:')) return
 
-      if (event.data?.type === 'forumline:ready') {
-        iframeRef.current?.contentWindow?.postMessage(
-          { type: 'forumline:request_auth_state' },
-          forumOrigin,
-        )
-        return
-      }
+      switch (msg.type) {
+        case 'forumline:ready':
+          postToForum({ type: 'forumline:request_auth_state' })
+          postToForum({ type: 'forumline:request_unread_counts' })
+          break
 
-      if (event.data?.type !== 'forumline:auth_state') return
-      if (event.data.signedIn) {
-        if (onAuthed && !hasCalledAuthed.current) {
-          hasCalledAuthed.current = true
-          onAuthed(forum.domain)
-        }
-      } else {
-        if (onSignedOut) {
-          hasCalledAuthed.current = false
-          onSignedOut(forum.domain)
-        }
+        case 'forumline:auth_state':
+          if (msg.signedIn) {
+            if (onAuthed && !hasCalledAuthed.current) {
+              hasCalledAuthed.current = true
+              onAuthed(forum.domain)
+            }
+          } else {
+            if (onSignedOut) {
+              hasCalledAuthed.current = false
+              onSignedOut(forum.domain)
+            }
+          }
+          break
+
+        case 'forumline:unread_counts':
+          onUnreadCounts?.(forum.domain, msg.counts)
+          break
+
+        case 'forumline:notification':
+          onNotification?.(forum.domain, msg.notification)
+          break
       }
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [forum.domain, forumOrigin, onAuthed, onSignedOut])
+  }, [forum.domain, forumOrigin, onAuthed, onSignedOut, onUnreadCounts, onNotification])
 
   const handleLogin = useCallback(() => {
     if (!authUrl) return
@@ -77,10 +99,8 @@ export default function ForumWebview({ forum, authUrl, onAuthed, onSignedOut }: 
     }
     // Ask the forum for its current auth state as a fallback
     // (the primary path is the forumline:ready event from the forum).
-    iframeRef.current?.contentWindow?.postMessage(
-      { type: 'forumline:request_auth_state' },
-      forumOrigin,
-    )
+    const requestAuth: HubToForumMessage = { type: 'forumline:request_auth_state' }
+    iframeRef.current?.contentWindow?.postMessage(requestAuth, forumOrigin)
   }, [loggingIn, onAuthed, forum.domain, forumOrigin])
 
   const showBanner = !!authUrl && !loggingIn && !hasCalledAuthed.current

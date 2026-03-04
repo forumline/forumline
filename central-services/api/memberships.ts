@@ -18,6 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .select(`
       id,
       joined_at,
+      forum_authed_at,
       forumline_forums (
         domain,
         name,
@@ -36,6 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     forum_name: m.forumline_forums.name,
     forum_icon_url: m.forumline_forums.icon_url,
     joined_at: m.joined_at,
+    forum_authed_at: m.forum_authed_at,
   }))
 
   return res.status(200).json(mapped)
