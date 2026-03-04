@@ -38,7 +38,7 @@ export function useNativeNotifications(
         },
         async (payload) => {
           // Only notify when the window is not focused
-          if (document.hasFocus()) return
+          if (document.visibilityState === 'visible') return
 
           const msg = payload.new as {
             content?: string

@@ -2,7 +2,7 @@
   "$schema": "node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Forumline",
   "version": "0.1.0",
-  "identifier": "com.forumchatvoice.desktop",
+  "identifier": "com.forumchatvoice.app",
   "build": {
     "frontendDist": "https://forumline-hub.vercel.app",
     "devUrl": "http://localhost:5173"
@@ -32,13 +32,20 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "iOS": {
+      "minimumSystemVersion": "16.0"
+    },
+    "android": {
+      "minSdkVersion": 24
+    }
   },
   "plugins": {
     "deep-link": {
       "desktop": {
         "schemes": ["forumline"]
-      }
+      },
+      "mobile": []
     }
   }
 }
