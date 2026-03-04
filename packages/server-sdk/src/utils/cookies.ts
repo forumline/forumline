@@ -1,5 +1,3 @@
-import jwt from 'jsonwebtoken'
-
 /** Parse a Cookie header string into a key-value record */
 export function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {}
@@ -23,9 +21,10 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
 }
 
 /** Verify a JWT signature and return the decoded payload, or null if invalid */
-export function verifyJwt(token: string, secret: string): Record<string, unknown> | null {
+export async function verifyJwt(token: string, secret: string): Promise<Record<string, unknown> | null> {
   try {
-    return jwt.verify(token, secret) as Record<string, unknown>
+    const jwt = await import('jsonwebtoken')
+    return jwt.default.verify(token, secret) as Record<string, unknown>
   } catch {
     return null
   }
