@@ -16,7 +16,7 @@ interface AppLayoutProps {
 /** Persist auth state change to hub DB */
 async function updateForumAuthState(accessToken: string, forumDomain: string, authed: boolean) {
   try {
-    await fetch('/api/memberships/auth-state', {
+    await fetch('/api/memberships', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
