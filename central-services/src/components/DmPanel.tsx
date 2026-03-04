@@ -9,9 +9,10 @@ type DmView = 'list' | 'conversation' | 'new'
 
 interface DmPanelProps {
   onClose: () => void
+  fullScreen?: boolean
 }
 
-export default function DmPanel({ onClose }: DmPanelProps) {
+export default function DmPanel({ onClose, fullScreen = false }: DmPanelProps) {
   const { isHubConnected } = useHub()
   const [view, setView] = useState<DmView>('list')
   const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null)
@@ -27,7 +28,10 @@ export default function DmPanel({ onClose }: DmPanelProps) {
   }
 
   return (
-    <div className="absolute right-0 top-0 z-20 flex h-full w-[400px] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl">
+    <div className={fullScreen
+      ? 'flex h-full w-full flex-col bg-slate-900'
+      : 'absolute right-0 top-0 z-20 flex h-full w-[400px] flex-col border-l border-slate-700 bg-slate-900 shadow-2xl'
+    }>
       <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
         <div className="flex items-center gap-2">
           {view !== 'list' && (
@@ -61,9 +65,15 @@ export default function DmPanel({ onClose }: DmPanelProps) {
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
             title="Close"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            {fullScreen ? (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
           </button>
         </div>
       </div>

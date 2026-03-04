@@ -13,9 +13,10 @@ interface ForumRailProps {
   onDmClick?: () => void
   dmUnreadCount?: number
   onSettingsClick?: () => void
+  className?: string
 }
 
-export default function ForumRail({ onDmClick, dmUnreadCount = 0, onSettingsClick }: ForumRailProps = {}) {
+export default function ForumRail({ onDmClick, dmUnreadCount = 0, onSettingsClick, className }: ForumRailProps = {}) {
   const { forums, activeForum, unreadCounts, switchForum, goHome, addForum } = useForum()
   const [showAddModal, setShowAddModal] = useState(false)
   const [addUrl, setAddUrl] = useState('')
@@ -45,7 +46,7 @@ export default function ForumRail({ onDmClick, dmUnreadCount = 0, onSettingsClic
 
   return (
     <>
-      <div className="flex w-[72px] shrink-0 flex-col items-center gap-2 border-r border-slate-700 bg-slate-900 py-3">
+      <div className={`flex w-[72px] shrink-0 flex-col items-center gap-2 border-r border-slate-700 bg-slate-900 py-3${className ? ` ${className}` : ''}`}>
         {/* Home / current app */}
         <button
           onClick={goHome}
