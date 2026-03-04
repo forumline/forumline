@@ -504,10 +504,12 @@ export default function Settings() {
                           .eq('id', user.id)
                         if (error) {
                           toast.error('Failed to disconnect: ' + error.message)
-                        } else {
-                          toast.success('Disconnected from Forumline')
-                          window.location.reload()
+                          return
                         }
+                        // Clear httpOnly Forumline cookies (hub session)
+                        await fetch('/api/forumline/auth/session', { method: 'DELETE' }).catch(() => {})
+                        toast.success('Disconnected from Forumline')
+                        window.location.reload()
                       }}
                       className="text-sm text-slate-400 hover:text-red-400 underline"
                     >
