@@ -6,8 +6,6 @@ on:
     branches: [main]
     paths:
       - 'demo/**'
-      - 'packages/**'
-      - 'package-lock.json'
 
 jobs:
   deploy:
@@ -15,10 +13,4 @@ jobs:
     with:
       project-id: prj_Q6NCsZIw3eRbYLQFMTkLon3wZ3Nk
       working-directory: demo
-      packages-to-build: packages/protocol packages/server-sdk
-      sync-commands: |
-        cp -r packages/protocol/dist/* demo/node_modules/@johnvondrashek/forumline-protocol/dist/
-        cp packages/protocol/package.json demo/node_modules/@johnvondrashek/forumline-protocol/package.json
-        cp -r packages/server-sdk/dist/* demo/node_modules/@johnvondrashek/forumline-server-sdk/dist/
-        cp packages/server-sdk/package.json demo/node_modules/@johnvondrashek/forumline-server-sdk/package.json
     secrets: inherit

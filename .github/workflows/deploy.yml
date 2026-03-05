@@ -9,14 +9,6 @@ on:
       working-directory:
         required: true
         type: string
-      packages-to-build:
-        required: true
-        type: string
-        description: 'Space-separated list of workspace packages to build (e.g. "packages/protocol packages/server-sdk")'
-      sync-commands:
-        required: true
-        type: string
-        description: 'Shell commands to sync built packages into the app node_modules'
 
 jobs:
   deploy:
@@ -32,30 +24,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install Vercel CLI
         run: npm i -g vercel
-
-      - name: Install workspace packages (for building from source)
-        run: npm ci
-        env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build monorepo packages from source
-        run: |
-          for pkg in ${{ inputs.packages-to-build }}; do
-            npm run --workspace="$pkg" build
-          done
 
       - name: Install app dependencies
         run: npm ci
         working-directory: ${{ inputs.working-directory }}
         env:
           GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Sync built packages into app node_modules
-        run: ${{ inputs.sync-commands }}
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }}
