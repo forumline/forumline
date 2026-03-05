@@ -1,6 +1,6 @@
 {
   "name": "@johnvondrashek/forumline-react",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@johnvondrashek/forumline-central-services-client": "0.2.0",
-    "@johnvondrashek/forumline-protocol": "0.3.2"
+    "@johnvondrashek/forumline-protocol": "^0.3.2"
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2",
