@@ -2,22 +2,23 @@ import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/auth'
-import { getDataProvider } from '../lib/data-provider'
+import { useDataProvider } from '../lib/data-provider'
 import Avatar from '../components/Avatar'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
 import { formatTimeAgo, formatDate } from '../lib/dateFormatters'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
 
 export default function Bookmarks() {
+  const dp = useDataProvider()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
   // Use React Query for bookmarks - cached globally!
   const { data: bookmarks = [], isLoading: loading, isError } = useQuery({
     queryKey: queryKeys.bookmarks(user?.id ?? ''),
-    queryFn: () => fetchers.bookmarksWithMeta(user!.id),
+    queryFn: () => dp.getBookmarksWithMeta(user!.id),
     enabled: !!user,
     ...queryOptions.threads,
   })
@@ -25,7 +26,7 @@ export default function Bookmarks() {
   // Optimistic removal mutation
   const removeBookmarkMutation = useMutation({
     mutationFn: async (bookmarkId: string) => {
-      await getDataProvider().removeBookmarkById(bookmarkId)
+      await dp.removeBookmarkById(bookmarkId)
     },
     onMutate: async (bookmarkId) => {
       // Cancel any outgoing refetches

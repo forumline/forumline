@@ -5,8 +5,6 @@
  * Fetchers delegate to the active ForumDataProvider.
  */
 
-import { getDataProvider } from './data-provider'
-
 // ============================================================================
 // Query Keys - centralized for easy invalidation
 // ============================================================================
@@ -58,56 +56,6 @@ export const queryKeys = {
   hubDmConversations: ['hub', 'dm', 'conversations'] as const,
   hubDmMessages: (recipientId: string) => ['hub', 'dm', 'messages', recipientId] as const,
   hubProfileSearch: (query: string) => ['hub', 'profiles', 'search', query] as const,
-}
-
-// ============================================================================
-// Fetchers - delegate to the active ForumDataProvider
-// ============================================================================
-
-export const fetchers = {
-  // Static data
-  categories: () => getDataProvider().getCategories(),
-  channels: () => getDataProvider().getChannels(),
-  voiceRooms: () => getDataProvider().getVoiceRooms(),
-
-  // Threads
-  threads: (limit = 20) => getDataProvider().getThreads(limit),
-  threadsByCategory: (categorySlug: string) => getDataProvider().getThreadsByCategory(categorySlug),
-  thread: (threadId: string) => getDataProvider().getThread(threadId),
-
-  // Posts
-  posts: (threadId: string) => getDataProvider().getPosts(threadId),
-
-  // Category
-  category: (slug: string) => getDataProvider().getCategory(slug),
-
-  // Profiles
-  profile: (userId: string) => getDataProvider().getProfile(userId),
-  profileByUsername: (username: string) => getDataProvider().getProfileByUsername(username),
-
-  // Chat messages
-  chatMessagesBySlug: (channelSlug: string) => getDataProvider().getChatMessages(channelSlug),
-
-  // Bookmarks
-  bookmarksWithMeta: (userId: string) => getDataProvider().getBookmarksWithMeta(userId),
-  bookmarks: (userId: string) => getDataProvider().getBookmarks(userId),
-  isBookmarked: (userId: string, threadId: string) => getDataProvider().isBookmarked(userId, threadId),
-
-  // Profile activity
-  userThreads: (userId: string) => getDataProvider().getUserThreads(userId),
-  userPosts: (userId: string) => getDataProvider().getUserPosts(userId),
-
-  // Search
-  searchThreads: (query: string) => getDataProvider().searchThreads(query),
-  searchPosts: (query: string) => getDataProvider().searchPosts(query),
-
-  // Admin
-  adminStats: () => getDataProvider().getAdminStats(),
-  adminUsers: () => getDataProvider().getAdminUsers(),
-
-  // Notifications
-  notifications: (userId: string) => getDataProvider().getNotifications(userId),
-
 }
 
 // ============================================================================

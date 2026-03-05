@@ -5,7 +5,8 @@ import { useVoice } from '../lib/voice'
 import Card from '../components/ui/Card'
 import RoomList from '../components/voice/RoomList'
 import ActiveRoom from '../components/voice/ActiveRoom'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 import type { VoiceRoom } from '../types'
 import type { VoiceParticipant } from '../lib/voice'
 
@@ -16,6 +17,7 @@ interface RoomWithParticipants extends VoiceRoom {
 }
 
 export default function Voice() {
+  const dp = useDataProvider()
   const { roomId } = useParams()
   const { user } = useAuth()
   const voice = useVoice()
@@ -23,7 +25,7 @@ export default function Voice() {
   // Use React Query for rooms - cached globally, instant navigation!
   const { data: rawRooms = [], isLoading: roomsLoading, isError: roomsError } = useQuery({
     queryKey: queryKeys.voiceRooms,
-    queryFn: fetchers.voiceRooms,
+    queryFn: () => dp.getVoiceRooms(),
     ...queryOptions.static,
   })
 

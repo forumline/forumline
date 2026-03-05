@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Avatar from '../Avatar'
 import ImageCropModal from '../ImageCropModal'
 import { uploadAvatar } from '../../lib/avatars'
-import { getDataProvider } from '../../lib/data-provider'
+import { useDataProvider } from '../../lib/data-provider'
 import { queryKeys } from '../../lib/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -29,6 +29,7 @@ export default function ThreadHeader({
   onToggleBookmark,
   currentUserId,
 }: ThreadHeaderProps) {
+  const dp = useDataProvider()
   const queryClient = useQueryClient()
   const threadImageInputRef = useRef<HTMLInputElement>(null)
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
@@ -145,7 +146,7 @@ export default function ThreadHeader({
             try {
               const imageUrl = await uploadAvatar(blob, `thread/${thread.id}/custom.png`)
               if (imageUrl) {
-                await getDataProvider().updateThread(thread.id, { image_url: imageUrl })
+                await dp.updateThread(thread.id, { image_url: imageUrl })
                 // Update cache
                 queryClient.setQueryData(queryKeys.thread(thread.id), { ...thread, image_url: imageUrl })
                 toast.success('Thread image updated')

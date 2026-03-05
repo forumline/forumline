@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/auth'
-import { getDataProvider } from '../lib/data-provider'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
+import { queryKeys, queryOptions } from '../lib/queries'
 import Button from '../components/ui/Button'
 import Skeleton from '../components/ui/Skeleton'
 import ThreadHeader from '../components/thread/ThreadHeader'
@@ -15,6 +15,7 @@ import type { PostWithAuthor } from '../types'
 const POSTS_PER_PAGE = 5
 
 export default function Thread() {
+  const dp = useDataProvider()
   const { threadId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
@@ -23,7 +24,7 @@ export default function Thread() {
   // Use React Query for thread - instant on back navigation!
   const { data: thread, isLoading: threadLoading, isError: threadError } = useQuery({
     queryKey: queryKeys.thread(threadId!),
-    queryFn: () => fetchers.thread(threadId!),
+    queryFn: () => dp.getThread(threadId!),
     ...queryOptions.threads,
     enabled: !!threadId,
   })
@@ -31,7 +32,7 @@ export default function Thread() {
   // Use React Query for posts - instant on back navigation!
   const { data: posts = [], isLoading: postsLoading, isError: postsError } = useQuery({
     queryKey: queryKeys.posts(threadId!),
-    queryFn: () => fetchers.posts(threadId!),
+    queryFn: () => dp.getPosts(threadId!),
     ...queryOptions.posts,
     enabled: !!threadId,
   })
@@ -59,7 +60,7 @@ export default function Thread() {
   // Bookmark status via React Query
   const { data: isBookmarked = false } = useQuery({
     queryKey: queryKeys.isBookmarked(user?.id ?? '', thread?.id ?? ''),
-    queryFn: () => fetchers.isBookmarked(user!.id, thread!.id),
+    queryFn: () => dp.isBookmarked(user!.id, thread!.id),
     enabled: !!thread && !!user,
   })
 
@@ -67,7 +68,6 @@ export default function Thread() {
   const bookmarkMutation = useMutation({
     mutationFn: async () => {
       if (!thread || !user) throw new Error('Not authenticated')
-      const dp = getDataProvider()
       if (isBookmarked) {
         await dp.removeBookmark(user.id, thread.id)
       } else {

@@ -6,14 +6,14 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '../lib/auth'
-import { getDataProvider } from '../lib/data-provider'
+import { useDataProvider } from '../lib/data-provider'
 import { uploadAvatar, uploadDefaultAvatar } from '../lib/avatars'
 import Avatar from '../components/Avatar'
 import ImageCropModal from '../components/ImageCropModal'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Card from '../components/ui/Card'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
 
 const newThreadSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
@@ -23,12 +23,13 @@ const newThreadSchema = z.object({
 type NewThreadFormData = z.infer<typeof newThreadSchema>
 
 export default function NewThread() {
+  const dp = useDataProvider()
   const { categorySlug } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { data: category } = useQuery({
     queryKey: queryKeys.category(categorySlug!),
-    queryFn: () => fetchers.category(categorySlug!),
+    queryFn: () => dp.getCategory(categorySlug!),
     enabled: !!categorySlug,
     ...queryOptions.static,
   })
@@ -55,8 +56,6 @@ export default function NewThread() {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 50)
-
-      const dp = getDataProvider()
 
       // Create thread
       const thread = await dp.createThread({

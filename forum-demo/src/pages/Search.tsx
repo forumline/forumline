@@ -6,11 +6,13 @@ import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
 import { formatTimeAgo } from '../lib/dateFormatters'
 import { useDebounce } from '../lib/hooks'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 
 type SearchFilter = 'all' | 'threads' | 'posts'
 
 export default function Search() {
+  const dp = useDataProvider()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQuery = searchParams.get('q') || ''
   const filterParam = searchParams.get('filter') as SearchFilter || 'all'
@@ -23,14 +25,14 @@ export default function Search() {
   // Use React Query for search results - cached for quick navigation back
   const { data: threadResults = [], isLoading: threadsLoading, isError: threadsError } = useQuery({
     queryKey: queryKeys.searchThreads(debouncedSearch),
-    queryFn: () => fetchers.searchThreads(debouncedSearch),
+    queryFn: () => dp.searchThreads(debouncedSearch),
     enabled: !!debouncedSearch.trim(),
     ...queryOptions.search,
   })
 
   const { data: postResults = [], isLoading: postsLoading, isError: postsError } = useQuery({
     queryKey: queryKeys.searchPosts(debouncedSearch),
-    queryFn: () => fetchers.searchPosts(debouncedSearch),
+    queryFn: () => dp.searchPosts(debouncedSearch),
     enabled: !!debouncedSearch.trim(),
     ...queryOptions.search,
   })

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../lib/auth'
-import { getDataProvider } from '../../lib/data-provider'
+import { useDataProvider } from '../../lib/data-provider'
 import { queryKeys } from '../../lib/queries'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
@@ -26,6 +26,7 @@ export default function ReplyComposer({
   onSetReplyingTo,
   onGoToPage,
 }: ReplyComposerProps) {
+  const dp = useDataProvider()
   const { user, profile } = useAuth()
   const queryClient = useQueryClient()
   const [replyContent, setReplyContent] = useState('')
@@ -34,7 +35,6 @@ export default function ReplyComposer({
   const replyMutation = useMutation({
     mutationFn: async ({ content, replyToId }: { content: string; replyToId: string | null }) => {
       if (!thread || !user) throw new Error('Not authenticated')
-      const dp = getDataProvider()
       const result = await dp.createPost({
         thread_id: thread.id,
         author_id: user.id,
@@ -123,7 +123,7 @@ export default function ReplyComposer({
       )
 
       // Update thread's last_post_at
-      getDataProvider().updateThread(thread.id, {
+      dp.updateThread(thread.id, {
         last_post_at: new Date().toISOString(),
         post_count: thread.post_count + 1,
       }).catch((updateError) => {

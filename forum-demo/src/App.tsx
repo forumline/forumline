@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import type { ForumAuthProvider } from './lib/auth-provider'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ForumProvider, HubProvider } from '@johnvondrashek/forumline-react'
 import { VoiceProvider } from './lib/voice'
@@ -69,9 +70,9 @@ function AuthenticatedProviders({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function App() {
+export default function App({ authProvider }: { authProvider: ForumAuthProvider }) {
   return (
-    <AuthProvider>
+    <AuthProvider authProvider={authProvider}>
       <AuthenticatedProviders>
       <ScrollToTop />
       <Routes>

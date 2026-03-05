@@ -4,16 +4,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Avatar from '../components/Avatar'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 import { formatTimeAgo } from '../lib/dateFormatters'
 
 export default function Home() {
+  const dp = useDataProvider()
   const queryClient = useQueryClient()
 
   // Use React Query - instant on return visits!
   const { data: threads = [], isLoading, isError } = useQuery({
     queryKey: queryKeys.threads(20),
-    queryFn: () => fetchers.threads(20),
+    queryFn: () => dp.getThreads(20),
     ...queryOptions.threads,
   })
 
@@ -24,12 +26,12 @@ export default function Home() {
     threads.forEach((thread) => {
       queryClient.prefetchQuery({
         queryKey: queryKeys.thread(thread.id),
-        queryFn: () => fetchers.thread(thread.id),
+        queryFn: () => dp.getThread(thread.id),
         ...queryOptions.threads,
       })
       queryClient.prefetchQuery({
         queryKey: queryKeys.posts(thread.id),
-        queryFn: () => fetchers.posts(thread.id),
+        queryFn: () => dp.getPosts(thread.id),
         ...queryOptions.posts,
       })
     })

@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { useAuth } from '../lib/auth'
 import { useHub } from '@johnvondrashek/forumline-react'
 import { supabase } from '../lib/supabase'
-import { getDataProvider } from '../lib/data-provider'
+import { useDataProvider } from '../lib/data-provider'
 import { uploadAvatar } from '../lib/avatars'
 import ImageCropModal from '../components/ImageCropModal'
 import Card from '../components/ui/Card'
@@ -47,6 +47,7 @@ const accountSchema = z.object({
 })
 
 export default function Settings() {
+  const dp = useDataProvider()
   const { user, profile } = useAuth()
   const { reconnect } = useHub()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
@@ -176,7 +177,7 @@ export default function Settings() {
 
       if (activeTab === 'profile' && data) {
         const profileData = data as ProfileFormData
-        await getDataProvider().updateProfile(user.id, {
+        await dp.updateProfile(user.id, {
           display_name: profileData.displayName || null,
           bio: profileData.bio || null,
           website: profileData.website || null,
@@ -416,7 +417,7 @@ export default function Settings() {
             const path = `user/${user.id}/custom.png`
             const url = await uploadAvatar(file, path)
             if (url) {
-              await getDataProvider().updateProfile(user.id, { avatar_url: url })
+              await dp.updateProfile(user.id, { avatar_url: url })
               setAvatarUrl(url)
               toast.success('Avatar updated')
             } else {

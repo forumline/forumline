@@ -6,25 +6,27 @@ import Avatar from '../components/Avatar'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
 import { formatTimeAgo } from '../lib/dateFormatters'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 
 type Tab = 'overview' | 'users' | 'content' | 'reports'
 
 export default function Admin() {
+  const dp = useDataProvider()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [userSearch, setUserSearch] = useState('')
 
   const { data: stats = { totalUsers: 0, totalThreads: 0, totalPosts: 0 }, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: queryKeys.adminStats,
-    queryFn: fetchers.adminStats,
+    queryFn: () => dp.getAdminStats(),
     enabled: !!user,
     ...queryOptions.threads,
   })
 
   const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery({
     queryKey: queryKeys.adminUsers,
-    queryFn: fetchers.adminUsers,
+    queryFn: () => dp.getAdminUsers(),
     enabled: !!user,
     ...queryOptions.threads,
   })

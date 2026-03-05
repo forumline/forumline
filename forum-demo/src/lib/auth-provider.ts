@@ -55,27 +55,10 @@ export interface ForumAuthProvider {
   /** Get the raw underlying user object (provider-specific) */
   getRawUser(): Promise<{ id: string; email?: string; user_metadata?: Record<string, unknown> } | null>
 
+  /** Restore a session from URL hash tokens (e.g. after OAuth redirect) */
+  restoreSessionFromUrl(): Promise<boolean>
+
   /** Listen for auth state changes */
   onAuthStateChange(callback: AuthCallback): Unsubscribe
 }
 
-// ============================================================================
-// Provider Registry
-// ============================================================================
-
-let _authProvider: ForumAuthProvider | null = null
-
-/** Set the active auth provider (called once at app startup) */
-export function setAuthProvider(provider: ForumAuthProvider): void {
-  _authProvider = provider
-}
-
-/** Get the active auth provider */
-export function getAuthProvider(): ForumAuthProvider {
-  if (!_authProvider) {
-    throw new Error(
-      'ForumAuthProvider not initialized. Call setAuthProvider() before using auth operations.'
-    )
-  }
-  return _authProvider
-}

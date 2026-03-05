@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import { getDataProvider } from '../lib/data-provider'
+import { useDataProvider } from '../lib/data-provider'
 import Avatar from '../components/Avatar'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
 import Skeleton from '../components/ui/Skeleton'
 import { formatTime, formatDateLabel } from '../lib/dateFormatters'
 import type { Profile, ChatMessageWithAuthor } from '../types'
@@ -40,6 +40,7 @@ function toMsg(row: { id: string; channel_id: string; author_id: string; content
 }
 
 export default function Chat() {
+  const dp = useDataProvider()
   const { channelId: channelSlug = 'general' } = useParams()
   const { user, profile } = useAuth()
   const queryClient = useQueryClient()
@@ -51,7 +52,7 @@ export default function Chat() {
   // Use React Query for channels - instant on tab switch!
   const { data: channels = [] } = useQuery({
     queryKey: queryKeys.channels,
-    queryFn: fetchers.channels,
+    queryFn: () => dp.getChannels(),
     ...queryOptions.static,
   })
 
@@ -60,7 +61,7 @@ export default function Chat() {
   // Use React Query for messages - instant on channel switch!
   const { data: cachedMessages = [], isLoading: loading, isError } = useQuery({
     queryKey: queryKeys.chatMessages(channelSlug),
-    queryFn: () => fetchers.chatMessagesBySlug(channelSlug),
+    queryFn: () => dp.getChatMessages(channelSlug),
     ...queryOptions.realtime,
     enabled: !!channel,
   })
@@ -131,7 +132,7 @@ export default function Chat() {
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!user || !channel) throw new Error('Not authenticated')
-      await getDataProvider().sendChatMessage({
+      await dp.sendChatMessage({
         channel_id: channel.id,
         author_id: user.id,
         content,

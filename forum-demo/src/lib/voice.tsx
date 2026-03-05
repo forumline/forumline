@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect, Re
 import type { Room as RoomType, Participant } from 'livekit-client'
 import { supabase } from './supabase'
 import { useAuth } from './auth'
-import { getDataProvider } from './data-provider'
+import { useDataProvider } from './data-provider'
 
 // Lazily loaded livekit module — only fetched when joinRoom() is called
 let livekitModule: typeof import('livekit-client') | null = null
@@ -82,6 +82,7 @@ function participantToVoice(p: Participant, lk: typeof import('livekit-client'))
 }
 
 export function VoiceProvider({ children }: { children: ReactNode }) {
+  const dp = useDataProvider()
   const { user } = useAuth()
   const livekitRoomRef = useRef<RoomType | null>(null)
 
@@ -209,7 +210,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const writePresence = useCallback(async (roomSlug: string) => {
     if (!user) return
     try {
-      await getDataProvider().setVoicePresence(user.id, roomSlug)
+      await dp.setVoicePresence(user.id, roomSlug)
     } catch (err) {
       console.error('Failed to write voice presence:', err)
     }
@@ -219,7 +220,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const deletePresence = useCallback(async () => {
     if (!user) return
     try {
-      await getDataProvider().clearVoicePresence(user.id)
+      await dp.clearVoicePresence(user.id)
     } catch (err) {
       console.error('Failed to delete voice presence:', err)
     }

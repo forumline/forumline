@@ -103,6 +103,29 @@ export class SupabaseAuthProvider implements ForumAuthProvider {
     }
   }
 
+  async restoreSessionFromUrl(): Promise<boolean> {
+    const hash = window.location.hash
+    if (!hash) return false
+    const params = new URLSearchParams(hash.substring(1))
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+    if (!accessToken || !refreshToken) return false
+
+    console.log('[FLD:Auth] Detected session tokens in URL hash, setting session...')
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    })
+    if (error) {
+      console.error('[FLD:Auth] Failed to set session from hash:', error)
+      return false
+    }
+    console.log('[FLD:Auth] Session set from URL hash')
+    // Clear hash from URL
+    window.history.replaceState({}, '', window.location.pathname)
+    return true
+  }
+
   onAuthStateChange(callback: AuthCallback): Unsubscribe {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {

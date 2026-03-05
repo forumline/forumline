@@ -6,10 +6,12 @@ import Avatar from '../components/Avatar'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 import { formatTimeAgo } from '../lib/dateFormatters'
 
 export default function Category() {
+  const dp = useDataProvider()
   const { categorySlug } = useParams()
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -17,7 +19,7 @@ export default function Category() {
   // Use React Query for category data - cached!
   const { data: category, isLoading: categoryLoading, isError: categoryError } = useQuery({
     queryKey: queryKeys.category(categorySlug!),
-    queryFn: () => fetchers.category(categorySlug!),
+    queryFn: () => dp.getCategory(categorySlug!),
     ...queryOptions.static,
     enabled: !!categorySlug,
   })
@@ -25,7 +27,7 @@ export default function Category() {
   // Use React Query for threads - cached!
   const { data: threads = [], isLoading: threadsLoading, isError: threadsError } = useQuery({
     queryKey: queryKeys.threadsByCategory(categorySlug!),
-    queryFn: () => fetchers.threadsByCategory(categorySlug!),
+    queryFn: () => dp.getThreadsByCategory(categorySlug!),
     ...queryOptions.threads,
     enabled: !!categorySlug,
   })
@@ -40,12 +42,12 @@ export default function Category() {
     threads.forEach((thread) => {
       queryClient.prefetchQuery({
         queryKey: queryKeys.thread(thread.id),
-        queryFn: () => fetchers.thread(thread.id),
+        queryFn: () => dp.getThread(thread.id),
         ...queryOptions.threads,
       })
       queryClient.prefetchQuery({
         queryKey: queryKeys.posts(thread.id),
-        queryFn: () => fetchers.posts(thread.id),
+        queryFn: () => dp.getPosts(thread.id),
         ...queryOptions.posts,
       })
     })

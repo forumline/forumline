@@ -4,10 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import Avatar from '../components/Avatar'
 import { supabase } from '../lib/supabase'
-import { getDataProvider } from '../lib/data-provider'
+import { useDataProvider } from '../lib/data-provider'
 import Skeleton from '../components/ui/Skeleton'
 import { formatNotificationTime } from '../lib/dateFormatters'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
 import type { Notification as DBNotification } from '../types'
 
 interface HeaderProps {
@@ -37,6 +37,7 @@ function toNotifItem(n: DBNotification): NotifItem {
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {
+  const dp = useDataProvider()
   const { user, signOut, loading } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -47,7 +48,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   // Fetch notifications via React Query
   const { data: rawNotifications = [] } = useQuery({
     queryKey: queryKeys.notifications(user?.id ?? ''),
-    queryFn: () => fetchers.notifications(user!.id),
+    queryFn: () => dp.getNotifications(user!.id),
     enabled: !!user,
     ...queryOptions.realtime,
   })
@@ -107,7 +108,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
   const handleNotificationClick = async (notification: NotifItem) => {
     if (!notification.read) {
-      await getDataProvider().markNotificationRead(notification.id)
+      await dp.markNotificationRead(notification.id)
       if (user) {
         queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user.id) })
       }
@@ -118,7 +119,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
   const markAllAsRead = async () => {
     if (user) {
-      await getDataProvider().markAllNotificationsRead(user.id)
+      await dp.markAllNotificationsRead(user.id)
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user.id) })
     }
   }

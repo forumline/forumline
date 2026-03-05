@@ -6,11 +6,13 @@ import Avatar from '../components/Avatar'
 import Card from '../components/ui/Card'
 import Skeleton from '../components/ui/Skeleton'
 import { formatTimeAgo } from '../lib/dateFormatters'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 
 type ActivityTab = 'threads' | 'posts'
 
 export default function ProfilePage() {
+  const dp = useDataProvider()
   const { username } = useParams()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<ActivityTab>('threads')
@@ -18,7 +20,7 @@ export default function ProfilePage() {
   // Use React Query for profile - cached globally!
   const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: queryKeys.profileByUsername(username!),
-    queryFn: () => fetchers.profileByUsername(username!),
+    queryFn: () => dp.getProfileByUsername(username!),
     enabled: !!username,
     ...queryOptions.profiles,
   })
@@ -26,14 +28,14 @@ export default function ProfilePage() {
   // Fetch threads and posts once we have the profile
   const { data: threads = [] } = useQuery({
     queryKey: queryKeys.userThreads(profile?.id ?? ''),
-    queryFn: () => fetchers.userThreads(profile!.id),
+    queryFn: () => dp.getUserThreads(profile!.id),
     enabled: !!profile?.id,
     ...queryOptions.threads,
   })
 
   const { data: posts = [] } = useQuery({
     queryKey: queryKeys.userPosts(profile?.id ?? ''),
-    queryFn: () => fetchers.userPosts(profile!.id),
+    queryFn: () => dp.getUserPosts(profile!.id),
     enabled: !!profile?.id,
     ...queryOptions.threads,
   })

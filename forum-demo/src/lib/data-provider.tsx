@@ -5,6 +5,7 @@
  * Each forum implementation provides its own data provider.
  */
 
+import { createContext, useContext, type ReactNode } from 'react'
 import type {
   Category,
   ChatChannel,
@@ -132,22 +133,19 @@ export interface ForumDataProvider {
 }
 
 // ============================================================================
-// Provider Registry
+// React Context
 // ============================================================================
 
-let _provider: ForumDataProvider | null = null
+const DataProviderContext = createContext<ForumDataProvider | null>(null)
 
-/** Set the active data provider (called once at app startup) */
-export function setDataProvider(provider: ForumDataProvider): void {
-  _provider = provider
+export function DataProviderProvider({ value, children }: { value: ForumDataProvider; children: ReactNode }) {
+  return <DataProviderContext.Provider value={value}>{children}</DataProviderContext.Provider>
 }
 
-/** Get the active data provider */
-export function getDataProvider(): ForumDataProvider {
-  if (!_provider) {
-    throw new Error(
-      'ForumDataProvider not initialized. Call setDataProvider() before using data operations.'
-    )
+export function useDataProvider(): ForumDataProvider {
+  const ctx = useContext(DataProviderContext)
+  if (!ctx) {
+    throw new Error('useDataProvider must be used within a DataProviderProvider')
   }
-  return _provider
+  return ctx
 }

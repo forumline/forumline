@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
-import { getAuthProvider, type AppUser } from './auth-provider'
-import { getDataProvider } from './data-provider'
+import type { ForumAuthProvider, AppUser } from './auth-provider'
+import { useDataProvider } from './data-provider'
 import { uploadDefaultAvatar } from './avatars'
-import { supabase } from './supabase'
 import type { Profile } from '../types/database'
 import type { ForumToHubMessage, HubToForumMessage } from '@johnvondrashek/forumline-protocol'
 
@@ -20,7 +19,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children, authProvider }: { children: ReactNode; authProvider: ForumAuthProvider }) {
+  const dp = useDataProvider()
   const [user, setUser] = useState<AppUser | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const parentOriginRef = useRef<string | null>(null)
 
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
-    const data = await getDataProvider().getProfile(userId)
+    const data = await dp.getProfile(userId)
     if (data) setProfile(data)
     return data
   }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const displayName = (rawUser.user_metadata?.display_name as string) || username
 
     try {
-      await getDataProvider().upsertProfile(rawUser.id, {
+      await dp.upsertProfile(rawUser.id, {
         username,
         display_name: displayName,
         avatar_url: (rawUser.user_metadata?.avatar_url as string) || null,
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Generate and upload a default DiceBear avatar
     const avatarUrl = await uploadDefaultAvatar(rawUser.id, 'user')
     if (avatarUrl) {
-      await getDataProvider().updateProfile(rawUser.id, { avatar_url: avatarUrl })
+      await dp.updateProfile(rawUser.id, { avatar_url: avatarUrl })
     }
 
     // Fetch the newly created profile
@@ -88,36 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const auth = getAuthProvider()
+    const auth = authProvider
 
-    // Detect session tokens from URL hash (e.g. after Forumline OAuth redirect).
-    // Supabase PKCE flow doesn't auto-detect hash fragments, so we handle it manually.
-    const initSession = async () => {
-      const hash = window.location.hash
-      if (hash) {
-        const params = new URLSearchParams(hash.substring(1))
-        const accessToken = params.get('access_token')
-        const refreshToken = params.get('refresh_token')
-        if (accessToken && refreshToken) {
-          console.log('[FLD:Auth] Detected session tokens in URL hash, setting session...')
-          const { error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          })
-          if (error) {
-            console.error('[FLD:Auth] Failed to set session from hash:', error)
-          } else {
-            console.log('[FLD:Auth] Session set from URL hash')
-          }
-          // Clear hash from URL
-          window.history.replaceState({}, '', window.location.pathname)
-        }
-      }
-    }
-
-    // Check existing session (after handling any hash tokens)
+    // Check existing session (after handling any hash tokens from OAuth redirect)
     console.log('[FLD:Auth] Checking existing session...')
-    initSession().then(() => auth.getRawUser()).then(async (rawUser) => {
+    auth.restoreSessionFromUrl().then(() => auth.getRawUser()).then(async (rawUser) => {
       if (rawUser) {
         console.log('[FLD:Auth] Session found, ensuring profile for user:', rawUser.id)
         try {
@@ -246,30 +221,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    return getAuthProvider().signIn(email, password)
+    return authProvider.signIn(email, password)
   }
 
   const signUp = async (email: string, password: string, username: string) => {
-    return getAuthProvider().signUp(email, password, username)
+    return authProvider.signUp(email, password, username)
   }
 
   const signOut = async () => {
-    await getAuthProvider().signOut()
+    await authProvider.signOut()
     setUser(null)
     setProfile(null)
     loadedUserIdRef.current = null
   }
 
   const signInWithGitHub = async () => {
-    await getAuthProvider().signInWithOAuth('github')
+    await authProvider.signInWithOAuth('github')
   }
 
   const resetPassword = async (email: string) => {
-    return getAuthProvider().resetPassword(email)
+    return authProvider.resetPassword(email)
   }
 
   const updatePassword = async (newPassword: string) => {
-    return getAuthProvider().updatePassword(newPassword)
+    return authProvider.updatePassword(newPassword)
   }
 
   return (

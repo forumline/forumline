@@ -9,9 +9,11 @@ import ErrorBoundary from './ErrorBoundary'
 import { ForumWebview, useForum, useNativeNotifications, useHub } from '@johnvondrashek/forumline-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { queryKeys, fetchers, queryOptions } from '../lib/queries'
+import { queryKeys, queryOptions } from '../lib/queries'
+import { useDataProvider } from '../lib/data-provider'
 
 export default function Layout() {
+  const dp = useDataProvider()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user } = useAuth()
   const { activeForum } = useForum()
@@ -28,19 +30,19 @@ export default function Layout() {
   // Use React Query for sidebar data - cached globally, instant on tab switch!
   const { data: categories = [], isError: categoriesError } = useQuery({
     queryKey: queryKeys.categories,
-    queryFn: fetchers.categories,
+    queryFn: () => dp.getCategories(),
     ...queryOptions.static,
   })
 
   const { data: channels = [], isError: channelsError } = useQuery({
     queryKey: queryKeys.channels,
-    queryFn: fetchers.channels,
+    queryFn: () => dp.getChannels(),
     ...queryOptions.static,
   })
 
   const { data: rooms = [], isError: roomsError } = useQuery({
     queryKey: queryKeys.voiceRooms,
-    queryFn: fetchers.voiceRooms,
+    queryFn: () => dp.getVoiceRooms(),
     ...queryOptions.static,
   })
 
@@ -56,7 +58,7 @@ export default function Layout() {
     // Prefetch home page threads
     queryClient.prefetchQuery({
       queryKey: queryKeys.threads(20),
-      queryFn: () => fetchers.threads(20),
+      queryFn: () => dp.getThreads(20),
       ...queryOptions.threads,
     })
   }, [queryClient])
@@ -66,7 +68,7 @@ export default function Layout() {
     if (!user) return
     queryClient.prefetchQuery({
       queryKey: queryKeys.bookmarks(user.id),
-      queryFn: () => fetchers.bookmarksWithMeta(user.id),
+      queryFn: () => dp.getBookmarksWithMeta(user.id),
       ...queryOptions.threads,
     })
   }, [user, queryClient])
@@ -78,13 +80,13 @@ export default function Layout() {
     categories.forEach((category) => {
       queryClient.prefetchQuery({
         queryKey: queryKeys.threadsByCategory(category.slug),
-        queryFn: () => fetchers.threadsByCategory(category.slug),
+        queryFn: () => dp.getThreadsByCategory(category.slug),
         ...queryOptions.threads,
       })
       // Also prefetch the category metadata
       queryClient.prefetchQuery({
         queryKey: queryKeys.category(category.slug),
-        queryFn: () => fetchers.category(category.slug),
+        queryFn: () => dp.getCategory(category.slug),
         ...queryOptions.static,
       })
     })
@@ -97,7 +99,7 @@ export default function Layout() {
     channels.forEach((channel) => {
       queryClient.prefetchQuery({
         queryKey: queryKeys.chatMessages(channel.slug),
-        queryFn: () => fetchers.chatMessagesBySlug(channel.slug),
+        queryFn: () => dp.getChatMessages(channel.slug),
         ...queryOptions.realtime,
       })
     })
