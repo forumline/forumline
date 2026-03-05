@@ -99,8 +99,15 @@ app.use(
   serveStatic({ root: './dist', path: '/favicon.ico' }),
 )
 
-// SPA fallback — serve index.html for all non-API, non-asset routes
-app.get('*', serveStatic({ root: './dist', path: '/index.html' }))
+// SPA fallback — serve index.html for navigation routes only (not missing files)
+app.get('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname
+  // If the path has a file extension, it's a missing static file — return 404
+  if (path.match(/\.\w+$/)) {
+    return c.notFound()
+  }
+  return serveStatic({ root: './dist', path: '/index.html' })(c, next)
+})
 
 // ---------------------------------------------------------------------------
 // Start server
