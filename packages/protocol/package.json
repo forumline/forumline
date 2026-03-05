@@ -1,18 +1,17 @@
 {
   "name": "@johnvondrashek/forumline-protocol",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Forumline federation protocol types",
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./validation": {
       "types": "./dist/validation.d.ts",
-      "import": "./dist/validation.js"
+      "default": "./dist/validation.js"
     }
   },
   "files": ["dist"],

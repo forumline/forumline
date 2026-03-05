@@ -1,14 +1,13 @@
 {
   "name": "@johnvondrashek/forumline-server-sdk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Forumline server SDK for forum operators",
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     }
   },
   "files": ["dist"],
@@ -25,7 +24,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@johnvondrashek/forumline-protocol": "^0.3.0",
+    "@johnvondrashek/forumline-protocol": "^0.3.2",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
