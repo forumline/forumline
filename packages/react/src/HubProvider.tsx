@@ -58,6 +58,24 @@ export function HubProvider({
   const [hubUserId, setHubUserId] = useState<string | null>(null)
   const [isHubConnected, setIsHubConnected] = useState(false)
   const initRef = useRef(false)
+  const lastTokenRef = useRef<string | null>(null)
+
+  // When directSession token changes, update the client without full re-init
+  useEffect(() => {
+    if (!directSession || !isHubConnected) return
+    if (directSession.access_token === lastTokenRef.current) return
+
+    lastTokenRef.current = directSession.access_token
+    const client = new CentralServicesClient(hubUrl, directSession.access_token)
+    setHubClient(client)
+
+    const hubSb = createClient(hubSupabaseUrl, hubSupabaseAnonKey, {
+      global: {
+        headers: { Authorization: `Bearer ${directSession.access_token}` },
+      },
+    })
+    setHubSupabase(hubSb)
+  }, [directSession, isHubConnected, hubUrl, hubSupabaseUrl, hubSupabaseAnonKey])
 
   useEffect(() => {
     if (!user || initRef.current) return
@@ -70,7 +88,7 @@ export function HubProvider({
         let token: string
 
         if (directSession) {
-          // Desktop app: use the session token directly
+          // Desktop app / hub: use the session token directly
           token = directSession.access_token
         } else {
           // Web forum: fetch the hub access token from our server-side cookie
@@ -84,6 +102,8 @@ export function HubProvider({
 
           token = data.hub_access_token
         }
+
+        lastTokenRef.current = token
 
         // Create hub DM client
         const client = new CentralServicesClient(hubUrl, token)
