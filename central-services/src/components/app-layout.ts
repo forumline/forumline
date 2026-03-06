@@ -44,10 +44,17 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
   let dmUnreadCount = 0
   let dmPollInterval: ReturnType<typeof setInterval> | null = null
 
-  // Child instances
-  let currentChild: { el: HTMLElement; destroy: () => void } | null = null
+  // Persistent child instances — created lazily, kept alive
   let webviewInstance: ForumWebviewInstance | null = null
+  let webviewForumDomain: string | null = null // track which forum the webview is showing
+  let dmChild: { el: HTMLElement; destroy: () => void } | null = null
+  let settingsChild: { el: HTMLElement; destroy: () => void } | null = null
+  let welcomeChild: { el: HTMLElement; destroy: () => void } | null = null
   let tabBarInstance: ReturnType<typeof createMobileTabBar> | null = null
+
+  // View containers — persistent wrappers for each view
+  const forumContainer = document.createElement('div')
+  forumContainer.className = 'flex flex-col flex-1 overflow-hidden'
 
   const cleanups: (() => void)[] = []
 
@@ -64,7 +71,7 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
     forumStore,
     onChangeView: (v) => {
       view = v
-      render()
+      switchView()
     },
   })
   root.appendChild(tabBarInstance.el)
@@ -90,7 +97,7 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
   const cleanupDeepLink = setupDeepLinkListener((target: DeepLinkTarget) => {
     forumStore.switchForum(target.domain)
     deepLinkPath = target.path
-    render()
+    switchView()
   })
   cleanups.push(cleanupDeepLink)
 
@@ -246,55 +253,30 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
     return forumHeaderEl
   }
 
-  // ---- Main render ----
-  function render() {
-    // Destroy previous child
-    currentChild?.destroy()
-    currentChild = null
-    webviewInstance?.destroy()
-    webviewInstance = null
-    forumHeaderEl = null
+  // ---- Helper to show/hide elements ----
+  function showEl(el: HTMLElement) { el.style.display = '' }
+  function hideEl(el: HTMLElement) { el.style.display = 'none' }
 
-    mainArea.innerHTML = ''
-    tabBarInstance?.update(view, dmUnreadCount)
-
+  // ---- Ensure webview for current forum ----
+  function ensureWebview() {
     const { activeForum } = forumStore.get()
-    const { isHubConnected } = hubStore.get()
+    if (!activeForum) return
 
-    if (view === 'settings') {
-      const settings = createSettingsPage({
-        hubSession,
-        forumStore,
-        hubStore,
-        supabase,
-        onClose: () => { view = 'forums'; render() },
-      })
-      currentChild = settings
-      mainArea.appendChild(settings.el)
-      return
+    // If webview is for a different forum, destroy and recreate
+    if (webviewInstance && webviewForumDomain !== activeForum.domain) {
+      webviewInstance.destroy()
+      webviewInstance = null
+      webviewForumDomain = null
+      forumContainer.innerHTML = ''
+      forumHeaderEl = null
     }
 
-    if (view === 'dms') {
-      const dm = createDmPanel({
-        hubStore,
-        onClose: () => { view = 'forums'; render() },
-        onGoToSettings: () => { view = 'settings'; render() },
-      })
-      currentChild = dm
-      mainArea.appendChild(dm.el)
-      return
-    }
-
-    // Forums view
-    if (activeForum) {
-      const forumView = document.createElement('div')
-      forumView.className = 'flex flex-col flex-1 overflow-hidden'
-
-      // Forum header
+    // Create webview if needed
+    if (!webviewInstance) {
+      forumContainer.innerHTML = ''
       renderForumHeader()
-      forumView.appendChild(forumHeaderEl!)
+      forumContainer.appendChild(forumHeaderEl!)
 
-      // Webview (authUrl set asynchronously with fresh token)
       const needsAuth = authedForums !== null && !authedForums.has(activeForum.domain)
       webviewInstance = createForumWebview({
         forum: activeForum,
@@ -312,9 +294,9 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
         onNotification: handleForumNotification,
         onNavigate: (_domain, path) => { forumPath = path },
       })
+      webviewForumDomain = activeForum.domain
 
-      forumView.appendChild(webviewInstance.el)
-      mainArea.appendChild(forumView)
+      forumContainer.appendChild(webviewInstance.el)
 
       // Set auth URL with fresh token (async)
       if (needsAuth) {
@@ -329,18 +311,71 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
 
       deepLinkPath = null
       forumPath = '/'
+    }
+  }
+
+  // ---- Main view switch ----
+  function switchView() {
+    tabBarInstance?.update(view, dmUnreadCount)
+
+    const { activeForum } = forumStore.get()
+
+    // Hide all persistent children
+    if (forumContainer.parentNode) hideEl(forumContainer)
+    if (dmChild?.el.parentNode) hideEl(dmChild.el)
+    if (settingsChild?.el.parentNode) hideEl(settingsChild.el)
+    if (welcomeChild?.el.parentNode) hideEl(welcomeChild.el)
+
+    if (view === 'settings') {
+      if (!settingsChild) {
+        settingsChild = createSettingsPage({
+          hubSession,
+          forumStore,
+          hubStore,
+          supabase,
+          onClose: () => { view = 'forums'; switchView() },
+        })
+        mainArea.appendChild(settingsChild.el)
+      }
+      showEl(settingsChild.el)
+      return
+    }
+
+    if (view === 'dms') {
+      if (!dmChild) {
+        dmChild = createDmPanel({
+          hubStore,
+          onClose: () => { view = 'forums'; switchView() },
+          onGoToSettings: () => { view = 'settings'; switchView() },
+        })
+        mainArea.appendChild(dmChild.el)
+      }
+      showEl(dmChild.el)
+      return
+    }
+
+    // Forums view
+    if (activeForum) {
+      // Ensure forum container is in mainArea
+      if (!forumContainer.parentNode) {
+        mainArea.appendChild(forumContainer)
+      }
+      ensureWebview()
+      showEl(forumContainer)
       return
     }
 
     // No active forum — welcome page
-    const welcome = createWelcomePage({
-      hubSession,
-      forumStore,
-      hubStore,
-      onGoToSettings: () => { view = 'settings'; render() },
-    })
-    currentChild = welcome
-    mainArea.appendChild(welcome.el)
+    if (!welcomeChild) {
+      welcomeChild = createWelcomePage({
+        hubSession,
+        forumStore,
+        hubStore,
+        onGoToSettings: () => { view = 'settings'; switchView() },
+      })
+      mainArea.appendChild(welcomeChild.el)
+    }
+    showEl(welcomeChild.el)
   }
 
   // ---- Subscribe to store changes ----
@@ -350,7 +385,7 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
     const { activeForum } = forumStore.get()
     if (activeForum !== prevActiveForum) {
       prevActiveForum = activeForum
-      if (view === 'forums') render()
+      if (view === 'forums') switchView()
     }
   })
   cleanups.push(unsubForum)
@@ -359,13 +394,15 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
   fetchMemberships()
   registerPush()
   startDmPolling()
-  render()
+  switchView()
 
   return {
     el: root,
     destroy() {
-      currentChild?.destroy()
       webviewInstance?.destroy()
+      dmChild?.destroy()
+      settingsChild?.destroy()
+      welcomeChild?.destroy()
       tabBarInstance?.destroy()
       cleanups.forEach((fn) => fn())
       if (copiedTimeout) clearTimeout(copiedTimeout)

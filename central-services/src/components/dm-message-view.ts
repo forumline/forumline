@@ -16,20 +16,41 @@ export function createDmMessageView({ hubStore, recipientId }: DmMessageViewOpti
   let sending = false
   let pollInterval: ReturnType<typeof setInterval> | null = null
   let markedRead = false
+  let initialLoad = true
 
   const el = document.createElement('div')
   el.className = 'flex flex-col'
   el.style.height = '100%'
 
-  // Message header
+  // Message header — built once, updated in place
   const headerEl = document.createElement('div')
   headerEl.className = 'message-header'
+  const headerAvatar = createAvatar({ avatarUrl: null, seed: recipientName, size: 32 })
+  const headerName = document.createElement('h3')
+  headerName.className = 'font-medium text-white'
+  headerName.textContent = recipientName
+  headerEl.append(headerAvatar, headerName)
   el.appendChild(headerEl)
 
   // Messages container
   const messagesContainer = document.createElement('div')
   messagesContainer.className = 'flex-1 overflow-y-auto p-lg'
   el.appendChild(messagesContainer)
+
+  // Message list wrapper (lives inside messagesContainer)
+  const messageList = document.createElement('div')
+  messageList.style.display = 'flex'
+  messageList.style.flexDirection = 'column'
+  messageList.style.gap = '1rem'
+
+  // Empty state
+  const emptyState = document.createElement('div')
+  emptyState.className = 'text-center text-faint'
+  emptyState.style.padding = '3rem 0'
+  emptyState.textContent = 'No messages yet. Say hello!'
+
+  // Track rendered messages
+  const renderedMessages = new Map<string, HTMLElement>()
 
   // Compose bar
   const composeBar = document.createElement('div')
@@ -53,59 +74,90 @@ export function createDmMessageView({ hubStore, recipientId }: DmMessageViewOpti
   composeBar.appendChild(sendBtn)
   el.appendChild(composeBar)
 
-  function renderHeader() {
-    headerEl.innerHTML = ''
-    headerEl.appendChild(createAvatar({ avatarUrl: recipientAvatarUrl, seed: recipientName, size: 32 }))
-    const h3 = document.createElement('h3')
-    h3.className = 'font-medium text-white'
-    h3.textContent = recipientName
-    headerEl.appendChild(h3)
+  function updateHeader() {
+    // Replace avatar
+    const newAvatar = createAvatar({ avatarUrl: recipientAvatarUrl, seed: recipientName, size: 32 })
+    headerEl.replaceChild(newAvatar, headerEl.firstChild!)
+    headerName.textContent = recipientName
+  }
+
+  function isAtBottom(): boolean {
+    const threshold = 50
+    return messagesContainer.scrollTop + messagesContainer.clientHeight >= messagesContainer.scrollHeight - threshold
+  }
+
+  function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight
+  }
+
+  function createMessageRow(msg: HubDirectMessage): HTMLElement {
+    const { hubUserId } = hubStore.get()
+    const isMe = msg.sender_id === hubUserId
+    const row = document.createElement('div')
+    row.className = isMe ? 'dm-row dm-row--mine' : 'dm-row dm-row--theirs'
+
+    const wrap = document.createElement('div')
+    wrap.style.maxWidth = '75%'
+
+    const bubble = document.createElement('div')
+    bubble.className = isMe ? 'dm-bubble dm-bubble--mine' : 'dm-bubble dm-bubble--theirs'
+    bubble.textContent = msg.content
+    wrap.appendChild(bubble)
+
+    const time = document.createElement('div')
+    time.className = `dm-time ${isMe ? 'text-right' : 'text-left'}`
+    time.textContent = formatMessageTime(new Date(msg.created_at))
+    wrap.appendChild(time)
+
+    row.appendChild(wrap)
+    return row
   }
 
   function renderMessages() {
-    messagesContainer.innerHTML = ''
-    const { hubUserId } = hubStore.get()
+    const wasAtBottom = isAtBottom()
 
     if (messages.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'text-center text-faint'
-      empty.style.padding = '3rem 0'
-      empty.textContent = 'No messages yet. Say hello!'
-      messagesContainer.appendChild(empty)
+      // Show empty state
+      messageList.remove()
+      if (!emptyState.parentNode) {
+        messagesContainer.innerHTML = ''
+        messagesContainer.appendChild(emptyState)
+      }
       return
     }
 
-    const list = document.createElement('div')
-    list.style.display = 'flex'
-    list.style.flexDirection = 'column'
-    list.style.gap = '1rem'
-
-    for (const msg of messages) {
-      const isMe = msg.sender_id === hubUserId
-      const row = document.createElement('div')
-      row.className = isMe ? 'dm-row dm-row--mine' : 'dm-row dm-row--theirs'
-
-      const wrap = document.createElement('div')
-      wrap.style.maxWidth = '75%'
-
-      const bubble = document.createElement('div')
-      bubble.className = isMe ? 'dm-bubble dm-bubble--mine' : 'dm-bubble dm-bubble--theirs'
-      bubble.textContent = msg.content
-      wrap.appendChild(bubble)
-
-      const time = document.createElement('div')
-      time.className = `dm-time ${isMe ? 'text-right' : 'text-left'}`
-      time.textContent = formatMessageTime(new Date(msg.created_at))
-      wrap.appendChild(time)
-
-      row.appendChild(wrap)
-      list.appendChild(row)
+    // Show message list
+    emptyState.remove()
+    if (!messageList.parentNode) {
+      messagesContainer.innerHTML = ''
+      messagesContainer.appendChild(messageList)
     }
 
-    messagesContainer.appendChild(list)
+    // Build set of current message IDs for removal detection
+    const currentIds = new Set(messages.map(m => m.id))
 
-    // Scroll to bottom
-    messagesContainer.scrollTop = messagesContainer.scrollHeight
+    // Remove messages that no longer exist (e.g. optimistic removed on failure)
+    for (const [id, rowEl] of renderedMessages) {
+      if (!currentIds.has(id)) {
+        rowEl.remove()
+        renderedMessages.delete(id)
+      }
+    }
+
+    // Add new messages in order
+    for (const msg of messages) {
+      if (!renderedMessages.has(msg.id)) {
+        const row = createMessageRow(msg)
+        renderedMessages.set(msg.id, row)
+        messageList.appendChild(row)
+      }
+    }
+
+    // Auto-scroll only if user was at bottom or this is the initial load
+    if (wasAtBottom || initialLoad) {
+      scrollToBottom()
+      initialLoad = false
+    }
   }
 
   async function fetchMessages() {
@@ -117,10 +169,11 @@ export function createDmMessageView({ hubStore, recipientId }: DmMessageViewOpti
       const convos = await hubClient.getConversations()
       const convo = convos.find((c) => c.recipientId === recipientId)
       if (convo) {
+        const nameChanged = recipientName !== convo.recipientName || recipientAvatarUrl !== (convo.recipientAvatarUrl ?? null)
         recipientName = convo.recipientName
         recipientAvatarUrl = convo.recipientAvatarUrl ?? null
         messageInput.placeholder = `Message ${recipientName}...`
-        renderHeader()
+        if (nameChanged) updateHeader()
       }
 
       // Fetch messages
@@ -161,6 +214,9 @@ export function createDmMessageView({ hubStore, recipientId }: DmMessageViewOpti
 
     try {
       await hubClient.sendMessage(recipientId, content)
+      // Remove optimistic message before adding real ones
+      renderedMessages.get(optimistic.id)?.remove()
+      renderedMessages.delete(optimistic.id)
       // Refetch to get real message
       const realMessages = await hubClient.getMessages(recipientId)
       messages = realMessages
@@ -181,7 +237,6 @@ export function createDmMessageView({ hubStore, recipientId }: DmMessageViewOpti
   spinnerWrap.appendChild(createSpinner())
   messagesContainer.appendChild(spinnerWrap)
 
-  renderHeader()
   fetchMessages()
 
   // Poll for new messages
