@@ -9,13 +9,15 @@ import { createMobileTabBar, type AppView } from './mobile-tab-bar.js'
 import type { ForumWebviewInstance } from '@johnvondrashek/forumline-core'
 
 /** Persist auth state change to hub DB */
-async function updateForumAuthState(accessToken: string, forumDomain: string, authed: boolean) {
+async function updateForumAuthState(supabase: SupabaseClient, forumDomain: string, authed: boolean) {
   try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
     await fetch('/api/memberships', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ forum_domain: forumDomain, authed }),
     })
@@ -95,8 +97,10 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
   // ---- Memberships fetch ----
   async function fetchMemberships() {
     try {
+      const { data: { session: freshSession } } = await supabase.auth.getSession()
+      if (!freshSession) return
       const res = await fetch('/api/memberships', {
-        headers: { Authorization: `Bearer ${hubSession.access_token}` },
+        headers: { Authorization: `Bearer ${freshSession.access_token}` },
       })
       if (!res.ok) return
       const memberships: { forum_domain: string; forum_authed_at: string | null; notifications_muted?: boolean }[] = await res.json()
@@ -168,11 +172,13 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
         if (cancelled) return
 
         const sub = subscription.toJSON()
+        const { data: { session: pushSession } } = await supabase.auth.getSession()
+        if (!pushSession) return
         await fetch('/api/push?action=subscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${hubSession.access_token}`,
+            Authorization: `Bearer ${pushSession.access_token}`,
           },
           body: JSON.stringify({ endpoint: sub.endpoint, keys: sub.keys }),
         })
@@ -288,23 +294,19 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
       renderForumHeader()
       forumView.appendChild(forumHeaderEl!)
 
-      // Auth URL
-      const authUrl = hubSession && authedForums !== null && !authedForums.has(activeForum.domain)
-        ? `${activeForum.api_base}/auth?hub_token=${hubSession.access_token}`
-        : null
-
-      // Webview
+      // Webview (authUrl set asynchronously with fresh token)
+      const needsAuth = authedForums !== null && !authedForums.has(activeForum.domain)
       webviewInstance = createForumWebview({
         forum: activeForum,
-        authUrl,
+        authUrl: null,
         initialPath: deepLinkPath,
         onAuthed: (domain) => {
           authedForums?.add(domain)
-          updateForumAuthState(hubSession.access_token, domain, true)
+          updateForumAuthState(supabase, domain, true)
         },
         onSignedOut: (domain) => {
           authedForums?.delete(domain)
-          updateForumAuthState(hubSession.access_token, domain, false)
+          updateForumAuthState(supabase, domain, false)
         },
         onUnreadCounts: (domain, counts) => forumStore.setUnreadCounts(domain, counts),
         onNotification: handleForumNotification,
@@ -313,6 +315,17 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
 
       forumView.appendChild(webviewInstance.el)
       mainArea.appendChild(forumView)
+
+      // Set auth URL with fresh token (async)
+      if (needsAuth) {
+        const wv = webviewInstance
+        const af = activeForum
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session && wv === webviewInstance) {
+            wv.setAuthUrl(`${af.api_base}/auth?hub_token=${session.access_token}`)
+          }
+        })
+      }
 
       deepLinkPath = null
       forumPath = '/'

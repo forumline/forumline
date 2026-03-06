@@ -20,10 +20,11 @@ export function createSettingsPage({ hubSession, forumStore, hubStore, supabase,
   el.className = 'page-scroll'
 
   async function fetchMemberships() {
-    if (!hubSession) return
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
       const res = await fetch('/api/memberships', {
-        headers: { Authorization: `Bearer ${hubSession.access_token}` },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (!res.ok) return
       memberships = await res.json()
@@ -32,12 +33,13 @@ export function createSettingsPage({ hubSession, forumStore, hubStore, supabase,
   }
 
   async function fetchAvatar() {
-    if (!hubSession) return
+    const userId = hubSession?.user?.id
+    if (!userId) return
     try {
       const { data } = await supabase
         .from('hub_profiles')
         .select('avatar_url')
-        .eq('id', hubSession.user.id)
+        .eq('id', userId)
         .single()
       if (data?.avatar_url) {
         avatarUrl = data.avatar_url
@@ -47,7 +49,6 @@ export function createSettingsPage({ hubSession, forumStore, hubStore, supabase,
   }
 
   async function toggleMute(forumDomain: string, muted: boolean) {
-    if (!hubSession) return
     // Optimistic update
     memberships = memberships.map((m) =>
       m.forum_domain === forumDomain ? { ...m, notifications_muted: muted } : m,
@@ -55,11 +56,13 @@ export function createSettingsPage({ hubSession, forumStore, hubStore, supabase,
     render()
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No session')
       const res = await fetch('/api/memberships', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${hubSession.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ forum_domain: forumDomain, muted }),
       })

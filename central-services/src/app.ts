@@ -110,8 +110,14 @@ export function createApp(root: HTMLElement) {
     currentSession = session
     if (event === 'PASSWORD_RECOVERY') {
       passwordRecovery = true
+      renderForSession(session)
+    } else if (event === 'TOKEN_REFRESHED') {
+      // Token refresh doesn't need to re-create the app layout — the supabase
+      // client handles token management internally. Re-rendering would destroy
+      // the webview iframe and cause fetch failures in pending callbacks.
+    } else {
+      renderForSession(session)
     }
-    renderForSession(session)
   })
 
   // Return top-level cleanup
