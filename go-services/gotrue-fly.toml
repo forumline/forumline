@@ -13,7 +13,7 @@ primary_region = "iad"
   GOTRUE_DISABLE_SIGNUP = "false"
   GOTRUE_EXTERNAL_EMAIL_ENABLED = "true"
   GOTRUE_MAILER_AUTOCONFIRM = "true"
-  GOTRUE_MAILER_URLPATHS_RECOVERY = "/reset-password"
+  # Recovery redirect is set client-side via redirectTo in resetPasswordForEmail()
   GOTRUE_SMTP_HOST = "smtp.resend.com"
   GOTRUE_SMTP_PORT = "465"
   GOTRUE_SMTP_USER = "resend"
