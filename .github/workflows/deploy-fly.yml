@@ -52,6 +52,7 @@ jobs:
           --build-arg VITE_HUB_SUPABASE_URL=${{ secrets.VITE_HUB_SUPABASE_URL }}
           --build-arg VITE_HUB_SUPABASE_ANON_KEY=${{ secrets.VITE_HUB_SUPABASE_ANON_KEY }}
           --build-arg VITE_SITE_URL=${{ secrets.VITE_SITE_URL }}
+          --build-arg VITE_USE_API_PROVIDER=true
           --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
