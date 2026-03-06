@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 )
 
 // SSEClient represents a connected SSE client with a filter.
@@ -21,22 +21,25 @@ type SSEClient struct {
 }
 
 // SSEHub manages LISTEN/NOTIFY subscriptions and fans out to SSE clients.
+// Uses direct pgx connections (not pooled) for LISTEN to bypass PgBouncer
+// transaction mode, which doesn't support LISTEN/NOTIFY.
 type SSEHub struct {
-	mu      sync.RWMutex
-	clients map[string][]*SSEClient // channel -> clients
-	pool    *pgxpool.Pool
+	mu        sync.RWMutex
+	clients   map[string][]*SSEClient // channel -> clients
+	listenDSN string                  // direct Postgres DSN for LISTEN connections
 }
 
-func NewSSEHub(pool *pgxpool.Pool) *SSEHub {
+func NewSSEHub(listenDSN string) *SSEHub {
 	return &SSEHub{
-		clients: make(map[string][]*SSEClient),
-		pool:    pool,
+		clients:   make(map[string][]*SSEClient),
+		listenDSN: listenDSN,
 	}
 }
 
 // Listen starts a goroutine that listens on the given Postgres channel
 // and fans out notifications to registered clients. Automatically reconnects
-// on connection failure.
+// on connection failure. Uses a direct connection (not from pool) to avoid
+// PgBouncer transaction mode limitations with LISTEN/NOTIFY.
 func (h *SSEHub) Listen(ctx context.Context, channel string) {
 	go func() {
 		for {
@@ -58,12 +61,12 @@ func (h *SSEHub) Listen(ctx context.Context, channel string) {
 }
 
 func (h *SSEHub) listenOnce(ctx context.Context, channel string) {
-	conn, err := h.pool.Acquire(ctx)
+	conn, err := pgx.Connect(ctx, h.listenDSN)
 	if err != nil {
-		log.Printf("SSEHub: failed to acquire connection for LISTEN %s: %v", channel, err)
+		log.Printf("SSEHub: failed to connect for LISTEN %s: %v", channel, err)
 		return
 	}
-	defer conn.Release()
+	defer conn.Close(ctx)
 
 	_, err = conn.Exec(ctx, fmt.Sprintf("LISTEN %s", channel))
 	if err != nil {
@@ -74,7 +77,7 @@ func (h *SSEHub) listenOnce(ctx context.Context, channel string) {
 	log.Printf("SSEHub: listening on channel %s", channel)
 
 	for {
-		notification, err := conn.Conn().WaitForNotification(ctx)
+		notification, err := conn.WaitForNotification(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return // context cancelled, clean shutdown

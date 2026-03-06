@@ -26,8 +26,12 @@ func main() {
 	}
 	defer pool.Close()
 
-	// SSE hub for LISTEN/NOTIFY
-	sseHub := shared.NewSSEHub(pool)
+	// SSE hub for LISTEN/NOTIFY — uses direct connection (bypasses PgBouncer)
+	listenDSN := os.Getenv("DATABASE_URL_DIRECT")
+	if listenDSN == "" {
+		listenDSN = os.Getenv("DATABASE_URL")
+	}
+	sseHub := shared.NewSSEHub(listenDSN)
 	sseHub.Listen(ctx, "dm_changes")
 	sseHub.Listen(ctx, "push_dm")
 
