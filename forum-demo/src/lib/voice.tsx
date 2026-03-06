@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react'
 import type { Room as RoomType, Participant } from 'livekit-client'
-import { supabase } from './supabase'
 import { useAuth } from './auth'
 import { useDataProvider } from './data-provider'
+import { useSSE } from './sse'
 
 // Lazily loaded livekit module — only fetched when joinRoom() is called
 let livekitModule: typeof import('livekit-client') | null = null
@@ -134,16 +134,10 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     // Fetch avatar URLs for any participants not yet in cache
     const uncached = remotes.filter(p => avatarCacheRef.current[p.id] === undefined)
     if (uncached.length > 0) {
-      supabase
-        .from('profiles')
-        .select('id, avatar_url')
-        .in('id', uncached.map(p => p.id))
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('[FLD:Voice] Failed to fetch participant avatars:', error)
-            return
-          }
-          if (!data) return
+      const ids = uncached.map(p => p.id).join(',')
+      fetch(`/api/profiles/batch?ids=${encodeURIComponent(ids)}`)
+        .then(res => res.json())
+        .then((data: Array<{ id: string; avatar_url: string | null }>) => {
           let changed = false
           for (const profile of data) {
             if (avatarCacheRef.current[profile.id] === undefined) {
@@ -159,38 +153,30 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
             }
           }
           if (changed) {
-            // Re-apply cached URLs
             setParticipants(prev => prev.map(p => ({
               ...p,
               avatarUrl: avatarCacheRef.current[p.id] ?? p.avatarUrl,
             })))
           }
         })
+        .catch(err => console.error('[FLD:Voice] Failed to fetch participant avatars:', err))
     }
   }, [])
 
   // Fetch all voice presence and build room participant counts
   const fetchVoicePresence = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('voice_presence')
-        .select(`
-          id,
-          user_id,
-          room_slug,
-          joined_at,
-          profile:profiles(id, username, display_name, avatar_url)
-        `)
-
-      if (error) {
-        console.error('Failed to fetch voice presence:', error)
+      const res = await fetch('/api/voice-presence')
+      if (!res.ok) {
+        console.error('Failed to fetch voice presence:', res.status)
         return
       }
+      const data = await res.json() as VoicePresenceRow[]
 
       const counts: Record<string, RoomParticipantInfo> = {}
       const newAvatarUpdates: Record<string, string | null> = {}
 
-      for (const row of (data || []) as VoicePresenceRow[]) {
+      for (const row of data) {
         if (!counts[row.room_slug]) {
           counts[row.room_slug] = { count: 0, names: [], identities: [] }
         }
@@ -234,10 +220,9 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     if (!user) return
     const token = accessTokenRef.current
     if (token) {
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/voice_presence?user_id=eq.${user.id}`, {
+      fetch('/api/voice-presence', {
         method: 'DELETE',
         headers: {
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${token}`,
         },
         keepalive: true,
@@ -279,6 +264,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     accessTokenRef.current = null
   }, [deletePresence])
 
+  const { getAccessToken } = useAuth()
+
   const joinRoom = useCallback(async (slug: string, name: string) => {
     if (!user) return
 
@@ -295,8 +282,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setIsConnecting(true)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) {
+      const accessToken = await getAccessToken()
+      if (!accessToken) {
         setConnectError('Not authenticated')
         setIsConnecting(false)
         return
@@ -308,7 +295,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           roomName: slug,
@@ -326,7 +313,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       const { token } = await resp.json()
 
       // Cache for beforeunload cleanup
-      accessTokenRef.current = session.access_token
+      accessTokenRef.current = accessToken
 
       const livekitUrl = import.meta.env.VITE_LIVEKIT_URL as string | undefined
       if (!livekitUrl) {
@@ -437,7 +424,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsConnecting(false)
     }
-  }, [user, updateParticipants, writePresence, deletePresence])
+  }, [user, getAccessToken, updateParticipants, writePresence, deletePresence])
 
   const toggleMute = useCallback(async () => {
     const room = livekitRoomRef.current
@@ -485,32 +472,16 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     }
   }, [isScreenSharing])
 
-  // Subscribe to voice_presence changes via Supabase Realtime
+  // Initial fetch of voice presence
   useEffect(() => {
-    // Initial fetch
     fetchVoicePresence()
-
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel('voice-presence-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'voice_presence',
-        },
-        () => {
-          // Re-fetch all presence data on any change
-          fetchVoicePresence()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
   }, [fetchVoicePresence])
+
+  // Subscribe to voice_presence changes via SSE
+  const handleVoicePresenceSSE = useCallback(() => {
+    fetchVoicePresence()
+  }, [fetchVoicePresence])
+  useSSE('/api/voice-presence/stream', handleVoicePresenceSSE, getAccessToken)
 
   // Graceful disconnect on page unload / unmount
   useEffect(() => {

@@ -1,10 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../lib/auth'
 import Avatar from '../components/Avatar'
-import { supabase } from '../lib/supabase'
 import { useDataProvider } from '../lib/data-provider'
+import { useSSE } from '../lib/sse'
 import Skeleton from '../components/ui/Skeleton'
 import { formatRelativeTime } from '../lib/dateFormatters'
 import { queryKeys, queryOptions } from '../lib/queries'
@@ -56,23 +56,15 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const notifications: NotifItem[] = rawNotifications.map(toNotifItem)
   const unreadCount = notifications.filter(n => !n.read).length
 
-  // Realtime subscription — invalidate query on new notifications
-  useEffect(() => {
-    if (!user) return
-
-    const sub = supabase
-      .channel('header-notifications')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => {
-          queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user.id) })
-        }
-      )
-      .subscribe()
-
-    return () => { sub.unsubscribe() }
+  // Realtime subscription — invalidate query on new notifications via SSE
+  const { getAccessToken } = useAuth()
+  const notifStreamUrl = user ? '/api/forumline/notifications/stream' : null
+  const handleNotifSSE = useCallback(() => {
+    if (user) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user.id) })
+    }
   }, [user, queryClient])
+  useSSE(notifStreamUrl, handleNotifSSE, getAccessToken)
 
   // Close dropdown when clicking outside
   useEffect(() => {

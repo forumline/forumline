@@ -2,26 +2,29 @@
  * useUnreadReporter — Reports unread counts to the parent hub via postMessage.
  *
  * Only active when the forum is embedded in an iframe (i.e. running inside the hub).
- * Polls /api/forumline/unread every 30s and also listens for Supabase Realtime
- * notification inserts for instant updates.
+ * Polls /api/forumline/unread every 30s and also listens for SSE
+ * notification events for instant updates.
  */
 
 import { useEffect, useRef, useCallback } from 'react'
 import type { ForumToHubMessage, HubToForumMessage } from '@johnvondrashek/forumline-protocol'
-import { supabase } from '../lib/supabase'
+import { useSSE } from '../lib/sse'
+import { useAuth } from '../lib/auth'
 
 const POLL_INTERVAL = 30_000
 
 export function useUnreadReporter(userId: string | null) {
   const parentOriginRef = useRef<string | null>(null)
   const isEmbedded = window.parent !== window
+  const { getAccessToken } = useAuth()
 
   const sendUnreadCounts = useCallback(async () => {
     if (!isEmbedded || !userId) return
 
     try {
+      const token = await getAccessToken()
       const res = await fetch('/api/forumline/unread', {
-        headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (!res.ok) return
 
@@ -32,7 +35,14 @@ export function useUnreadReporter(userId: string | null) {
     } catch {
       // Non-critical — will retry on next poll
     }
-  }, [isEmbedded, userId])
+  }, [isEmbedded, userId, getAccessToken])
+
+  // SSE subscription for instant updates on new notifications
+  const sseUrl = isEmbedded && userId ? '/api/forumline/notifications/stream' : null
+  const handleSSE = useCallback(() => {
+    sendUnreadCounts()
+  }, [sendUnreadCounts])
+  useSSE(sseUrl, handleSSE, getAccessToken)
 
   useEffect(() => {
     if (!isEmbedded || !userId) return
@@ -51,25 +61,9 @@ export function useUnreadReporter(userId: string | null) {
     sendUnreadCounts()
     const intervalId = setInterval(sendUnreadCounts, POLL_INTERVAL)
 
-    // Subscribe to Realtime notification inserts for instant updates
-    const channel = supabase
-      .channel('unread-reporter')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        () => sendUnreadCounts(),
-      )
-      .subscribe()
-
     return () => {
       window.removeEventListener('message', handleMessage)
       clearInterval(intervalId)
-      supabase.removeChannel(channel)
     }
   }, [isEmbedded, userId, sendUnreadCounts])
 }

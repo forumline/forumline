@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/auth'
-import { supabase } from '../lib/supabase'
 import { useDataProvider } from '../lib/data-provider'
+import { useSSE } from '../lib/sse'
 import Avatar from '../components/Avatar'
 import { queryKeys, queryOptions } from '../lib/queries'
 import Skeleton from '../components/ui/Skeleton'
@@ -80,44 +80,21 @@ export default function Chat() {
     }
   }, [cachedMessages])
 
-  // Subscribe to real-time updates
-  useEffect(() => {
-    if (!channel) return
+  // Subscribe to real-time updates via SSE
+  const { getAccessToken } = useAuth()
+  const sseUrl = channel ? `/api/channels/${channel.slug}/stream` : null
 
-    console.log('[FLD:Chat] Subscribing to realtime for channel:', channel.slug)
-    const sub = supabase
-      .channel(`chat:${channel.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${channel.id}` },
-        async (payload) => {
-          const { data, error } = await supabase
-            .from('chat_messages')
-            .select('*, author:profiles(*)')
-            .eq('id', payload.new.id)
-            .single()
-          if (error) {
-            console.error('[FLD:Chat] Failed to fetch new realtime message:', error)
-            return
-          }
-          if (data) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === data.id)) return prev
-              return [...prev, toMsg(data)]
-            })
-            // Invalidate cache so next visit has fresh data
-            queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(channelSlug) })
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[FLD:Chat] Subscription status:', status)
-      })
+  const handleSSEMessage = useCallback((data: unknown) => {
+    const msg = data as { id: string; channel_id: string; author_id: string; content: string; created_at: string; author?: Profile }
+    if (!msg.author) return
+    setMessages(prev => {
+      if (prev.some(m => m.id === msg.id)) return prev
+      return [...prev, toMsg({ ...msg, author: msg.author! })]
+    })
+    queryClient.invalidateQueries({ queryKey: queryKeys.chatMessages(channelSlug) })
+  }, [channelSlug, queryClient])
 
-    return () => {
-      sub.unsubscribe()
-    }
-  }, [channel?.id, channelSlug, queryClient])
+  useSSE(sseUrl, handleSSEMessage, getAccessToken)
 
   // Scroll to bottom on new messages
   useEffect(() => {

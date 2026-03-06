@@ -1,6 +1,6 @@
 import { type UseFormRegister, type FieldErrors } from 'react-hook-form'
 import toast from 'react-hot-toast'
-import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../lib/auth'
 import Input from '../../components/ui/Input'
 
 export type AccountFormData = {
@@ -23,6 +23,7 @@ export default function AccountTab({
   register,
   errors,
 }: AccountTabProps) {
+  const { getAccessToken } = useAuth()
   return (
     <div className="space-y-6">
       <div>
@@ -100,12 +101,19 @@ export default function AccountTab({
             <button
               onClick={async () => {
                 if (!userId) return
-                const { error } = await supabase
-                  .from('profiles')
-                  .update({ forumline_id: null })
-                  .eq('id', userId)
-                if (error) {
-                  toast.error('Failed to disconnect: ' + error.message)
+                try {
+                  const token = await getAccessToken()
+                  const res = await fetch(`/api/profiles/${userId}/forumline-id`, {
+                    method: 'DELETE',
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  })
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}))
+                    toast.error('Failed to disconnect: ' + (data.error || 'Unknown error'))
+                    return
+                  }
+                } catch (err) {
+                  toast.error('Failed to disconnect: ' + (err instanceof Error ? err.message : 'Unknown error'))
                   return
                 }
                 // Clear httpOnly Forumline cookies (hub session)
@@ -125,12 +133,12 @@ export default function AccountTab({
             </p>
             <button
               onClick={async () => {
-                const { data: { session } } = await supabase.auth.getSession()
-                if (!session?.access_token) {
+                const token = await getAccessToken()
+                if (!token) {
                   toast.error('Session expired. Please sign in again.')
                   return
                 }
-                window.location.href = `/api/forumline/auth?link_token=${session.access_token}`
+                window.location.href = `/api/forumline/auth?link_token=${token}`
               }}
               className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-600/10 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-600/20"
             >

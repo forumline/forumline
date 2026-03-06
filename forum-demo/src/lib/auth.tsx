@@ -10,6 +10,7 @@ interface AuthContextType {
   user: AppUser | null
   profile: Profile | null
   loading: boolean
+  getAccessToken: () => Promise<string | null>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string, username: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
@@ -255,8 +256,13 @@ export function AuthProvider({ children, authProvider }: { children: ReactNode; 
     return authProvider.updatePassword(newPassword)
   }
 
+  const getAccessToken = async (): Promise<string | null> => {
+    const session = await authProvider.getSession()
+    return session?.access_token ?? null
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, profile, loading, getAccessToken, signIn, signUp, signOut, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

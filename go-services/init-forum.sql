@@ -25,3 +25,53 @@ CREATE TRIGGER trg_notification_insert
   AFTER INSERT ON notifications
   FOR EACH ROW
   EXECUTE FUNCTION notify_notification_insert();
+
+-- pg_notify trigger for chat message SSE stream.
+CREATE OR REPLACE FUNCTION notify_chat_message_insert()
+RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify('chat_message_changes', json_build_object(
+    'id', NEW.id,
+    'channel_id', NEW.channel_id,
+    'author_id', NEW.author_id,
+    'content', NEW.content,
+    'created_at', NEW.created_at
+  )::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_chat_message_insert ON chat_messages;
+CREATE TRIGGER trg_chat_message_insert
+  AFTER INSERT ON chat_messages
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_chat_message_insert();
+
+-- pg_notify trigger for voice presence changes.
+CREATE OR REPLACE FUNCTION notify_voice_presence_change()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM pg_notify('voice_presence_changes', json_build_object(
+      'event', 'DELETE',
+      'user_id', OLD.user_id,
+      'room_slug', OLD.room_slug
+    )::text);
+    RETURN OLD;
+  ELSE
+    PERFORM pg_notify('voice_presence_changes', json_build_object(
+      'event', TG_OP,
+      'user_id', NEW.user_id,
+      'room_slug', NEW.room_slug,
+      'joined_at', NEW.joined_at
+    )::text);
+    RETURN NEW;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_voice_presence_change ON voice_presence;
+CREATE TRIGGER trg_voice_presence_change
+  AFTER INSERT OR UPDATE OR DELETE ON voice_presence
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_voice_presence_change();

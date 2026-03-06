@@ -2,61 +2,48 @@
  * useNotificationReporter — Forwards new notifications to the parent hub via postMessage.
  *
  * Only active when the forum is embedded in an iframe.
- * Subscribes to Supabase Realtime on the notifications table and sends
+ * Subscribes to SSE on the notification stream and sends
  * each new notification to the parent frame as a `forumline:notification` message.
  */
 
-import { useEffect } from 'react'
+import { useCallback } from 'react'
 import type { ForumToHubMessage } from '@johnvondrashek/forumline-protocol'
 import type { ForumNotification } from '@johnvondrashek/forumline-protocol'
-import { supabase } from '../lib/supabase'
+import { useSSE } from '../lib/sse'
+import { useAuth } from '../lib/auth'
 
 export function useNotificationReporter(userId: string | null) {
   const isEmbedded = window.parent !== window
+  const { getAccessToken } = useAuth()
 
-  useEffect(() => {
-    if (!isEmbedded || !userId) return
+  const sseUrl = isEmbedded && userId ? '/api/forumline/notifications/stream' : null
 
-    const channel = supabase
-      .channel('notification-reporter')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const row = payload.new as {
-            id: string
-            type: string
-            title: string
-            message: string
-            created_at: string
-            read: boolean
-            link: string
-          }
-
-          const notification: ForumNotification = {
-            id: row.id,
-            type: row.type as ForumNotification['type'],
-            title: row.title,
-            body: row.message,
-            timestamp: row.created_at,
-            read: row.read,
-            link: row.link || '',
-            forum_domain: window.location.hostname,
-          }
-
-          const msg: ForumToHubMessage = { type: 'forumline:notification', notification }
-          window.parent.postMessage(msg, '*')
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
+  const handleSSE = useCallback((data: unknown) => {
+    const raw = data as {
+      id: string
+      type: string
+      title: string
+      body: string
+      timestamp: string
+      read: boolean
+      link: string
+      forum_domain: string
     }
-  }, [isEmbedded, userId])
+
+    const notification: ForumNotification = {
+      id: raw.id,
+      type: raw.type as ForumNotification['type'],
+      title: raw.title,
+      body: raw.body,
+      timestamp: raw.timestamp,
+      read: raw.read,
+      link: raw.link || '',
+      forum_domain: raw.forum_domain || window.location.hostname,
+    }
+
+    const msg: ForumToHubMessage = { type: 'forumline:notification', notification }
+    window.parent.postMessage(msg, '*')
+  }, [])
+
+  useSSE(sseUrl, handleSSE, getAccessToken)
 }

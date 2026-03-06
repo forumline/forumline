@@ -29,6 +29,8 @@ func main() {
 	// SSE hub for LISTEN/NOTIFY
 	sseHub := shared.NewSSEHub(pool)
 	sseHub.Listen(ctx, "notification_changes")
+	sseHub.Listen(ctx, "chat_message_changes")
+	sseHub.Listen(ctx, "voice_presence_changes")
 
 	// Config
 	domain := os.Getenv("FORUM_DOMAIN")

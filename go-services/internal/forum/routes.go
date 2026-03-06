@@ -59,6 +59,80 @@ func NewRouter(pool *pgxpool.Pool, sseHub *shared.SSEHub, cfg *Config) *chi.Mux 
 	r.Post("/api/livekit", h.HandleLiveKitToken)
 	r.Get("/api/livekit", h.HandleLiveKitParticipants)
 
+	// ================================================================
+	// Data endpoints (Phase B)
+	// ================================================================
+
+	// Static/config (public)
+	r.Get("/api/categories", h.HandleCategories)
+	r.Get("/api/categories/{slug}", h.HandleCategoryBySlug)
+	r.Get("/api/channels", h.HandleChannels)
+	r.Get("/api/voice-rooms", h.HandleVoiceRooms)
+
+	// Threads (public reads)
+	r.Get("/api/threads", h.HandleThreads)
+	r.Get("/api/threads/{id}", h.HandleThread)
+	r.Get("/api/categories/{slug}/threads", h.HandleThreadsByCategory)
+	r.Get("/api/users/{id}/threads", h.HandleUserThreads)
+	r.Get("/api/search/threads", h.HandleSearchThreads)
+
+	// Posts (public reads)
+	r.Get("/api/threads/{id}/posts", h.HandlePosts)
+	r.Get("/api/users/{id}/posts", h.HandleUserPosts)
+	r.Get("/api/search/posts", h.HandleSearchPosts)
+
+	// Profiles (public reads)
+	r.Get("/api/profiles/batch", h.HandleProfilesBatch)
+	r.Get("/api/profiles/by-username/{username}", h.HandleProfileByUsername)
+	r.Get("/api/profiles/{id}", h.HandleProfile)
+
+	// Chat messages (public read)
+	r.Get("/api/channels/{slug}/messages", h.HandleChatMessages)
+
+	// Voice presence (public read)
+	r.Get("/api/voice-presence", h.HandleVoicePresence)
+
+	// Authenticated data endpoints
+	r.Group(func(r chi.Router) {
+		r.Use(shared.AuthMiddleware)
+
+		// Thread writes
+		r.Post("/api/threads", h.HandleCreateThread)
+		r.Patch("/api/threads/{id}", h.HandleUpdateThread)
+
+		// Post writes
+		r.Post("/api/posts", h.HandleCreatePost)
+
+		// Chat writes & stream
+		r.Post("/api/channels/{slug}/messages", h.HandleSendChatMessage)
+		r.Post("/api/channels/_by-id/{id}/messages", h.HandleSendChatMessageByID)
+		r.Get("/api/channels/{slug}/stream", h.HandleChatStream)
+
+		// Bookmarks
+		r.Get("/api/bookmarks", h.HandleBookmarks)
+		r.Get("/api/bookmarks/{threadId}/status", h.HandleBookmarkStatus)
+		r.Post("/api/bookmarks", h.HandleAddBookmark)
+		r.Delete("/api/bookmarks/{threadId}", h.HandleRemoveBookmark)
+		r.Delete("/api/bookmarks/by-id/{id}", h.HandleRemoveBookmarkByID)
+
+		// Notifications (data provider)
+		r.Get("/api/notifications", h.HandleNotificationsData)
+		r.Post("/api/notifications/read-all", h.HandleMarkAllNotificationsRead)
+
+		// Profile writes
+		r.Put("/api/profiles/{id}", h.HandleUpsertProfile)
+		r.Delete("/api/profiles/{id}/forumline-id", h.HandleClearForumlineID)
+
+		// Voice presence writes & stream
+		r.Put("/api/voice-presence", h.HandleSetVoicePresence)
+		r.Delete("/api/voice-presence", h.HandleClearVoicePresence)
+		r.Get("/api/voice-presence/stream", h.HandleVoicePresenceStream)
+
+		// Admin
+		r.Get("/api/admin/stats", h.HandleAdminStats)
+		r.Get("/api/admin/users", h.HandleAdminUsers)
+	})
+
 	// GoTrue reverse proxy — allows supabase-js to call /auth/v1/* same-origin
 	if cfg.GoTrueURL != "" {
 		target, _ := url.Parse(cfg.GoTrueURL)
