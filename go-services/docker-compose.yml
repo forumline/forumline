@@ -37,7 +37,6 @@ services:
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       GOTRUE_MAILER_AUTOCONFIRM: "true"
-      GOTRUE_MAILER_URLPATHS_RECOVERY: "/reset-password"
       # For local dev, use Mailpit to catch emails:
       #   Add mailpit service: image: axllent/mailpit, ports: ["8025:8025", "1025:1025"]
       #   Set GOTRUE_SMTP_HOST=mailpit, GOTRUE_SMTP_PORT=1025
