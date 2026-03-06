@@ -150,7 +150,6 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
 
   // ---- Push subscription ----
   function registerPush() {
-    console.log('[Hub:Push] registerPush called', new Error().stack?.split('\n').slice(1, 3).join(' <- '))
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
 
     const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
