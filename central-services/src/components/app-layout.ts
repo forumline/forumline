@@ -331,8 +331,14 @@ export function createAppLayout({ hubSession, forumStore, hubStore, supabase }: 
   }
 
   // ---- Subscribe to store changes ----
+  // Only re-render when activeForum changes (not on unread count updates)
+  let prevActiveForum = forumStore.get().activeForum
   const unsubForum = forumStore.subscribe(() => {
-    if (view === 'forums') render()
+    const { activeForum } = forumStore.get()
+    if (activeForum !== prevActiveForum) {
+      prevActiveForum = activeForum
+      if (view === 'forums') render()
+    }
   })
   cleanups.push(unsubForum)
 
