@@ -12,7 +12,7 @@ interface DmMessageViewProps {
 }
 
 export default function DmMessageView({ recipientId }: DmMessageViewProps) {
-  const { hubClient, hubSupabase, hubUserId } = useHub()
+  const { hubClient, hubUserId } = useHub()
   const queryClient = useQueryClient()
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -34,23 +34,7 @@ export default function DmMessageView({ recipientId }: DmMessageViewProps) {
     refetchInterval: 15_000,
   })
 
-  useEffect(() => {
-    if (!hubSupabase) return
-
-    const sub = hubSupabase
-      .channel(`hub-dm-messages-${recipientId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'hub_direct_messages' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['hub', 'dm', 'messages', recipientId] })
-          queryClient.invalidateQueries({ queryKey: ['hub', 'dm', 'conversations'] })
-        }
-      )
-      .subscribe()
-
-    return () => { sub.unsubscribe() }
-  }, [hubSupabase, recipientId, queryClient])
+  // Real-time updates handled by refetchInterval (SSE integration TODO)
 
   useEffect(() => {
     if (!hubClient || rawMessages.length === 0) return

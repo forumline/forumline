@@ -9,7 +9,7 @@ interface DmConversationListProps {
 }
 
 export default function DmConversationList({ onSelectConversation }: DmConversationListProps) {
-  const { hubClient, hubSupabase } = useHub()
+  const { hubClient } = useHub()
   const queryClient = useQueryClient()
 
   const { data: conversations = [], isError } = useQuery({
@@ -33,22 +33,7 @@ export default function DmConversationList({ onSelectConversation }: DmConversat
     })
   }, [conversations, hubClient, queryClient])
 
-  useEffect(() => {
-    if (!hubSupabase) return
-
-    const sub = hubSupabase
-      .channel('hub-dm-conversations')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'hub_direct_messages' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['hub', 'dm', 'conversations'] })
-        }
-      )
-      .subscribe()
-
-    return () => { sub.unsubscribe() }
-  }, [hubSupabase, queryClient])
+  // Real-time updates handled by refetchInterval (SSE integration TODO)
 
   if (isError) {
     return (

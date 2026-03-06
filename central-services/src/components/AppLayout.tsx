@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import type { ForumNotification } from '@johnvondrashek/forumline-protocol'
 import { ForumWebview, useForum, useHub, isTauri, getTauriNotification, useDeepLink } from '@johnvondrashek/forumline-react'
 import type { DeepLinkTarget } from '@johnvondrashek/forumline-react'
-import { hubSupabase } from '../App'
 import WelcomePage from './WelcomePage'
 import DmPanel from './DmPanel'
 import SettingsPage from './SettingsPage'
@@ -154,64 +153,8 @@ export default function AppLayout({ hubSession }: AppLayoutProps) {
     }
   }, [mutedForums])
 
-  // DM notification listener — fires native/browser notification on new DMs
-  useEffect(() => {
-    if (!hubSession) return
-
-    const channel = hubSupabase
-      .channel('dm-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'hub_direct_messages',
-          filter: `recipient_id=eq.${hubSession.user.id}`,
-        },
-        async (payload) => {
-          // Don't notify if DM panel is active and visible
-          if (view === 'dms' && document.visibilityState === 'visible') return
-
-          const row = payload.new as { sender_id: string; content: string }
-
-          // Look up sender's username
-          const { data: sender } = await hubSupabase
-            .from('hub_profiles')
-            .select('username')
-            .eq('id', row.sender_id)
-            .single()
-
-          const title = `Message from ${sender?.username ?? 'someone'}`
-          const body = row.content.length > 100 ? row.content.slice(0, 100) + '...' : row.content
-
-          if (isTauri()) {
-            try {
-              const { sendNotification, isPermissionGranted, requestPermission } = await getTauriNotification()
-              let permitted = await isPermissionGranted()
-              if (!permitted) {
-                const result = await requestPermission()
-                permitted = result === 'granted'
-              }
-              if (permitted) sendNotification({ title, body })
-            } catch (err) {
-              console.error('[Hub] DM notification error:', err)
-            }
-          } else if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-              await Notification.requestPermission()
-            }
-            if (Notification.permission === 'granted') {
-              new Notification(title, { body })
-            }
-          }
-        },
-      )
-      .subscribe()
-
-    return () => {
-      hubSupabase.removeChannel(channel)
-    }
-  }, [hubSession, view])
+  // DM notifications are handled server-side via web push (Go push listener).
+  // In-app notification via SSE stream integration is TODO.
 
   // Register service worker + push subscription
   useEffect(() => {
