@@ -536,7 +536,17 @@ func (h *Handlers) createOrLinkUser(r *http.Request, identity *forumlineIdentity
 		return newUserID, nil
 	}
 
-	// 3. Fallback: create user with forumline.local email
+	// 3. Fallback: check existing GoTrue users for matching forumline_id before creating
+	users, listErr := gotrueAdminListUsers(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey)
+	if listErr == nil {
+		for _, u := range users {
+			if meta, ok := u.UserMetadata["forumline_id"].(string); ok && meta == identity.ForumlineID {
+				h.ensureProfileWithForumlineID(ctx, u.ID, identity)
+				return u.ID, nil
+			}
+		}
+	}
+
 	newUserID, err := gotrueAdminCreateUser(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, map[string]interface{}{
 		"email":         identity.Username + "@forumline.local",
 		"password":      randomHex(16),
