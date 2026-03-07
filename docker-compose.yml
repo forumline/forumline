@@ -1,10 +1,8 @@
 services:
-  forum-demo:
+  forum:
     build:
       context: .
-      dockerfile: Dockerfile.forum-demo
-      args:
-        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+      dockerfile: Dockerfile.go-forum
     ports:
       - "3000:3000"
     env_file:

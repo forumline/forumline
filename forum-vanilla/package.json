@@ -1,0 +1,24 @@
+{
+  "name": "forumline-vanilla",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Forumline Demo — vanilla JS",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dicebear/avataaars": "^9.3.2",
+    "@dicebear/core": "^9.3.2",
+    "@dicebear/shapes": "^9.3.2",
+    "livekit-client": "^2.17.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.2.1",
+    "tailwindcss": "^4.2.1",
+    "vite": "^7.3.1"
+  }
+}
