@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnvondrashek/forumline/examples/shared"
+	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"

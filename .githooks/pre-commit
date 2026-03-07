@@ -10,7 +10,7 @@ set -euo pipefail
 # Root workspace lockfile covers all workspace packages
 ROOT_LOCK="pnpm-lock.yaml"
 # Standalone project has its own lockfile
-STANDALONE_DIRS=("examples/forum-a")
+STANDALONE_DIRS=("example-forum-instances-and-shared-forum-server/forum-a")
 
 missing=()
 
@@ -18,10 +18,10 @@ missing=()
 workspace_pkgs=(
   "package.json"
   "forumline-identity-and-federation-web/package.json"
-  "packages/protocol/package.json"
-  "packages/server-sdk/package.json"
-  "packages/central-services-client/package.json"
-  "packages/core/package.json"
+  "published-npm-packages/protocol/package.json"
+  "published-npm-packages/server-sdk/package.json"
+  "published-npm-packages/central-services-client/package.json"
+  "published-npm-packages/core/package.json"
 )
 
 for pkg in "${workspace_pkgs[@]}"; do
@@ -76,7 +76,7 @@ done
 for file in $(git diff --cached --name-only --diff-filter=ACM | grep '\.env\.enc$' || true); do
   if ! git show ":$file" | grep -q 'sops_version='; then
     echo "ERROR: $file does not appear to be SOPS-encrypted (missing sops metadata)."
-    echo "       Encrypt it first: sops --config deploy/.sops.yaml --input-type dotenv --output-type dotenv -e -i $file"
+    echo "       Encrypt it first: sops --config production-docker-compose-configs/.sops.yaml --input-type dotenv --output-type dotenv -e -i $file"
     sops_errors=1
   fi
 done

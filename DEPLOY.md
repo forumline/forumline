@@ -11,8 +11,8 @@ Both apps deploy via **GitHub Actions** on push to `main` → **self-hosted Prox
 
 Both deploy via GitHub Actions workflows:
 
-- `.github/workflows/deploy-forum.yml` — triggers on `examples/` changes
-- `.github/workflows/deploy-forumline.yml` — triggers on `forumline-identity-and-federation-api/`, `forumline-identity-and-federation-web/`, or `packages/` changes
+- `.github/workflows/deploy-forum.yml` — triggers on `example-forum-instances-and-shared-forum-server/` changes
+- `.github/workflows/deploy-forumline.yml` — triggers on `forumline-identity-and-federation-api/`, `forumline-identity-and-federation-web/`, or `published-npm-packages/` changes
 
 Required GitHub secrets:
 - `FORUM_SSH_KEY` — SSH key for production servers
@@ -26,7 +26,7 @@ Required GitHub secrets:
 pnpm install                            # from root — sets up workspaces
 cd forumline-identity-and-federation-api && docker compose up -d  # start Postgres + GoTrue
 cd examples && go run ./forum-a/        # start forum backend
-cd examples/forum-a && pnpm dev         # start forum frontend
+cd example-forum-instances-and-shared-forum-server/forum-a && pnpm dev         # start forum frontend
 ```
 
-Create `examples/forum-a/.env.local` and `forumline-identity-and-federation-api/.env.local` with the required env vars.
+Create `example-forum-instances-and-shared-forum-server/forum-a/.env.local` and `forumline-identity-and-federation-api/.env.local` with the required env vars.

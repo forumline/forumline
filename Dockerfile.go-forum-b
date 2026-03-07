@@ -2,12 +2,12 @@
 FROM golang:1.25-alpine AS go-build
 
 WORKDIR /app
-COPY examples/go.mod examples/go.sum ./
+COPY example-forum-instances-and-shared-forum-server/go.mod example-forum-instances-and-shared-forum-server/go.sum ./
 RUN go mod download
 
-COPY examples/shared/ shared/
-COPY examples/forum/ forum/
-COPY examples/forum-b/main.go forum-b/main.go
+COPY example-forum-instances-and-shared-forum-server/shared/ shared/
+COPY example-forum-instances-and-shared-forum-server/forum/ forum/
+COPY example-forum-instances-and-shared-forum-server/forum-b/main.go forum-b/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/forum ./forum-b/
 
 # ---- Frontend build stage ----
@@ -17,14 +17,14 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-# Copy examples/forum-b (standalone, no workspace deps needed)
-COPY examples/forum-b/package.json examples/forum-b/pnpm-lock.yaml* ./
+# Copy example-forum-instances-and-shared-forum-server/forum-b (standalone, no workspace deps needed)
+COPY example-forum-instances-and-shared-forum-server/forum-b/package.json example-forum-instances-and-shared-forum-server/forum-b/pnpm-lock.yaml* ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile || pnpm install
 
 # Copy source and build
-COPY examples/forum-b/ .
+COPY example-forum-instances-and-shared-forum-server/forum-b/ .
 RUN pnpm run build
 
 # ---- Production stage ----

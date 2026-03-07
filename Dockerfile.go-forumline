@@ -20,7 +20,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.js
 COPY .npmrc ./
 
 # Copy all workspace packages (needed for dependency resolution)
-COPY packages/ packages/
+COPY published-npm-packages/ published-npm-packages/
 COPY forumline-identity-and-federation-web/ forumline-identity-and-federation-web/
 
 # Install all dependencies

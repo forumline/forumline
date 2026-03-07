@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/johnvondrashek/forumline/examples/shared"
+	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
 )
 
 // forumlineIdentity represents a Forumline identity.

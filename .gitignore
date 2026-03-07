@@ -33,10 +33,10 @@ package-lock.json
 .turbo
 
 # Package build artifacts (compiled in-place by tsc)
-packages/*/src/**/*.js
-packages/*/src/**/*.d.ts
-packages/*/src/**/*.d.ts.map
-packages/*/src/**/*.js.map
+published-npm-packages/*/src/**/*.js
+published-npm-packages/*/src/**/*.d.ts
+published-npm-packages/*/src/**/*.d.ts.map
+published-npm-packages/*/src/**/*.js.map
 
 # Supabase CLI temp
 **/supabase/.temp/
@@ -50,7 +50,7 @@ desktop-and-mobile-tauri-apps/gen/
 *.png
 
 # Decrypted deploy secrets (only .env.enc should be committed)
-deploy/**/.env
+production-docker-compose-configs/**/.env
 
 # Wrangler local state
 .wrangler/

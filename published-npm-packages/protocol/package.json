@@ -1,20 +1,24 @@
 {
-  "name": "@johnvondrashek/forumline-server-sdk",
+  "name": "@johnvondrashek/forumline-protocol",
   "version": "0.3.3",
-  "description": "Forumline server SDK for forum operators",
+  "description": "Forumline federation protocol types",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "default": "./dist/validation.js"
     }
   },
   "files": ["dist"],
   "repository": {
     "type": "git",
     "url": "https://github.com/JohnVonDrashek/forumline.git",
-    "directory": "packages/server-sdk"
+    "directory": "published-npm-packages/protocol"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -24,11 +28,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@johnvondrashek/forumline-protocol": "workspace:*",
-    "jsonwebtoken": "^9.0.2"
+    "zod": ">=3.23.0"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.9",
     "typescript": "^5.9.3"
   }
 }

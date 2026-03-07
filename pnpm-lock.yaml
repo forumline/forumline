@@ -28,7 +28,7 @@ importers:
     dependencies:
       '@johnvondrashek/forumline-protocol':
         specifier: workspace:*
-        version: link:../packages/protocol
+        version: link:../published-npm-packages/protocol
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -37,7 +37,7 @@ importers:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@25.3.5)
 
-  packages/protocol:
+  published-npm-packages/protocol:
     dependencies:
       zod:
         specifier: '>=3.23.0'
@@ -47,7 +47,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/server-sdk:
+  published-npm-packages/server-sdk:
     dependencies:
       '@johnvondrashek/forumline-protocol':
         specifier: workspace:*
