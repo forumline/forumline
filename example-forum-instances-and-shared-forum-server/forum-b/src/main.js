@@ -110,7 +110,7 @@ if (window.parent !== window) {
   })
 
   // Notify parent on auth state changes (login, logout, initial load)
-  let lastSignedIn: boolean | null = null
+  let lastSignedIn = null
   authStore.subscribe(() => {
     const { loading, user } = authStore.get()
     if (loading) return
