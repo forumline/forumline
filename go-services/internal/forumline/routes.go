@@ -70,7 +70,7 @@ func NewRouter(pool *pgxpool.Pool, sseHub *shared.SSEHub) *chi.Mux {
 	// Push notifications
 	r.Post("/api/push", h.HandlePush)
 
-	// GoTrue reverse proxy — allows supabase-js to call /auth/v1/* same-origin
+	// GoTrue reverse proxy — allows frontend to call /auth/v1/* same-origin
 	gotrueURL := os.Getenv("GOTRUE_URL")
 	if gotrueURL != "" {
 		target, _ := url.Parse(gotrueURL)

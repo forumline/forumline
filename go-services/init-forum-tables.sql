@@ -1,5 +1,5 @@
 -- Forum tables for local dev
--- Based on forum-demo/src/types/database.ts
+-- Forum database schema
 
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY,

@@ -1,6 +1,6 @@
 /**
  * GoTrueAuthClient — Direct GoTrue REST API client for Forumline auth.
- * Replaces @supabase/supabase-js auth, using the Go Forumline's auth endpoints.
+ * Uses the Go Forumline server's auth endpoints which proxy to GoTrue.
  *
  * Login/signup go through /api/auth/* (Go handlers that create profiles, set cookies).
  * Token refresh and password operations use the GoTrue proxy at /auth/v1/*.

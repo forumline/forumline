@@ -62,7 +62,7 @@ func (h *Handlers) HandleSignup(w http.ResponseWriter, r *http.Request) {
 
 	// Check email uniqueness via GoTrue admin API
 	gotrueURL := h.Config.GoTrueURL
-	serviceKey := h.Config.ServiceRoleKey
+	serviceKey := h.Config.GoTrueServiceRoleKey
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, gotrueURL+"/admin/users", nil)
 	req.Header.Set("Authorization", "Bearer "+serviceKey)
@@ -363,17 +363,17 @@ func gotrueAdminSignOut(gotrueURL, serviceKey, token string) {
 
 // afterAuth generates a Supabase session for a user and returns a redirect URL with tokens.
 func (h *Handlers) afterAuth(userID string) string {
-	email, err := gotrueAdminGetUser(h.Config.GoTrueURL, h.Config.ServiceRoleKey, userID)
+	email, err := gotrueAdminGetUser(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, userID)
 	if err != nil || email == "" {
 		return ""
 	}
 
-	hashedToken, err := gotrueAdminGenerateLink(h.Config.GoTrueURL, h.Config.ServiceRoleKey, email)
+	hashedToken, err := gotrueAdminGenerateLink(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, email)
 	if err != nil || hashedToken == "" {
 		return ""
 	}
 
-	accessToken, refreshToken, err := gotrueVerifyOTP(h.Config.GoTrueURL, h.Config.ServiceRoleKey, hashedToken)
+	accessToken, refreshToken, err := gotrueVerifyOTP(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, hashedToken)
 	if err != nil {
 		return ""
 	}
@@ -382,10 +382,9 @@ func (h *Handlers) afterAuth(userID string) string {
 		h.Config.SiteURL, accessToken, refreshToken)
 }
 
-// getServiceRoleKey returns the appropriate GoTrue service role key.
-// For Supabase, this is SUPABASE_SERVICE_ROLE_KEY. For standalone GoTrue, GOTRUE_SERVICE_ROLE_KEY.
-func (h *Handlers) getServiceRoleKey() string {
-	key := h.Config.ServiceRoleKey
+// getGoTrueServiceRoleKey returns the GoTrue service role key.
+func (h *Handlers) getGoTrueServiceRoleKey() string {
+	key := h.Config.GoTrueServiceRoleKey
 	if key == "" {
 		key = os.Getenv("GOTRUE_SERVICE_ROLE_KEY")
 	}

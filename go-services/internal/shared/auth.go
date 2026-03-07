@@ -204,7 +204,7 @@ func extractToken(r *http.Request) string {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 
-	// Check access_token cookie (used by supabase-js)
+	// Check access_token cookie
 	if cookie, err := r.Cookie("sb-access-token"); err == nil {
 		return cookie.Value
 	}

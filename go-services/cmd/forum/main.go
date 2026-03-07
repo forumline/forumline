@@ -52,14 +52,14 @@ func main() {
 
 	cfg := &forum.Config{
 		GoTrueURL:         os.Getenv("GOTRUE_URL"),
-		ServiceRoleKey:    os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
+		GoTrueServiceRoleKey:    os.Getenv("GOTRUE_SERVICE_ROLE_KEY"),
 		SiteURL:           siteURL,
 		Domain:            domain,
 		ForumlineURL:            os.Getenv("FORUMLINE_APP_URL"),
 		ForumlineClientID:       os.Getenv("FORUMLINE_CLIENT_ID"),
 		ForumlineClientSecret:   os.Getenv("FORUMLINE_CLIENT_SECRET"),
 		ForumlineJWTSecret:      os.Getenv("FORUMLINE_JWT_SECRET"),
-		ForumlineSupabaseURL:    os.Getenv("FORUMLINE_SUPABASE_URL"),
+		ForumlineGoTrueURL:    os.Getenv("FORUMLINE_GOTRUE_URL"),
 		ForumlineServiceRoleKey: os.Getenv("FORUMLINE_SERVICE_ROLE_KEY"),
 		LiveKitURL:        os.Getenv("LIVEKIT_URL"),
 		LiveKitAPIKey:     os.Getenv("LIVEKIT_API_KEY"),

@@ -358,9 +358,9 @@ func (h *Handlers) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 	cookies := parseCookies(r)
 	forumlineAccessToken := cookies["forumline_access_token"]
 
-	if forumlineAccessToken != "" && h.Config.ForumlineSupabaseURL != "" {
+	if forumlineAccessToken != "" && h.Config.ForumlineGoTrueURL != "" {
 		// Revoke hub session via GoTrue
-		gotrueAdminSignOut(h.Config.ForumlineSupabaseURL, h.Config.ForumlineServiceRoleKey, forumlineAccessToken)
+		gotrueAdminSignOut(h.Config.ForumlineGoTrueURL, h.Config.ForumlineServiceRoleKey, forumlineAccessToken)
 	}
 
 	// Clear all Forumline cookies
@@ -485,13 +485,13 @@ func (h *Handlers) createOrLinkUser(r *http.Request, identity *forumlineIdentity
 
 	// 2. Get hub email and check for collision
 	var forumlineEmail string
-	if forumlineAccessToken != "" && h.Config.ForumlineSupabaseURL != "" {
-		forumlineEmail, _ = gotrueGetUserByToken(h.Config.ForumlineSupabaseURL, forumlineAccessToken)
+	if forumlineAccessToken != "" && h.Config.ForumlineGoTrueURL != "" {
+		forumlineEmail, _ = gotrueGetUserByToken(h.Config.ForumlineGoTrueURL, forumlineAccessToken)
 	}
 
 	if forumlineEmail != "" {
 		// Check if a local user with this email exists
-		users, err := gotrueAdminListUsers(h.Config.GoTrueURL, h.Config.ServiceRoleKey)
+		users, err := gotrueAdminListUsers(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey)
 		if err == nil {
 			for _, u := range users {
 				if strings.EqualFold(u.Email, forumlineEmail) {
@@ -501,7 +501,7 @@ func (h *Handlers) createOrLinkUser(r *http.Request, identity *forumlineIdentity
 		}
 
 		// Create new local user with hub email
-		newUserID, err := gotrueAdminCreateUser(h.Config.GoTrueURL, h.Config.ServiceRoleKey, map[string]interface{}{
+		newUserID, err := gotrueAdminCreateUser(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, map[string]interface{}{
 			"email":         forumlineEmail,
 			"password":      randomHex(16),
 			"email_confirm": true,
@@ -522,7 +522,7 @@ func (h *Handlers) createOrLinkUser(r *http.Request, identity *forumlineIdentity
 	}
 
 	// 3. Fallback: create user with forumline.local email
-	newUserID, err := gotrueAdminCreateUser(h.Config.GoTrueURL, h.Config.ServiceRoleKey, map[string]interface{}{
+	newUserID, err := gotrueAdminCreateUser(h.Config.GoTrueURL, h.Config.GoTrueServiceRoleKey, map[string]interface{}{
 		"email":         identity.Username + "@forumline.local",
 		"password":      randomHex(16),
 		"email_confirm": true,

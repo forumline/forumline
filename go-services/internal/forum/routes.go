@@ -137,7 +137,7 @@ func NewRouter(pool *pgxpool.Pool, sseHub *shared.SSEHub, cfg *Config) *chi.Mux 
 		r.Get("/api/admin/users", h.HandleAdminUsers)
 	})
 
-	// GoTrue reverse proxy — allows supabase-js to call /auth/v1/* same-origin
+	// GoTrue reverse proxy — allows frontend to call /auth/v1/* same-origin
 	if cfg.GoTrueURL != "" {
 		target, _ := url.Parse(cfg.GoTrueURL)
 		proxy := httputil.NewSingleHostReverseProxy(target)

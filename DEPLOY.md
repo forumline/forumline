@@ -18,7 +18,7 @@ Required GitHub secrets:
 - `FORUM_SSH_KEY` — SSH key for production servers
 - `GITHUB_PACKAGES_TOKEN` (automatically provided)
 
-**Do NOT deploy manually.** Do NOT run `flyctl deploy` or push Docker images directly.
+**Do NOT deploy manually.**
 
 ## Local Development
 
@@ -29,4 +29,4 @@ cd go-services && go run ./cmd/forum/   # start forum backend
 cd examples/forum-a && pnpm dev         # start forum frontend
 ```
 
-Create `examples/forum-a/.env.local` and `go-services/.env.local` — see `.env.example` in each directory.
+Create `examples/forum-a/.env.local` and `go-services/.env.local` with the required env vars.

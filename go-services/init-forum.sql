@@ -1,5 +1,5 @@
 -- pg_notify trigger for notification SSE stream.
--- Run this on the forum-demo Supabase Postgres database.
+-- Run this on the forum Postgres database.
 -- It fires a NOTIFY on the 'notification_changes' channel whenever
 -- a new row is inserted into the 'notifications' table.
 
