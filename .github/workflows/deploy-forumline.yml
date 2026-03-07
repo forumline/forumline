@@ -46,7 +46,7 @@ jobs:
           chmod 600 ~/.ssh/id_deploy
           cat >> ~/.ssh/config <<EOF
           Host forumline-prod
-            HostName app-ssh.forumline.net
+            HostName hub-ssh.forumline.net
             User root
             IdentityFile ~/.ssh/id_deploy
             StrictHostKeyChecking no
