@@ -2,19 +2,32 @@
 
 ## Testing
 
-**Use Docker for backend testing**
-When possible, make sure to spin up a docker container locally for testing. This allows for faster iteration and safer git commits.
+**Always test locally before pushing.** Run the full local stack and Playwright tests before committing/pushing.
 
-**For testing in production**:
-Forumline: https://app.forumline.net
-Demo: https://demo.forumline.net
-
-Use Playwright to interact with the production site.
-
-Run forum Playwright tests against production:
+### Local dev stack
 ```bash
-cd forum-vanilla && PLAYWRIGHT_BASE_URL=https://demo.forumline.net npx playwright test
+# Start Postgres + GoTrue (Docker)
+cd go-services && docker compose up -d
+
+# Start Go forum server (port 3000)
+cd go-services && export $(grep -v '^#' .env.local | xargs) && go run ./cmd/forum/
+
+# Start Vite dev server (port 5174, proxies /api + /auth to localhost:3000)
+cd forum-vanilla && npm run dev
+
+# Run Playwright tests locally
+cd forum-vanilla && npx playwright test
 ```
+
+The Vite proxy target defaults to `http://localhost:3000`. Override with `VITE_API_TARGET` env var.
+
+### Testing against production
+```bash
+cd forum-vanilla && VITE_API_TARGET=https://demo.forumline.net PLAYWRIGHT_BASE_URL=https://demo.forumline.net npx playwright test
+```
+
+- **Demo**: https://demo.forumline.net
+- **Hub**: https://app.forumline.net
 
 Do NOT ignore bugs that you see even if they are unrelated to your changes. Jot them down and present them to the user at the conclusion of testing as potential next steps to fix.
 
