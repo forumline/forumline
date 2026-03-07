@@ -47,7 +47,7 @@ jobs:
 
       - name: Install create-dmg
         if: inputs.skip_dmg != 'true'
-        run: npm install -g create-dmg
+        run: corepack enable && pnpm add -g create-dmg
 
       - name: Create DMG with create-dmg
         if: inputs.skip_dmg != 'true'
