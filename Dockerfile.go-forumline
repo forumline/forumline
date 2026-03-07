@@ -13,15 +13,15 @@ FROM node:20-slim AS frontend-build
 
 WORKDIR /app
 
-# Copy workspace root files
-COPY package.json package-lock.json turbo.json tsconfig.base.json ./
+# Copy workspace root files (skip lock file — regenerate for Linux platform)
+COPY package.json turbo.json tsconfig.base.json ./
 COPY .npmrc ./
 
 # Copy all workspace packages (needed for dependency resolution)
 COPY packages/ packages/
 COPY central-services/ central-services/
 
-# Install all dependencies
+# Install all dependencies (fresh install to get correct platform binaries)
 ARG GITHUB_PACKAGES_TOKEN
 RUN GITHUB_PACKAGES_TOKEN=${GITHUB_PACKAGES_TOKEN} npm install
 
