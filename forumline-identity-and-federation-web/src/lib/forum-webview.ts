@@ -1,5 +1,6 @@
 import type { ForumToForumlineMessage, ForumlineToForumMessage, UnreadCounts, ForumNotification } from '@johnvondrashek/forumline-protocol'
 import type { ForumMembership } from './forum-store.js'
+import { showToast } from '../components/ui.js'
 
 export interface ForumWebviewOptions {
   forum: ForumMembership
@@ -27,6 +28,7 @@ export function createForumWebview(opts: ForumWebviewOptions): ForumWebviewInsta
   let loading = true
   let loggingIn = false
   let hasCalledAuthed = false
+  let loginAttempted = false
 
   // Container
   const container = document.createElement('div')
@@ -47,6 +49,7 @@ export function createForumWebview(opts: ForumWebviewOptions): ForumWebviewInsta
   bannerBtn.addEventListener('click', () => {
     if (!authUrl) return
     loggingIn = true
+    loginAttempted = true
     loading = true
     spinnerWrap.style.display = ''
     iframe.src = authUrl
@@ -103,6 +106,10 @@ export function createForumWebview(opts: ForumWebviewOptions): ForumWebviewInsta
             updateBanner()
           }
         } else {
+          if (loginAttempted && !hasCalledAuthed) {
+            showToast(`Login to ${forum.name} did not complete. The forum reported you are not signed in.`, 'error', 8000)
+            loginAttempted = false
+          }
           if (onSignedOut) {
             hasCalledAuthed = false
             onSignedOut(forum.domain)
@@ -127,6 +134,21 @@ export function createForumWebview(opts: ForumWebviewOptions): ForumWebviewInsta
     spinnerWrap.style.display = 'none'
 
     if (loggingIn) {
+      // Check if the iframe landed on an error URL
+      try {
+        const iframeUrl = new URL(iframe.contentWindow?.location.href ?? '')
+        const error = iframeUrl.searchParams.get('error')
+        if (error) {
+          const errorMessages: Record<string, string> = {
+            auth_failed: 'Forum login failed — the server could not complete authentication.',
+            email_exists: 'A local account with this email already exists. Sign in to the forum directly and connect Forumline from Settings.',
+          }
+          showToast(errorMessages[error] || `Forum login error: ${error}`, 'error', 8000)
+        }
+      } catch {
+        // Cross-origin — can't read iframe URL, that's expected for success redirects
+      }
+
       loggingIn = false
       updateBanner()
     }

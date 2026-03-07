@@ -84,3 +84,34 @@ export function createSpinner(small?: boolean): HTMLDivElement {
   div.className = small ? 'spinner spinner--sm' : 'spinner'
   return div
 }
+
+/** Show a toast notification. */
+let toastContainer: HTMLElement | null = null
+
+export function showToast(message: string, variant: 'error' | 'success' | 'info' = 'info', duration = 5000) {
+  if (!toastContainer) {
+    toastContainer = document.createElement('div')
+    toastContainer.className = 'toast-container'
+    document.body.appendChild(toastContainer)
+  }
+
+  const icons: Record<string, string> = {
+    error: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+    success: '<circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/>',
+    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+  }
+
+  const toast = document.createElement('div')
+  toast.className = `toast toast--${variant}`
+  toast.innerHTML = `
+    <svg class="toast__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[variant]}</svg>
+    <span class="toast__text">${message}</span>
+  `
+  toastContainer.appendChild(toast)
+
+  setTimeout(() => {
+    toast.style.opacity = '0'
+    toast.style.transition = 'opacity 0.2s'
+    setTimeout(() => toast.remove(), 200)
+  }, duration)
+}
