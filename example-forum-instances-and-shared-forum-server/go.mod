@@ -1,4 +1,4 @@
-module github.com/johnvondrashek/forumline/examples
+module github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server
 
 go 1.25.5
 

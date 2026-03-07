@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/johnvondrashek/forumline/examples/shared"
+	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
 )
 
 // HandleNotifications handles GET /api/forumline/notifications.

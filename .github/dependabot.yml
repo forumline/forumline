@@ -9,7 +9,7 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: npm
-    directory: /examples/forum-a
+    directory: /example-forum-instances-and-shared-forum-server/forum-a
     schedule:
       interval: weekly
     groups:

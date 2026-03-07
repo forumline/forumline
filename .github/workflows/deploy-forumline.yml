@@ -11,10 +11,10 @@ on:
       - 'forumline-identity-and-federation-web/vite.config.ts'
       - 'forumline-identity-and-federation-web/tsconfig.json'
       - 'forumline-identity-and-federation-web/package.json'
-      - 'packages/**'
+      - 'published-npm-packages/**'
       - 'package-lock.json'
       - 'Dockerfile.go-forumline'
-      - 'deploy/forumline/**'
+      - 'production-docker-compose-configs/forumline/**'
 
 jobs:
   deploy:
@@ -32,7 +32,7 @@ jobs:
       - name: Decrypt secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: sops -d --input-type dotenv --output-type dotenv deploy/forumline/.env.enc > /tmp/forumline.env
+        run: sops -d --input-type dotenv --output-type dotenv production-docker-compose-configs/forumline/.env.enc > /tmp/forumline.env
 
       - name: Install cloudflared
         run: |
@@ -56,5 +56,5 @@ jobs:
       - name: Deploy
         run: |
           scp /tmp/forumline.env forumline-prod:/opt/forumline/.env
-          scp deploy/forumline/docker-compose.yml forumline-prod:/opt/forumline/docker-compose.yml
+          scp production-docker-compose-configs/forumline/docker-compose.yml forumline-prod:/opt/forumline/docker-compose.yml
           ssh forumline-prod "cd /opt/forumline/repo && git pull origin main && cd /opt/forumline && docker compose up -d --build forumline && docker compose ps"

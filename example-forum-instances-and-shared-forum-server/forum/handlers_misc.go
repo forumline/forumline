@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/johnvondrashek/forumline/examples/shared"
+	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
 )
 
 // HandleManifest serves /.well-known/forumline-manifest.json for forum discovery.

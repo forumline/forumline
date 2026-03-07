@@ -1,3 +1,3 @@
 packages:
-  - 'packages/*'
+  - 'published-npm-packages/*'
   - 'forumline-identity-and-federation-web'

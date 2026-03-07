@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/**'
+      - 'published-npm-packages/**'
 
 jobs:
   publish:
@@ -32,7 +32,7 @@ jobs:
         run: |
           for pkg in protocol server-sdk central-services-client; do
             echo "=== Building and publishing $pkg ==="
-            cd "packages/$pkg"
+            cd "published-npm-packages/$pkg"
             pnpm run build
             OUTPUT=$(pnpm publish --no-git-checks 2>&1) && echo "$OUTPUT" || {
               if echo "$OUTPUT" | grep -qi "cannot publish over"; then

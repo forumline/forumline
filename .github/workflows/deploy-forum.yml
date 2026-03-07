@@ -5,14 +5,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'examples/**'
-      - 'examples/forum-a/src/**'
-      - 'examples/forum-a/index.html'
-      - 'examples/forum-a/vite.config.js'
-      - 'examples/forum-a/package.json'
+      - 'example-forum-instances-and-shared-forum-server/**'
+      - 'example-forum-instances-and-shared-forum-server/forum-a/src/**'
+      - 'example-forum-instances-and-shared-forum-server/forum-a/index.html'
+      - 'example-forum-instances-and-shared-forum-server/forum-a/vite.config.js'
+      - 'example-forum-instances-and-shared-forum-server/forum-a/package.json'
       - 'Dockerfile.go-forum'
       - '.github/workflows/deploy-forum.yml'
-      - 'deploy/forum-a/**'
+      - 'production-docker-compose-configs/forum-a/**'
 
 jobs:
   deploy:
@@ -30,7 +30,7 @@ jobs:
       - name: Decrypt secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: sops -d --input-type dotenv --output-type dotenv deploy/forum-a/.env.enc > /tmp/forum-a.env
+        run: sops -d --input-type dotenv --output-type dotenv production-docker-compose-configs/forum-a/.env.enc > /tmp/forum-a.env
 
       - name: Install cloudflared
         run: |
@@ -54,5 +54,5 @@ jobs:
       - name: Deploy
         run: |
           scp /tmp/forum-a.env forum-prod:/opt/forum/.env
-          scp deploy/forum-a/docker-compose.yml forum-prod:/opt/forum/docker-compose.yml
+          scp production-docker-compose-configs/forum-a/docker-compose.yml forum-prod:/opt/forum/docker-compose.yml
           ssh forum-prod "cd /opt/forum/repo && git pull origin main && cd /opt/forum && docker compose up -d --build forum && docker compose ps"

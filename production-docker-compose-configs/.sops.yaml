@@ -5,4 +5,4 @@ creation_rules:
 
 # Note: .env.enc files use dotenv format. Always pass --input-type dotenv
 # --output-type dotenv when running sops encrypt/decrypt commands.
-# Example: sops -d --input-type dotenv --output-type dotenv deploy/forum-a/.env.enc
+# Example: sops -d --input-type dotenv --output-type dotenv production-docker-compose-configs/forum-a/.env.enc
