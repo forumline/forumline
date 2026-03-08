@@ -3,8 +3,9 @@ import { createButton } from './ui.js'
 import { createDmConversationList } from './dm-conversation-list.js'
 import { createDmMessageView } from './dm-message-view.js'
 import { createDmNewMessage } from './dm-new-message.js'
+import { createDmNewGroup } from './dm-new-group.js'
 
-type DmView = 'list' | 'conversation' | 'new'
+type DmView = 'list' | 'conversation' | 'new' | 'new-group'
 
 interface DmPanelOptions {
   forumlineStore: ForumlineStore
@@ -14,7 +15,7 @@ interface DmPanelOptions {
 
 export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPanelOptions) {
   let dmView: DmView = 'list'
-  let selectedRecipientId: string | null = null
+  let selectedConversationId: string | null = null
   let currentChild: { el: HTMLElement; destroy: () => void } | null = null
 
   const el = document.createElement('div')
@@ -42,7 +43,7 @@ export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPan
       backBtn.innerHTML = `<svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>`
       backBtn.addEventListener('click', () => {
         dmView = 'list'
-        selectedRecipientId = null
+        selectedConversationId = null
         render()
       })
       headerLeft.appendChild(backBtn)
@@ -50,13 +51,22 @@ export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPan
 
     const title = document.createElement('h2')
     title.className = 'font-semibold text-white'
-    title.textContent = dmView === 'new' ? 'New Message' : 'Messages'
+    title.textContent = dmView === 'new' ? 'New Message' : dmView === 'new-group' ? 'New Group' : 'Messages'
     headerLeft.appendChild(title)
     header.appendChild(headerLeft)
 
     const headerRight = document.createElement('div')
     headerRight.className = 'flex items-center gap-sm'
     if (dmView === 'list' && isForumlineConnected) {
+      // New group button
+      const groupBtn = document.createElement('button')
+      groupBtn.className = 'btn--icon'
+      groupBtn.title = 'New group'
+      groupBtn.innerHTML = `<svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>`
+      groupBtn.addEventListener('click', () => { dmView = 'new-group'; render() })
+      headerRight.appendChild(groupBtn)
+
+      // New message button
       const newBtn = document.createElement('button')
       newBtn.className = 'btn--icon'
       newBtn.title = 'New message'
@@ -88,26 +98,44 @@ export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPan
     } else if (dmView === 'new') {
       const newMsg = createDmNewMessage({
         forumlineStore,
-        onSelectUser: (userId) => {
-          selectedRecipientId = userId
-          dmView = 'conversation'
-          render()
+        onSelectUser: async (userId) => {
+          const { forumlineClient } = forumlineStore.get()
+          if (!forumlineClient) return
+          try {
+            const { id } = await forumlineClient.getOrCreateDM(userId)
+            selectedConversationId = id
+            dmView = 'conversation'
+            render()
+          } catch (err) {
+            console.error('[Forumline:DM] Failed to get/create DM:', err)
+          }
         },
       })
       currentChild = newMsg
       content.appendChild(newMsg.el)
-    } else if (dmView === 'conversation' && selectedRecipientId) {
+    } else if (dmView === 'new-group') {
+      const newGroup = createDmNewGroup({
+        forumlineStore,
+        onCreated: (conversationId) => {
+          selectedConversationId = conversationId
+          dmView = 'conversation'
+          render()
+        },
+      })
+      currentChild = newGroup
+      content.appendChild(newGroup.el)
+    } else if (dmView === 'conversation' && selectedConversationId) {
       const msgView = createDmMessageView({
         forumlineStore,
-        recipientId: selectedRecipientId,
+        conversationId: selectedConversationId,
       })
       currentChild = msgView
       content.appendChild(msgView.el)
     } else {
       const convList = createDmConversationList({
         forumlineStore,
-        onSelectConversation: (recipientId) => {
-          selectedRecipientId = recipientId
+        onSelectConversation: (conversationId) => {
+          selectedConversationId = conversationId
           dmView = 'conversation'
           render()
         },

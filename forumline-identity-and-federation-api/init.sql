@@ -64,26 +64,37 @@ CREATE TABLE IF NOT EXISTS forumline_auth_codes (
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
--- Direct messages
-CREATE TABLE IF NOT EXISTS forumline_direct_messages (
+-- Conversations (1:1 and group chats)
+CREATE TABLE IF NOT EXISTS forumline_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sender_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
-  recipient_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  read BOOLEAN NOT NULL DEFAULT false,
+  is_group BOOLEAN NOT NULL DEFAULT false,
+  name TEXT,
+  created_by UUID REFERENCES forumline_profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT sender_not_recipient CHECK (sender_id != recipient_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_forumline_dms_sender ON forumline_direct_messages(sender_id);
-CREATE INDEX IF NOT EXISTS idx_forumline_dms_recipient ON forumline_direct_messages(recipient_id);
-CREATE INDEX IF NOT EXISTS idx_forumline_dms_conversation ON forumline_direct_messages(
-  least(sender_id, recipient_id),
-  greatest(sender_id, recipient_id),
-  created_at DESC
+-- Conversation members
+CREATE TABLE IF NOT EXISTS forumline_conversation_members (
+  conversation_id UUID NOT NULL REFERENCES forumline_conversations(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT '1970-01-01',
+  PRIMARY KEY (conversation_id, user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_forumline_dms_unread ON forumline_direct_messages(recipient_id, read)
-  WHERE read = false;
+CREATE INDEX IF NOT EXISTS idx_convo_members_user ON forumline_conversation_members(user_id);
+
+-- Direct messages (now linked to conversations)
+CREATE TABLE IF NOT EXISTS forumline_direct_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES forumline_conversations(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_forumline_dms_conversation ON forumline_direct_messages(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_forumline_dms_sender ON forumline_direct_messages(sender_id);
 
 -- Performance indexes for memberships and forum ownership lookups
 CREATE INDEX IF NOT EXISTS idx_forumline_memberships_user_id ON forumline_memberships(user_id);
@@ -119,6 +130,11 @@ CREATE TRIGGER forumline_forums_updated_at
   BEFORE UPDATE ON forumline_forums
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS forumline_conversations_updated_at ON forumline_conversations;
+CREATE TRIGGER forumline_conversations_updated_at
+  BEFORE UPDATE ON forumline_conversations
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 -- Auto-create forumline profile on signup
 CREATE OR REPLACE FUNCTION handle_new_forumline_user()
 RETURNS TRIGGER AS $$
@@ -140,10 +156,17 @@ CREATE TRIGGER on_auth_user_created
 
 -- LISTEN/NOTIFY triggers for SSE and push notifications
 CREATE OR REPLACE FUNCTION notify_dm_changes() RETURNS TRIGGER AS $$
+DECLARE
+  member_ids UUID[];
 BEGIN
+  SELECT array_agg(user_id) INTO member_ids
+  FROM forumline_conversation_members
+  WHERE conversation_id = NEW.conversation_id;
+
   PERFORM pg_notify('dm_changes', json_build_object(
+    'conversation_id', NEW.conversation_id,
     'sender_id', NEW.sender_id,
-    'recipient_id', NEW.recipient_id,
+    'member_ids', member_ids,
     'id', NEW.id,
     'content', NEW.content,
     'created_at', NEW.created_at
@@ -158,10 +181,17 @@ CREATE TRIGGER dm_changes_notify
   FOR EACH ROW EXECUTE FUNCTION notify_dm_changes();
 
 CREATE OR REPLACE FUNCTION notify_new_dm() RETURNS TRIGGER AS $$
+DECLARE
+  member_ids UUID[];
 BEGIN
+  SELECT array_agg(user_id) INTO member_ids
+  FROM forumline_conversation_members
+  WHERE conversation_id = NEW.conversation_id;
+
   PERFORM pg_notify('push_dm', json_build_object(
-    'recipient_id', NEW.recipient_id,
+    'conversation_id', NEW.conversation_id,
     'sender_id', NEW.sender_id,
+    'member_ids', member_ids,
     'content', NEW.content
   )::text);
   RETURN NEW;

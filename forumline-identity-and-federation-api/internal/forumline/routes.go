@@ -47,17 +47,21 @@ func NewRouter(pool *pgxpool.Pool, sseHub *shared.SSEHub) *chi.Mux {
 		r.Delete("/api/memberships", h.HandleLeaveForum)
 	})
 
-	// DMs (authenticated)
+	// Conversations / DMs (authenticated)
 	r.Group(func(r chi.Router) {
 		r.Use(shared.AuthMiddleware)
-		r.Get("/api/dms", h.HandleListConversations)
-		r.Get("/api/dms/{userId}", h.HandleGetMessages)
-		r.With(dmRL).Post("/api/dms/{userId}", h.HandleSendMessage)
-		r.Post("/api/dms/{userId}/read", h.HandleMarkRead)
+		r.Get("/api/conversations", h.HandleListConversations)
+		r.Post("/api/conversations", h.HandleCreateConversation)
+		r.Post("/api/conversations/dm", h.HandleGetOrCreateDM)
+		r.Get("/api/conversations/{conversationId}/messages", h.HandleGetMessages)
+		r.With(dmRL).Post("/api/conversations/{conversationId}/messages", h.HandleSendMessage)
+		r.Post("/api/conversations/{conversationId}/read", h.HandleMarkRead)
+		r.Patch("/api/conversations/{conversationId}", h.HandleUpdateConversation)
+		r.Delete("/api/conversations/{conversationId}/members/me", h.HandleLeaveConversation)
 	})
 
-	// DM stream (authenticated via query param for EventSource)
-	r.Get("/api/dms/{userId}/stream", h.HandleDMStream)
+	// Conversation stream (authenticated via query param for EventSource)
+	r.Get("/api/conversations/stream", h.HandleDMStream)
 
 	// Forums (public GET, authenticated POST)
 	r.Get("/api/forums", h.HandleListForums)

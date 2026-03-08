@@ -2,6 +2,7 @@ package forumline
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -13,34 +14,52 @@ import (
 )
 
 type DirectMessage struct {
-	ID          string    `json:"id"`
-	SenderID    string    `json:"sender_id"`
-	RecipientID string    `json:"recipient_id"`
-	Content     string    `json:"content"`
-	Read        bool      `json:"read"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	ConversationID string    `json:"conversation_id"`
+	SenderID       string    `json:"sender_id"`
+	Content        string    `json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type ConversationMember struct {
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"displayName"`
+	AvatarURL   *string `json:"avatarUrl"`
 }
 
 type Conversation struct {
-	RecipientID        string  `json:"recipientId"`
-	RecipientName      string  `json:"recipientName"`
-	RecipientAvatarURL *string `json:"recipientAvatarUrl"`
-	LastMessage        string  `json:"lastMessage"`
-	LastMessageTime    string  `json:"lastMessageTime"`
-	UnreadCount        int     `json:"unreadCount"`
+	ID              string               `json:"id"`
+	IsGroup         bool                 `json:"isGroup"`
+	Name            *string              `json:"name"`
+	Members         []ConversationMember `json:"members"`
+	LastMessage     string               `json:"lastMessage"`
+	LastMessageTime string               `json:"lastMessageTime"`
+	UnreadCount     int                  `json:"unreadCount"`
 }
 
-// HandleListConversations lists DM conversations for the authenticated user.
+// HandleListConversations lists all conversations for the authenticated user.
 func (h *Handlers) HandleListConversations(w http.ResponseWriter, r *http.Request) {
 	userID := shared.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	rows, err := h.Pool.Query(ctx,
-		`SELECT id, sender_id, recipient_id, content, read, created_at
-		 FROM forumline_direct_messages
-		 WHERE sender_id = $1 OR recipient_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT 500`, userID,
+		`SELECT
+			c.id, c.is_group, c.name,
+			COALESCE(m.content, ''), COALESCE(m.created_at, c.created_at),
+			(SELECT count(*) FROM forumline_direct_messages dm2
+			 WHERE dm2.conversation_id = c.id
+			   AND dm2.sender_id != $1
+			   AND dm2.created_at > cm.last_read_at)
+		 FROM forumline_conversations c
+		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+		 LEFT JOIN LATERAL (
+			SELECT content, created_at FROM forumline_direct_messages
+			WHERE conversation_id = c.id
+			ORDER BY created_at DESC LIMIT 1
+		 ) m ON true
+		 ORDER BY COALESCE(m.created_at, c.created_at) DESC
+		 LIMIT 100`, userID,
 	)
 	if err != nil {
 		log.Printf("[DMs] HandleListConversations query error: %v", err)
@@ -49,89 +68,99 @@ func (h *Handlers) HandleListConversations(w http.ResponseWriter, r *http.Reques
 	}
 	defer rows.Close()
 
-	type convData struct {
-		recipientID     string
+	type convoRow struct {
+		id              string
+		isGroup         bool
+		name            *string
 		lastMessage     string
 		lastMessageTime time.Time
 		unreadCount     int
 	}
 
-	convMap := make(map[string]*convData)
-	var otherIDs []string
+	var convoRows []convoRow
+	var convoIDs []string
 
 	for rows.Next() {
-		var msg DirectMessage
-		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.Read, &msg.CreatedAt); err != nil {
+		var cr convoRow
+		if err := rows.Scan(&cr.id, &cr.isGroup, &cr.name, &cr.lastMessage, &cr.lastMessageTime, &cr.unreadCount); err != nil {
 			continue
 		}
-
-		otherID := msg.RecipientID
-		if msg.SenderID != userID {
-			otherID = msg.SenderID
-		}
-
-		if _, exists := convMap[otherID]; !exists {
-			convMap[otherID] = &convData{
-				recipientID:     otherID,
-				lastMessage:     msg.Content,
-				lastMessageTime: msg.CreatedAt,
-			}
-			otherIDs = append(otherIDs, otherID)
-		}
-
-		if msg.RecipientID == userID && !msg.Read {
-			convMap[otherID].unreadCount++
-		}
+		convoRows = append(convoRows, cr)
+		convoIDs = append(convoIDs, cr.id)
 	}
 
-	if len(otherIDs) == 0 {
+	if len(convoIDs) == 0 {
 		writeJSON(w, http.StatusOK, []Conversation{})
 		return
 	}
 
-	// Fetch profiles
-	profiles := fetchProfilesByIDs(ctx, h.Pool, otherIDs)
+	// Fetch all members for all conversations
+	memberRows, err := h.Pool.Query(ctx,
+		`SELECT cm.conversation_id, cm.user_id, p.username, p.display_name, p.avatar_url
+		 FROM forumline_conversation_members cm
+		 JOIN forumline_profiles p ON p.id = cm.user_id
+		 WHERE cm.conversation_id = ANY($1)`, convoIDs,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch members"})
+		return
+	}
+	defer memberRows.Close()
 
-	// Build response
-	conversations := make([]Conversation, 0, len(otherIDs))
-	for _, id := range otherIDs {
-		cd := convMap[id]
-		profile := profiles[id]
-		name := "Unknown"
+	membersMap := make(map[string][]ConversationMember)
+	for memberRows.Next() {
+		var convoID, userIDm, username, displayName string
 		var avatarURL *string
-		if profile != nil {
-			if profile.DisplayName != "" {
-				name = profile.DisplayName
-			} else {
-				name = profile.Username
-			}
-			avatarURL = profile.AvatarURL
+		if err := memberRows.Scan(&convoID, &userIDm, &username, &displayName, &avatarURL); err != nil {
+			continue
 		}
+		name := displayName
+		if name == "" {
+			name = username
+		}
+		membersMap[convoID] = append(membersMap[convoID], ConversationMember{
+			ID:          userIDm,
+			Username:    username,
+			DisplayName: name,
+			AvatarURL:   avatarURL,
+		})
+	}
+
+	conversations := make([]Conversation, 0, len(convoRows))
+	for _, cr := range convoRows {
 		conversations = append(conversations, Conversation{
-			RecipientID:        cd.recipientID,
-			RecipientName:      name,
-			RecipientAvatarURL: avatarURL,
-			LastMessage:        cd.lastMessage,
-			LastMessageTime:    cd.lastMessageTime.Format(time.RFC3339),
-			UnreadCount:        cd.unreadCount,
+			ID:              cr.id,
+			IsGroup:         cr.isGroup,
+			Name:            cr.name,
+			Members:         membersMap[cr.id],
+			LastMessage:     cr.lastMessage,
+			LastMessageTime: cr.lastMessageTime.Format(time.RFC3339),
+			UnreadCount:     cr.unreadCount,
 		})
 	}
 
 	writeJSON(w, http.StatusOK, conversations)
 }
 
-// HandleGetMessages returns messages between the authenticated user and another user.
+// HandleGetMessages returns messages in a conversation.
 func (h *Handlers) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	userID := shared.UserIDFromContext(r.Context())
-	otherUserID := chi.URLParam(r, "userId")
+	conversationID := chi.URLParam(r, "conversationId")
 	ctx := r.Context()
 
-	if otherUserID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId is required"})
+	if conversationID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversationId is required"})
 		return
 	}
-	if otherUserID == userID {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot message yourself"})
+
+	// Verify membership
+	var isMember bool
+	h.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2)`,
+		conversationID, userID,
+	).Scan(&isMember)
+	if !isMember {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
 
@@ -141,54 +170,50 @@ func (h *Handlers) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	before := r.URL.Query().Get("before")
 
-	var rows interface{ Close() }
-	var err error
+	var messages []DirectMessage
 
 	if before != "" {
-		rows2, err2 := h.Pool.Query(ctx,
-			`SELECT id, sender_id, recipient_id, content, read, created_at
+		rows, err := h.Pool.Query(ctx,
+			`SELECT id, conversation_id, sender_id, content, created_at
 			 FROM forumline_direct_messages
-			 WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
-			   AND id < $3
-			 ORDER BY created_at DESC
-			 LIMIT $4`,
-			userID, otherUserID, before, limit,
-		)
-		rows = rows2
-		err = err2
-	} else {
-		rows2, err2 := h.Pool.Query(ctx,
-			`SELECT id, sender_id, recipient_id, content, read, created_at
-			 FROM forumline_direct_messages
-			 WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
+			 WHERE conversation_id = $1 AND id < $2
 			 ORDER BY created_at DESC
 			 LIMIT $3`,
-			userID, otherUserID, limit,
+			conversationID, before, limit,
 		)
-		rows = rows2
-		err = err2
-	}
-
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch messages"})
-		return
-	}
-
-	// We need to close and iterate
-	pgxRows := rows.(interface {
-		Close()
-		Next() bool
-		Scan(dest ...interface{}) error
-	})
-	defer pgxRows.Close()
-
-	var messages []DirectMessage
-	for pgxRows.Next() {
-		var msg DirectMessage
-		if err := pgxRows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.Read, &msg.CreatedAt); err != nil {
-			continue
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch messages"})
+			return
 		}
-		messages = append(messages, msg)
+		defer rows.Close()
+		for rows.Next() {
+			var msg DirectMessage
+			if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt); err != nil {
+				continue
+			}
+			messages = append(messages, msg)
+		}
+	} else {
+		rows, err := h.Pool.Query(ctx,
+			`SELECT id, conversation_id, sender_id, content, created_at
+			 FROM forumline_direct_messages
+			 WHERE conversation_id = $1
+			 ORDER BY created_at DESC
+			 LIMIT $2`,
+			conversationID, limit,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch messages"})
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var msg DirectMessage
+			if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt); err != nil {
+				continue
+			}
+			messages = append(messages, msg)
+		}
 	}
 
 	// Reverse to chronological order
@@ -203,18 +228,25 @@ func (h *Handlers) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, messages)
 }
 
-// HandleSendMessage sends a DM to another user.
+// HandleSendMessage sends a message in a conversation.
 func (h *Handlers) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	userID := shared.UserIDFromContext(r.Context())
-	recipientID := chi.URLParam(r, "userId")
+	conversationID := chi.URLParam(r, "conversationId")
 	ctx := r.Context()
 
-	if recipientID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId is required"})
+	if conversationID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversationId is required"})
 		return
 	}
-	if recipientID == userID {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot message yourself"})
+
+	// Verify membership
+	var isMember bool
+	h.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2)`,
+		conversationID, userID,
+	).Scan(&isMember)
+	if !isMember {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
 
@@ -232,52 +264,346 @@ func (h *Handlers) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify recipient exists
-	var recipientExists bool
-	h.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, recipientID,
-	).Scan(&recipientExists)
-
-	if !recipientExists {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Recipient not found"})
-		return
-	}
-
-	// Insert message
 	var msg DirectMessage
 	err := h.Pool.QueryRow(ctx,
-		`INSERT INTO forumline_direct_messages (sender_id, recipient_id, content)
+		`INSERT INTO forumline_direct_messages (conversation_id, sender_id, content)
 		 VALUES ($1, $2, $3)
-		 RETURNING id, sender_id, recipient_id, content, read, created_at`,
-		userID, recipientID, content,
-	).Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.Read, &msg.CreatedAt)
+		 RETURNING id, conversation_id, sender_id, content, created_at`,
+		conversationID, userID, content,
+	).Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt)
 
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to send message"})
 		return
 	}
 
+	// Update conversation updated_at
+	h.Pool.Exec(ctx, `UPDATE forumline_conversations SET updated_at = now() WHERE id = $1`, conversationID)
+
 	writeJSON(w, http.StatusCreated, msg)
 }
 
-// HandleMarkRead marks all messages from a specific user as read.
+// HandleMarkRead marks a conversation as read for the authenticated user.
 func (h *Handlers) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 	userID := shared.UserIDFromContext(r.Context())
-	otherUserID := chi.URLParam(r, "userId")
+	conversationID := chi.URLParam(r, "conversationId")
 	ctx := r.Context()
 
-	if otherUserID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId is required"})
+	if conversationID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversationId is required"})
 		return
 	}
 
 	_, err := h.Pool.Exec(ctx,
-		`UPDATE forumline_direct_messages SET read = true
-		 WHERE sender_id = $1 AND recipient_id = $2 AND read = false`,
-		otherUserID, userID,
+		`UPDATE forumline_conversation_members SET last_read_at = now()
+		 WHERE conversation_id = $1 AND user_id = $2`,
+		conversationID, userID,
 	)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark messages as read"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// HandleGetOrCreateDM finds or creates a 1:1 conversation with another user.
+func (h *Handlers) HandleGetOrCreateDM(w http.ResponseWriter, r *http.Request) {
+	userID := shared.UserIDFromContext(r.Context())
+	ctx := r.Context()
+
+	var body struct {
+		UserID string `json:"userId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if body.UserID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId is required"})
+		return
+	}
+	if body.UserID == userID {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot message yourself"})
+		return
+	}
+
+	// Verify other user exists
+	var exists bool
+	h.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, body.UserID,
+	).Scan(&exists)
+	if !exists {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "User not found"})
+		return
+	}
+
+	// Find existing 1:1 conversation between these two users
+	var convoID string
+	err := h.Pool.QueryRow(ctx,
+		`SELECT c.id FROM forumline_conversations c
+		 WHERE c.is_group = false
+		   AND EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = c.id AND user_id = $1)
+		   AND EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = c.id AND user_id = $2)
+		   AND (SELECT count(*) FROM forumline_conversation_members WHERE conversation_id = c.id) = 2`,
+		userID, body.UserID,
+	).Scan(&convoID)
+
+	if err != nil {
+		// Create new 1:1 conversation
+		tx, txErr := h.Pool.Begin(ctx)
+		if txErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create conversation"})
+			return
+		}
+		defer tx.Rollback(ctx)
+
+		err = tx.QueryRow(ctx,
+			`INSERT INTO forumline_conversations (is_group, created_by) VALUES (false, $1) RETURNING id`, userID,
+		).Scan(&convoID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create conversation"})
+			return
+		}
+
+		_, err = tx.Exec(ctx,
+			`INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+			convoID, userID, body.UserID,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to add members"})
+			return
+		}
+
+		if err = tx.Commit(ctx); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create conversation"})
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"id": convoID})
+}
+
+// HandleCreateConversation creates a new group conversation.
+func (h *Handlers) HandleCreateConversation(w http.ResponseWriter, r *http.Request) {
+	userID := shared.UserIDFromContext(r.Context())
+	ctx := r.Context()
+
+	var body struct {
+		MemberIDs []string `json:"memberIds"`
+		Name      string   `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if len(body.MemberIDs) < 2 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Group must have at least 2 other members"})
+		return
+	}
+	if len(body.MemberIDs) > 50 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Group cannot exceed 50 members"})
+		return
+	}
+
+	name := trimString(body.Name)
+	if name == "" || len(name) > 100 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Group name must be 1-100 characters"})
+		return
+	}
+
+	// Verify all members exist and aren't the creator
+	allMembers := append([]string{userID}, body.MemberIDs...)
+	seen := make(map[string]bool)
+	var uniqueMembers []string
+	for _, id := range allMembers {
+		if !seen[id] && id != "" {
+			seen[id] = true
+			uniqueMembers = append(uniqueMembers, id)
+		}
+	}
+
+	if len(uniqueMembers) < 3 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Group must have at least 3 members including yourself"})
+		return
+	}
+
+	// Verify all users exist
+	var existCount int
+	h.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM forumline_profiles WHERE id = ANY($1)`, uniqueMembers,
+	).Scan(&existCount)
+	if existCount != len(uniqueMembers) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "One or more users not found"})
+		return
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create group"})
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var convoID string
+	err = tx.QueryRow(ctx,
+		`INSERT INTO forumline_conversations (is_group, name, created_by) VALUES (true, $1, $2) RETURNING id`,
+		name, userID,
+	).Scan(&convoID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create group"})
+		return
+	}
+
+	for _, memberID := range uniqueMembers {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1, $2)`,
+			convoID, memberID,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to add members"})
+			return
+		}
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create group"})
+		return
+	}
+
+	// Fetch full conversation to return
+	profiles := fetchProfilesByIDs(ctx, h.Pool, uniqueMembers)
+	members := make([]ConversationMember, 0, len(uniqueMembers))
+	for _, id := range uniqueMembers {
+		p := profiles[id]
+		m := ConversationMember{ID: id}
+		if p != nil {
+			m.Username = p.Username
+			m.DisplayName = p.DisplayName
+			if m.DisplayName == "" {
+				m.DisplayName = p.Username
+			}
+			m.AvatarURL = p.AvatarURL
+		}
+		members = append(members, m)
+	}
+
+	writeJSON(w, http.StatusCreated, Conversation{
+		ID:              convoID,
+		IsGroup:         true,
+		Name:            &name,
+		Members:         members,
+		LastMessage:     "",
+		LastMessageTime: time.Now().Format(time.RFC3339),
+		UnreadCount:     0,
+	})
+}
+
+// HandleUpdateConversation updates a group conversation (rename, add/remove members).
+func (h *Handlers) HandleUpdateConversation(w http.ResponseWriter, r *http.Request) {
+	userID := shared.UserIDFromContext(r.Context())
+	conversationID := chi.URLParam(r, "conversationId")
+	ctx := r.Context()
+
+	// Verify membership and that it's a group
+	var isGroup bool
+	err := h.Pool.QueryRow(ctx,
+		`SELECT c.is_group FROM forumline_conversations c
+		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+		 WHERE c.id = $2`,
+		userID, conversationID,
+	).Scan(&isGroup)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
+		return
+	}
+	if !isGroup {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot modify a 1:1 conversation"})
+		return
+	}
+
+	var body struct {
+		Name         *string  `json:"name"`
+		AddMembers   []string `json:"addMembers"`
+		RemoveMembers []string `json:"removeMembers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if body.Name != nil {
+		name := trimString(*body.Name)
+		if name == "" || len(name) > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Group name must be 1-100 characters"})
+			return
+		}
+		_, err = h.Pool.Exec(ctx,
+			`UPDATE forumline_conversations SET name = $1 WHERE id = $2`, name, conversationID,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update group"})
+			return
+		}
+	}
+
+	for _, memberID := range body.AddMembers {
+		// Verify user exists
+		var userExists bool
+		h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, memberID).Scan(&userExists)
+		if !userExists {
+			continue
+		}
+		h.Pool.Exec(ctx,
+			`INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+			conversationID, memberID,
+		)
+	}
+
+	for _, memberID := range body.RemoveMembers {
+		if memberID == userID {
+			continue // Use leave endpoint instead
+		}
+		h.Pool.Exec(ctx,
+			`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2`,
+			conversationID, memberID,
+		)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// HandleLeaveConversation removes the authenticated user from a group conversation.
+func (h *Handlers) HandleLeaveConversation(w http.ResponseWriter, r *http.Request) {
+	userID := shared.UserIDFromContext(r.Context())
+	conversationID := chi.URLParam(r, "conversationId")
+	ctx := r.Context()
+
+	// Verify it's a group
+	var isGroup bool
+	err := h.Pool.QueryRow(ctx,
+		`SELECT c.is_group FROM forumline_conversations c
+		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+		 WHERE c.id = $2`,
+		userID, conversationID,
+	).Scan(&isGroup)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
+		return
+	}
+	if !isGroup {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot leave a 1:1 conversation"})
+		return
+	}
+
+	_, err = h.Pool.Exec(ctx,
+		`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2`,
+		conversationID, userID,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to leave conversation"})
 		return
 	}
 
@@ -306,9 +632,25 @@ func (h *Handlers) HandleDMStream(w http.ResponseWriter, r *http.Request) {
 
 	client := &shared.SSEClient{
 		Channel: "dm_changes",
-		Filter:  map[string]string{"recipient_id": userID},
-		Send:    make(chan []byte, 32),
-		Done:    make(chan struct{}),
+		FilterFunc: func(data map[string]interface{}) bool {
+			// Check if user is in member_ids array
+			memberIDs, ok := data["member_ids"]
+			if !ok {
+				return false
+			}
+			arr, ok := memberIDs.([]interface{})
+			if !ok {
+				return false
+			}
+			for _, id := range arr {
+				if fmt.Sprintf("%v", id) == userID {
+					return true
+				}
+			}
+			return false
+		},
+		Send: make(chan []byte, 32),
+		Done: make(chan struct{}),
 	}
 
 	h.SSEHub.Register(client)

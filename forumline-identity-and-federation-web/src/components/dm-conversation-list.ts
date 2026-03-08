@@ -1,11 +1,11 @@
 import type { ForumlineStore } from '../lib/index.js'
-import type { ForumlineDmConversation } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineDmConversation, ForumlineConversationMember } from '@johnvondrashek/forumline-protocol'
 import { createAvatar, createSpinner } from './ui.js'
 import { formatShortTimeAgo } from '../lib/dateFormatters.js'
 
 interface DmConversationListOptions {
   forumlineStore: ForumlineStore
-  onSelectConversation: (recipientId: string) => void
+  onSelectConversation: (conversationId: string) => void
 }
 
 type Conversation = ForumlineDmConversation
@@ -25,13 +25,35 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
     timeEl: HTMLElement
     previewEl: HTMLElement
     avatarWrap: HTMLElement
-    lastData: { unreadCount: number; lastMessage: string; lastMessageTime: string; recipientName: string }
+    lastData: { unreadCount: number; lastMessage: string; lastMessageTime: string; displayName: string }
   }>()
 
   // Persistent containers
   const listContainer = document.createElement('div')
   const emptyState = createEmptyState()
   const errorState = createErrorState()
+
+  function getConvoDisplayName(convo: Conversation): string {
+    if (convo.isGroup && convo.name) return convo.name
+    const { forumlineUserId } = forumlineStore.get()
+    const others = convo.members.filter((m: ForumlineConversationMember) => m.id !== forumlineUserId)
+    if (others.length === 0) return 'Empty conversation'
+    return others.map((m: ForumlineConversationMember) => m.displayName || m.username).join(', ')
+  }
+
+  function getConvoAvatarSeed(convo: Conversation): string {
+    if (convo.isGroup) return convo.name || convo.id
+    const { forumlineUserId } = forumlineStore.get()
+    const other = convo.members.find((m: ForumlineConversationMember) => m.id !== forumlineUserId)
+    return other?.username || convo.id
+  }
+
+  function getConvoAvatarUrl(convo: Conversation): string | null {
+    if (convo.isGroup) return null
+    const { forumlineUserId } = forumlineStore.get()
+    const other = convo.members.find((m: ForumlineConversationMember) => m.id !== forumlineUserId)
+    return other?.avatarUrl ?? null
+  }
 
   function createEmptyState(): HTMLElement {
     const empty = document.createElement('div')
@@ -71,10 +93,22 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
     const btn = document.createElement('button')
     btn.className = 'conversation-item'
 
+    const displayName = getConvoDisplayName(convo)
+
     // Avatar with unread indicator
     const avatarWrap = document.createElement('div')
     avatarWrap.className = 'relative'
-    avatarWrap.appendChild(createAvatar({ avatarUrl: convo.recipientAvatarUrl, seed: convo.recipientName, size: 40 }))
+
+    if (convo.isGroup) {
+      // Group avatar: stacked circles
+      const groupAvatar = document.createElement('div')
+      groupAvatar.style.cssText = 'width:40px;height:40px;border-radius:50%;background:var(--color-surface-hover);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--color-text-muted)'
+      groupAvatar.innerHTML = `<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`
+      avatarWrap.appendChild(groupAvatar)
+    } else {
+      avatarWrap.appendChild(createAvatar({ avatarUrl: getConvoAvatarUrl(convo), seed: getConvoAvatarSeed(convo), size: 40 }))
+    }
+
     let badgeEl: HTMLElement | null = null
     if (convo.unreadCount > 0) {
       badgeEl = document.createElement('div')
@@ -93,20 +127,20 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
     nameRow.className = 'flex items-center justify-between'
     const nameEl = document.createElement('span')
     nameEl.className = `font-medium ${convo.unreadCount > 0 ? 'text-white' : 'text-secondary'}`
-    nameEl.textContent = convo.recipientName
+    nameEl.textContent = displayName
     const timeEl = document.createElement('span')
     timeEl.className = 'text-xs text-faint'
-    timeEl.textContent = formatShortTimeAgo(new Date(convo.lastMessageTime))
+    timeEl.textContent = convo.lastMessageTime ? formatShortTimeAgo(new Date(convo.lastMessageTime)) : ''
     nameRow.append(nameEl, timeEl)
     textDiv.appendChild(nameRow)
 
     const previewEl = document.createElement('p')
     previewEl.className = `truncate text-sm ${convo.unreadCount > 0 ? 'font-medium text-secondary' : 'text-muted'}`
-    previewEl.textContent = convo.lastMessage
+    previewEl.textContent = convo.lastMessage || 'No messages yet'
     textDiv.appendChild(previewEl)
 
     btn.appendChild(textDiv)
-    btn.addEventListener('click', () => onSelectConversation(convo.recipientId))
+    btn.addEventListener('click', () => onSelectConversation(convo.id))
 
     return {
       btn,
@@ -119,13 +153,14 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
         unreadCount: convo.unreadCount,
         lastMessage: convo.lastMessage,
         lastMessageTime: convo.lastMessageTime,
-        recipientName: convo.recipientName,
+        displayName,
       },
     }
   }
 
   function updateConvoButton(entry: typeof renderedConvos extends Map<string, infer V> ? V : never, convo: Conversation) {
     const prev = entry.lastData
+    const displayName = getConvoDisplayName(convo)
 
     // Update badge
     if (prev.unreadCount !== convo.unreadCount) {
@@ -151,20 +186,20 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
 
     // Update text content
     if (prev.lastMessage !== convo.lastMessage) {
-      entry.previewEl.textContent = convo.lastMessage
+      entry.previewEl.textContent = convo.lastMessage || 'No messages yet'
     }
     if (prev.lastMessageTime !== convo.lastMessageTime) {
-      entry.timeEl.textContent = formatShortTimeAgo(new Date(convo.lastMessageTime))
+      entry.timeEl.textContent = convo.lastMessageTime ? formatShortTimeAgo(new Date(convo.lastMessageTime)) : ''
     }
-    if (prev.recipientName !== convo.recipientName) {
-      entry.nameEl.textContent = convo.recipientName
+    if (prev.displayName !== displayName) {
+      entry.nameEl.textContent = displayName
     }
 
     entry.lastData = {
       unreadCount: convo.unreadCount,
       lastMessage: convo.lastMessage,
       lastMessageTime: convo.lastMessageTime,
-      recipientName: convo.recipientName,
+      displayName,
     }
   }
 
@@ -186,8 +221,8 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
       el.appendChild(listContainer)
     }
 
-    // Build set of current recipient IDs
-    const currentIds = new Set(conversations.map(c => c.recipientId))
+    // Build set of current conversation IDs
+    const currentIds = new Set(conversations.map(c => c.id))
 
     // Remove stale conversations
     for (const [id, entry] of renderedConvos) {
@@ -199,14 +234,14 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
 
     // Update existing or add new conversations (in order)
     for (const convo of conversations) {
-      const existing = renderedConvos.get(convo.recipientId)
+      const existing = renderedConvos.get(convo.id)
       if (existing) {
         updateConvoButton(existing, convo)
         // Ensure correct order
         listContainer.appendChild(existing.btn)
       } else {
         const entry = createConvoButton(convo)
-        renderedConvos.set(convo.recipientId, entry)
+        renderedConvos.set(convo.id, entry)
         listContainer.appendChild(entry.btn)
       }
     }

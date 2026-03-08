@@ -67,9 +67,10 @@ func (pl *PushListener) listenOnce(ctx context.Context) {
 		}
 
 		var payload struct {
-			RecipientID string `json:"recipient_id"`
-			SenderID    string `json:"sender_id"`
-			Content     string `json:"content"`
+			ConversationID string   `json:"conversation_id"`
+			SenderID       string   `json:"sender_id"`
+			MemberIDs      []string `json:"member_ids"`
+			Content        string   `json:"content"`
 		}
 		if err := json.Unmarshal([]byte(notification.Payload), &payload); err != nil {
 			log.Printf("PushListener: failed to parse payload: %v", err)
@@ -91,9 +92,15 @@ func (pl *PushListener) listenOnce(ctx context.Context) {
 			body = body[:100]
 		}
 
-		sent := sendPushNotifications(ctx, pl.Pool, payload.RecipientID, title, body, "", "")
-		if sent > 0 {
-			log.Printf("PushListener: sent %d push notifications for DM to %s", sent, payload.RecipientID)
+		// Send push to all members except the sender
+		for _, memberID := range payload.MemberIDs {
+			if memberID == payload.SenderID {
+				continue
+			}
+			sent := sendPushNotifications(ctx, pl.Pool, memberID, title, body, "", "")
+			if sent > 0 {
+				log.Printf("PushListener: sent %d push notifications for DM to %s", sent, memberID)
+			}
 		}
 	}
 }

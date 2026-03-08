@@ -2,7 +2,7 @@ import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile 
 
 /**
  * Headless HTTP client for Forumline Central Services.
- * Provides access to cross-forum DMs and profile search.
+ * Provides access to cross-forum conversations (1:1 and group) and profile search.
  * All requests use the Forumline access token for authentication.
  */
 export class CentralServicesClient {
@@ -27,27 +27,43 @@ export class CentralServicesClient {
     return res.json()
   }
 
-  /** List all DM conversations */
+  /** List all conversations (1:1 and group) */
   async getConversations(): Promise<ForumlineDmConversation[]> {
-    return this.fetch('/api/dms')
+    return this.fetch('/api/conversations')
   }
 
-  /** Get messages with a specific user */
-  async getMessages(userId: string): Promise<ForumlineDirectMessage[]> {
-    return this.fetch(`/api/dms/${userId}`)
+  /** Get messages in a conversation */
+  async getMessages(conversationId: string): Promise<ForumlineDirectMessage[]> {
+    return this.fetch(`/api/conversations/${conversationId}/messages`)
   }
 
-  /** Send a message to a specific user */
-  async sendMessage(userId: string, content: string): Promise<ForumlineDirectMessage> {
-    return this.fetch(`/api/dms/${userId}`, {
+  /** Send a message in a conversation */
+  async sendMessage(conversationId: string, content: string): Promise<ForumlineDirectMessage> {
+    return this.fetch(`/api/conversations/${conversationId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     })
   }
 
-  /** Mark all messages from a user as read */
-  async markRead(userId: string): Promise<void> {
-    await this.fetch(`/api/dms/${userId}/read`, { method: 'POST' })
+  /** Mark a conversation as read */
+  async markRead(conversationId: string): Promise<void> {
+    await this.fetch(`/api/conversations/${conversationId}/read`, { method: 'POST' })
+  }
+
+  /** Get or create a 1:1 conversation with a user */
+  async getOrCreateDM(userId: string): Promise<{ id: string }> {
+    return this.fetch('/api/conversations/dm', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    })
+  }
+
+  /** Create a new group conversation */
+  async createGroupConversation(memberIds: string[], name: string): Promise<ForumlineDmConversation> {
+    return this.fetch('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ memberIds, name }),
+    })
   }
 
   /** Search Forumline profiles by username */

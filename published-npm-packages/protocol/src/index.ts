@@ -27,6 +27,7 @@ export type {
 } from './api'
 export type {
   ForumlineDirectMessage,
+  ForumlineConversationMember,
   ForumlineDmConversation,
   ForumlineProfile,
 } from './forumline-dms'
