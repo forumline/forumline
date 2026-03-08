@@ -4,6 +4,7 @@
 
 import { createStore } from '../state.js'
 import { authStore, getAccessToken } from './auth.js'
+import { getConfig } from './config.js'
 import { connectSSE } from './sse.js'
 
 let livekitModule = null
@@ -131,7 +132,7 @@ export async function joinRoom(slug, name) {
     const { token } = await resp.json()
     accessTokenCached = accessToken
 
-    const livekitUrl = import.meta.env.VITE_LIVEKIT_URL
+    const livekitUrl = getConfig().livekit_url || import.meta.env.VITE_LIVEKIT_URL
     if (!livekitUrl) { voiceStore.set({ connectError: 'LiveKit URL not configured', isConnecting: false }); return }
 
     const lk = await getLivekit()

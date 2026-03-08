@@ -4,6 +4,7 @@ import { initAuth, authStore } from './lib/auth.js'
 import { initVoice } from './lib/voice.js'
 import { renderLayout, getPageContainer } from './components/layout.js'
 import { closeMobileSidebar } from './components/sidebar.js'
+import { loadConfig } from './lib/config.js'
 
 // Pages
 import { renderHome } from './pages/home.js'
@@ -88,6 +89,7 @@ setNotFound(page(renderNotFound))
 
 async function boot() {
   renderLayout(document.getElementById('app'))
+  await loadConfig()
   await initAuth()
   initVoice()
   resolve()

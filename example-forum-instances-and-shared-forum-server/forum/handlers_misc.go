@@ -14,10 +14,14 @@ func (h *Handlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = h.Config.Domain
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"name":        name,
 		"hosted_mode": h.Config.GoTrueURL == "",
-	})
+	}
+	if h.Config.LiveKitURL != "" {
+		resp["livekit_url"] = h.Config.LiveKitURL
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // HandleManifest serves /.well-known/forumline-manifest.json for forum discovery.
