@@ -51,7 +51,14 @@ function scheduleRefresh(session) {
 }
 
 async function refreshSession() {
-  if (!currentSession?.refresh_token) return false
+  if (!currentSession?.refresh_token) {
+    // Hosted mode sessions can't refresh — sign out when expired
+    if (currentSession?.hosted && currentSession?.expires_at * 1000 < Date.now()) {
+      saveSession(null)
+      authStore.set({ user: null, profile: null, loading: false })
+    }
+    return false
+  }
   try {
     const res = await fetch('/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
@@ -191,7 +198,7 @@ export async function signUp(email, password, username) {
 
 export async function signOut() {
   try {
-    if (currentSession?.access_token) {
+    if (currentSession?.access_token && !currentSession?.hosted) {
       await fetch('/auth/v1/logout', {
         method: 'POST',
         headers: gotrueHeaders(currentSession.access_token),
@@ -246,17 +253,37 @@ async function restoreSessionFromUrl() {
   if (!hash) return false
   const params = new URLSearchParams(hash.substring(1))
   const accessToken = params.get('access_token')
-  const refreshToken = params.get('refresh_token')
-  if (!accessToken || !refreshToken) return false
+  if (!accessToken) return false
 
   try {
+    const payload = JSON.parse(atob(accessToken.split('.')[1]))
+    const refreshToken = params.get('refresh_token')
+
+    // Hosted mode: no refresh_token, no GoTrue — decode JWT and fetch profile
+    if (!refreshToken) {
+      const userId = payload.sub
+      if (!userId) return false
+
+      const session = {
+        access_token: accessToken,
+        refresh_token: null,
+        expires_in: (payload.exp - payload.iat) || 86400,
+        expires_at: payload.exp || Math.floor(Date.now() / 1000) + 86400,
+        user: { id: userId },
+        hosted: true,
+      }
+      saveSession(session)
+      window.history.replaceState({}, '', window.location.pathname)
+      return true
+    }
+
+    // Self-hosted mode: use GoTrue to get full user data
     const userRes = await fetch('/auth/v1/user', {
       headers: { 'Authorization': `Bearer ${accessToken}`, 'apikey': anonKey },
     })
     if (!userRes.ok) return false
     const user = await userRes.json()
 
-    const payload = JSON.parse(atob(accessToken.split('.')[1]))
     const session = {
       access_token: accessToken,
       refresh_token: refreshToken,
