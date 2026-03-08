@@ -195,4 +195,27 @@ VALUES (
   ARRAY['http://localhost:5173/api/forumline/auth/callback']
 ) ON CONFLICT (client_id) DO NOTHING;
 
+-- Platform entry for forumline.net website (needed for OAuth client registration)
+INSERT INTO forumline_forums (id, domain, name, api_base, web_base, capabilities, description, approved)
+VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  'forumline.net',
+  'Forumline Platform',
+  'https://forumline.net',
+  'https://forumline.net',
+  '{}',
+  'Forumline platform website — used for forum creation OAuth flow',
+  true
+) ON CONFLICT (id) DO NOTHING;
+
+-- OAuth client for the forumline.net website (forum creation flow)
+INSERT INTO forumline_oauth_clients (forum_id, client_id, client_secret_hash, redirect_uris)
+VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  'forumline-website',
+  -- SHA-256 of 'forumline-website-secret'
+  'c382ee3932b637301c6ad0b75fadd1f59fddddd2078c83bb9b53402df06512c5',
+  ARRAY['https://forumline.net/create-callback.html', 'http://localhost:8765/create-callback.html']
+) ON CONFLICT (client_id) DO NOTHING;
+
 SELECT 'Init complete: tables created, seed data inserted.' AS status;

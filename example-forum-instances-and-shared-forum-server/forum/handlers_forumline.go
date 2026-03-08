@@ -49,7 +49,18 @@ func (h *Handlers) HandleForumlineAuth(w http.ResponseWriter, r *http.Request) {
 
 // handleLinkRedirect handles "Connect from Settings" — verify session, set link cookie, redirect to Forumline.
 func (h *Handlers) handleLinkRedirect(w http.ResponseWriter, r *http.Request, linkToken string) {
-	// Validate the user's session via GoTrue
+	// In hosted mode (no GoTrue), validate JWT directly
+	if h.isHostedMode() {
+		claims, err := shared.ValidateJWT(linkToken)
+		if err != nil || claims.Subject == "" {
+			http.Redirect(w, r, h.Config.SiteURL+"/settings?error=invalid_session", http.StatusFound)
+			return
+		}
+		h.setLinkCookiesAndRedirect(w, r, claims.Subject)
+		return
+	}
+
+	// Self-hosted mode: validate via GoTrue
 	email, err := gotrueGetUserByToken(h.Config.GoTrueURL, linkToken)
 	if err != nil || email == "" {
 		// Try JWT validation as fallback
@@ -58,7 +69,6 @@ func (h *Handlers) handleLinkRedirect(w http.ResponseWriter, r *http.Request, li
 			http.Redirect(w, r, h.Config.SiteURL+"/settings?error=invalid_session", http.StatusFound)
 			return
 		}
-		// We have a valid JWT, use the subject as user ID
 		h.setLinkCookiesAndRedirect(w, r, claims.Subject)
 		return
 	}

@@ -54,7 +54,7 @@ var SITE_URL = 'https://forumline.net';
         body: JSON.stringify({
             code: code,
             client_id: 'forumline-website',
-            client_secret: '', // website client uses PKCE or no secret
+            client_secret: 'forumline-website-secret',
             redirect_uri: SITE_URL + '/create-callback.html'
         })
     })
