@@ -1,7 +1,20 @@
 import { signUp } from '../lib/auth.js'
 import { navigate } from '../router.js'
+import { getConfig } from '../lib/config.js'
 
 export function renderRegister(container) {
+  const { hosted_mode } = getConfig()
+
+  if (hosted_mode) {
+    container.innerHTML = `
+      <div class="max-w-md mx-auto mt-12">
+        <h1 class="text-2xl font-bold mb-6">Create Account</h1>
+        <a href="/api/forumline/auth" class="block w-full py-3 text-center bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors">Sign up with Forumline</a>
+        <p class="mt-4 text-sm text-slate-400 text-center">Already have an account? <a href="/login" class="text-indigo-400 hover:text-indigo-300">Sign in</a></p>
+      </div>
+    `
+    return
+  }
   container.innerHTML = `
     <div class="max-w-md mx-auto mt-12">
       <h1 class="text-2xl font-bold mb-6">Create Account</h1>

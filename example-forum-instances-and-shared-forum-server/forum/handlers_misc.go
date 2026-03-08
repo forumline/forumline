@@ -8,11 +8,27 @@ import (
 	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
 )
 
+// HandleConfig serves /api/config for frontend discovery of forum name and mode.
+func (h *Handlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
+	name := h.Config.ForumName
+	if name == "" {
+		name = h.Config.Domain
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"name":        name,
+		"hosted_mode": h.Config.GoTrueURL == "",
+	})
+}
+
 // HandleManifest serves /.well-known/forumline-manifest.json for forum discovery.
 func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
+	name := h.Config.ForumName
+	if name == "" {
+		name = h.Config.Domain
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"forumline_version": "1",
-		"name":              h.Config.Domain,
+		"name":              name,
 		"domain":            h.Config.Domain,
 		"icon_url":          "",
 		"api_base":          h.Config.SiteURL + "/api/forumline",

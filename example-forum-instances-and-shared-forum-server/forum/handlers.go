@@ -22,6 +22,7 @@ type Config struct {
 	GoTrueServiceRoleKey       string
 	SiteURL              string
 	Domain               string
+	ForumName            string
 	ForumlineURL               string
 	ForumlineClientID          string
 	ForumlineClientSecret      string

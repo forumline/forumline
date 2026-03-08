@@ -107,6 +107,7 @@ func main() {
 			GoTrueServiceRoleKey:   "",
 			SiteURL:                "https://" + tenant.Domain,
 			Domain:                 tenant.Domain,
+			ForumName:              tenant.Name,
 			ForumlineURL:           os.Getenv("FORUMLINE_APP_URL"),
 			ForumlineClientID:      tenant.ForumlineClientID,
 			ForumlineClientSecret:  tenant.ForumlineClientSecret,
