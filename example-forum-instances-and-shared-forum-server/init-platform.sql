@@ -26,4 +26,9 @@ CREATE INDEX IF NOT EXISTS idx_platform_tenants_domain ON platform_tenants(domai
 CREATE INDEX IF NOT EXISTS idx_platform_tenants_slug ON platform_tenants(slug);
 CREATE INDEX IF NOT EXISTS idx_platform_tenants_owner ON platform_tenants(owner_forumline_id);
 
+-- Custom frontend storage
+ALTER TABLE platform_tenants ADD COLUMN IF NOT EXISTS has_custom_site BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE platform_tenants ADD COLUMN IF NOT EXISTS site_storage_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE platform_tenants ADD COLUMN IF NOT EXISTS site_storage_limit BIGINT NOT NULL DEFAULT 52428800; -- 50MB
+
 SELECT 'Platform tables created!' AS status;

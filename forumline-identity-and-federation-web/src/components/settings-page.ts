@@ -1,6 +1,7 @@
 import type { GoTrueAuthClient, ForumlineSession } from '../lib/gotrue-auth.js'
 import type { ForumStore, ForumlineStore } from '../lib/index.js'
 import { createForumlineAuth } from './forumline-auth.js'
+import { createSiteManager } from './site-manager.js'
 import { createAvatar, createButton, createCard } from './ui.js'
 
 interface SettingsPageOptions {
@@ -15,9 +16,13 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
   let memberships: { forum_domain: string; notifications_muted: boolean }[] = []
   let removingDomain: string | null = null
   let avatarUrl: string | null = null
+  let siteManagerChild: { el: HTMLElement; destroy: () => void } | null = null
 
   const el = document.createElement('div')
   el.className = 'page-scroll'
+
+  // Wrapper for the main settings content (hidden when site manager is open)
+  const settingsWrapper = document.createElement('div')
 
   // ---- Persistent DOM structure ----
   // Header
@@ -32,12 +37,33 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
   title.className = 'text-xl font-bold text-white'
   title.textContent = 'Settings'
   header.appendChild(title)
-  el.appendChild(header)
+  settingsWrapper.appendChild(header)
 
   // Content
   const content = document.createElement('div')
   content.className = 'page-content'
-  el.appendChild(content)
+  settingsWrapper.appendChild(content)
+  el.appendChild(settingsWrapper)
+
+  function openSiteManager(forum: { name: string; domain: string }) {
+    // Extract slug from domain (e.g. "myforum.forumline.net" -> "myforum")
+    const slug = forum.domain.split('.')[0]
+    settingsWrapper.style.display = 'none'
+    siteManagerChild?.destroy()
+    siteManagerChild = createSiteManager({
+      slug,
+      forumName: forum.name,
+      domain: forum.domain,
+      auth,
+      onClose: () => {
+        siteManagerChild?.el.remove()
+        siteManagerChild?.destroy()
+        siteManagerChild = null
+        settingsWrapper.style.display = ''
+      },
+    })
+    el.appendChild(siteManagerChild.el)
+  }
 
   // Forumline account card
   const accountCard = createCard()
@@ -156,6 +182,16 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
     domain.textContent = forum.domain
     info.append(name, domain)
     row.appendChild(info)
+
+    // Edit Site button (only for hosted forums)
+    if (forum.domain.endsWith('.forumline.net')) {
+      row.appendChild(createButton({
+        text: 'Edit Site',
+        variant: 'ghost',
+        className: 'text-sm',
+        onClick: () => openSiteManager(forum),
+      }))
+    }
 
     // Mute button
     const muteBtn = document.createElement('button')
@@ -313,6 +349,6 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
 
   return {
     el,
-    destroy() { unsub() },
+    destroy() { unsub(); siteManagerChild?.destroy() },
   }
 }

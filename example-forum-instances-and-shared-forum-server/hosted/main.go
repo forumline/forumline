@@ -13,10 +13,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,6 +31,8 @@ import (
 	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/forum"
 	plat "github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/platform"
 	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func main() {
@@ -69,10 +75,24 @@ func main() {
 	sseHub.Listen(ctx, "post_changes")
 	sseHub.StartListening(ctx)
 
+	// Site cache for custom frontends (256MB, 5-minute TTL)
+	siteCache := plat.NewSiteCache(256, 5*time.Minute)
+
 	// Platform API (provisioning, forum listing) — no tenant context
 	platformHandlers := &plat.PlatformHandlers{
 		Pool:  pool,
 		Store: store,
+	}
+
+	// Site management API (custom frontend file CRUD)
+	siteHandlers := &plat.SiteHandlers{
+		Pool:      pool,
+		Store:     store,
+		R2Account: os.Getenv("R2_ACCOUNT_ID"),
+		R2KeyID:   os.Getenv("R2_ACCESS_KEY_ID"),
+		R2Secret:  os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2Bucket:  os.Getenv("R2_BUCKET_NAME"),
+		SiteCache: siteCache,
 	}
 
 	// Build the main router.
@@ -84,6 +104,14 @@ func main() {
 	r.Post("/api/platform/forums", platformHandlers.HandleProvision)
 	r.Get("/api/platform/forums", platformHandlers.HandleListForums)
 	r.Get("/api/platform/forums/{slug}/export", platformHandlers.HandleExport)
+
+	// Site management API (custom frontend files)
+	r.Get("/api/platform/sites/{slug}/files", siteHandlers.HandleListFiles)
+	r.Get("/api/platform/sites/{slug}/files/*", siteHandlers.HandleGetFile)
+	r.Put("/api/platform/sites/{slug}/files/*", siteHandlers.HandlePutFile)
+	r.Delete("/api/platform/sites/{slug}/files/*", siteHandlers.HandleDeleteFile)
+	r.Post("/api/platform/sites/{slug}/upload", siteHandlers.HandleMultipartUpload)
+	r.Post("/api/platform/sites/{slug}/reset", siteHandlers.HandleReset)
 
 	// Forum routes — wrapped with tenant middleware.
 	// The tenant middleware resolves Host -> schema and sets search_path.
@@ -149,7 +177,7 @@ func main() {
 	var handler http.Handler = r
 	handler = shared.CORSMiddleware(handler)
 	handler = shared.SecurityHeaders(handler)
-	handler = spaHandler(handler, store)
+	handler = spaHandler(handler, store, siteCache)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -180,11 +208,17 @@ func main() {
 	}
 }
 
-// spaHandler serves static files from ./dist for tenant domains only.
-// The platform domain (hosted.forumline.net) only serves API endpoints.
-func spaHandler(apiHandler http.Handler, store *plat.TenantStore) http.Handler {
+// spaHandler serves static files for tenant domains.
+// If a tenant has a custom site (HasCustomSite), files are served from R2
+// with an in-memory LRU cache. Otherwise, the default SPA from ./dist/ is served.
+func spaHandler(apiHandler http.Handler, store *plat.TenantStore, cache *plat.SiteCache) http.Handler {
 	distDir := "./dist"
 	fileServer := http.FileServer(http.Dir(distDir))
+
+	r2AccountID := os.Getenv("R2_ACCOUNT_ID")
+	r2KeyID := os.Getenv("R2_ACCESS_KEY_ID")
+	r2Secret := os.Getenv("R2_SECRET_ACCESS_KEY")
+	r2Bucket := os.Getenv("R2_BUCKET_NAME")
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") || strings.HasPrefix(r.URL.Path, "/.well-known/") {
@@ -192,15 +226,23 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore) http.Handler {
 			return
 		}
 
-		// Only serve SPA for known tenant domains, not the platform domain
+		// Only serve for known tenant domains, not the platform domain
 		host := strings.Split(r.Host, ":")[0]
-		if store.ByDomain(host) == nil {
+		tenant := store.ByDomain(host)
+		if tenant == nil {
 			http.NotFound(w, r)
 			return
 		}
 
-		path := filepath.Join(distDir, r.URL.Path)
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		// Custom site path: serve from R2 with caching
+		if tenant.HasCustomSite {
+			serveCustomSite(w, r, tenant, cache, r2AccountID, r2KeyID, r2Secret, r2Bucket)
+			return
+		}
+
+		// Default SPA path: serve from ./dist/
+		localPath := filepath.Join(distDir, r.URL.Path)
+		if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
 			if filepath.Base(r.URL.Path) == "index.html" {
 				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			}
@@ -216,4 +258,139 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
 	})
+}
+
+// serveCustomSite serves files from R2 for tenants with custom frontends.
+// Uses the manifest to determine which files exist, and falls back to
+// serving index.html for SPA-style routing (paths without extensions).
+func serveCustomSite(w http.ResponseWriter, r *http.Request, tenant *plat.Tenant, cache *plat.SiteCache, r2AccountID, r2KeyID, r2Secret, r2Bucket string) {
+	reqPath := strings.TrimPrefix(r.URL.Path, "/")
+	if reqPath == "" {
+		reqPath = "index.html"
+	}
+
+	// SPA fallback: if path has no extension, serve index.html
+	if path.Ext(reqPath) == "" {
+		reqPath = "index.html"
+	}
+
+	// Try cache first
+	if data, contentType, etag, ok := cache.Get(tenant.Slug, reqPath); ok {
+		if match := r.Header.Get("If-None-Match"); match == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		setCacheHeaders(w, reqPath, etag)
+		w.Header().Set("Content-Type", contentType)
+		w.Write(data)
+		return
+	}
+
+	// Cache miss: fetch from R2
+	endpoint := fmt.Sprintf("%s.r2.cloudflarestorage.com", r2AccountID)
+	client, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(r2KeyID, r2Secret, ""),
+		Secure: true,
+	})
+	if err != nil {
+		http.Error(w, "Storage unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	key := fmt.Sprintf("sites/%s/files/%s", tenant.Slug, reqPath)
+	obj, err := client.GetObject(r.Context(), r2Bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer obj.Close()
+
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Detect content type from manifest or extension
+	info, err := obj.Stat()
+	contentType := "application/octet-stream"
+	etag := ""
+	if err == nil {
+		contentType = info.ContentType
+		etag = info.ETag
+	}
+	if contentType == "" || contentType == "application/octet-stream" {
+		if ct, ok := extContentType(reqPath); ok {
+			contentType = ct
+		}
+	}
+
+	// Try to get etag from manifest if not from R2 headers
+	if etag == "" {
+		if manifest := loadManifestCached(r.Context(), client, r2Bucket, tenant.Slug); manifest != nil {
+			if entry, ok := manifest.Files[reqPath]; ok {
+				etag = entry.ETag
+			}
+		}
+	}
+
+	// Store in cache
+	cache.Put(tenant.Slug, reqPath, data, contentType, etag)
+
+	if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	setCacheHeaders(w, reqPath, etag)
+	w.Header().Set("Content-Type", contentType)
+	w.Write(data)
+}
+
+func setCacheHeaders(w http.ResponseWriter, filePath, etag string) {
+	if filePath == "index.html" {
+		w.Header().Set("Cache-Control", "no-cache")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
+}
+
+func extContentType(filePath string) (string, bool) {
+	types := map[string]string{
+		".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+		".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8",
+		".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+		".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+		".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2",
+		".ttf": "font/ttf", ".txt": "text/plain; charset=utf-8", ".xml": "application/xml; charset=utf-8",
+	}
+	ct, ok := types[path.Ext(filePath)]
+	return ct, ok
+}
+
+type manifestCache struct {
+	Files map[string]struct {
+		ETag string `json:"etag"`
+	} `json:"files"`
+}
+
+func loadManifestCached(ctx context.Context, client *minio.Client, bucket, slug string) *manifestCache {
+	key := fmt.Sprintf("sites/%s/_meta.json", slug)
+	obj, err := client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		return nil
+	}
+	var m manifestCache
+	if json.Unmarshal(data, &m) != nil {
+		return nil
+	}
+	return &m
 }

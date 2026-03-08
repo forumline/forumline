@@ -1111,3 +1111,78 @@ body {
   from { opacity: 0; transform: translateY(-0.5rem); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================================
+   Site Manager
+   ============================================================================ */
+
+.site-storage-bar {
+  margin-top: 0.5rem;
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.site-storage-bar__fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s;
+}
+
+.site-drop-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--color-text-dim);
+  font-size: 0.875rem;
+  transition: border-color 0.15s, background 0.15s;
+  margin-top: 0.75rem;
+}
+
+.site-drop-zone--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-20);
+  color: var(--color-text);
+}
+
+.site-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.site-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-file-row:last-child {
+  border-bottom: none;
+}
+
+.site-editor {
+  width: 100%;
+  min-height: 400px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.site-editor:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
