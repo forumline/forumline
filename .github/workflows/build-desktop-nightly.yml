@@ -214,6 +214,10 @@ jobs:
 
       - name: Build iOS app (simulator, no export)
         run: |
+          # Tauri's Xcode script phase expects this file; the app loads from a remote URL
+          # so the address doesn't matter, but the file must exist
+          echo "https://app.forumline.net" > "$TMPDIR/net.forumline.app-server-addr"
+
           xcodebuild build \
             -project gen/apple/forumline-demo.xcodeproj \
             -scheme forumline-demo_iOS \
