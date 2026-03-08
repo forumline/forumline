@@ -6,6 +6,10 @@ import { createAppLayout } from './components/app-layout.js'
 
 export const forumlineAuth = new GoTrueAuthClient()
 
+// Clean up legacy localStorage keys (forums are now server-side only)
+localStorage.removeItem('forumline_forums')
+localStorage.removeItem('forumline_active_forum')
+
 export const forumStore: ForumStore = createForumStore()
 export const forumlineStore: ForumlineStore = createForumlineStore({
   forumlineUrl: '',

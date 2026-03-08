@@ -33,38 +33,6 @@ export interface ForumStore extends Store<ForumState> {
 }
 
 // ============================================================================
-// localStorage helpers
-// ============================================================================
-
-const LS_FORUMS_KEY = 'forumline_forums'
-const LS_ACTIVE_KEY = 'forumline_active_forum'
-
-function lsLoadForums(): ForumMembership[] {
-  try {
-    const raw = localStorage.getItem(LS_FORUMS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function lsSaveForums(forums: ForumMembership[]) {
-  localStorage.setItem(LS_FORUMS_KEY, JSON.stringify(forums))
-}
-
-function lsGetActiveDomain(): string | null {
-  return localStorage.getItem(LS_ACTIVE_KEY)
-}
-
-function lsSetActiveDomain(domain: string | null) {
-  if (domain) {
-    localStorage.setItem(LS_ACTIVE_KEY, domain)
-  } else {
-    localStorage.removeItem(LS_ACTIVE_KEY)
-  }
-}
-
-// ============================================================================
 // Manifest fetch
 // ============================================================================
 
@@ -142,13 +110,9 @@ async function serverLeaveForum(domain: string): Promise<void> {
 // ============================================================================
 
 export function createForumStore(): ForumStore {
-  const forums = lsLoadForums()
-  const activeDomain = lsGetActiveDomain()
-  const activeForum = activeDomain ? forums.find((f) => f.domain === activeDomain) ?? null : null
-
   const store = createStore<ForumState>({
-    forums,
-    activeForum,
+    forums: [],
+    activeForum: null,
     unreadCounts: {},
   })
 
@@ -158,12 +122,10 @@ export function createForumStore(): ForumStore {
     switchForum(domain: string) {
       const state = store.get()
       const match = state.forums.find((f) => f.domain === domain) ?? null
-      lsSetActiveDomain(domain)
       store.set({ ...state, activeForum: match })
     },
 
     goHome() {
-      lsSetActiveDomain(null)
       store.set((prev) => ({ ...prev, activeForum: null }))
     },
 
@@ -184,7 +146,6 @@ export function createForumStore(): ForumStore {
       }
 
       const updated = [...state.forums, membership]
-      lsSaveForums(updated)
       store.set({ ...state, forums: updated })
 
       // Sync to server (fire-and-forget)
@@ -194,9 +155,7 @@ export function createForumStore(): ForumStore {
     removeForum(domain: string) {
       store.set((prev) => {
         const updated = prev.forums.filter((f) => f.domain !== domain)
-        lsSaveForums(updated)
         const active = prev.activeForum?.domain === domain ? null : prev.activeForum
-        if (prev.activeForum?.domain === domain) lsSetActiveDomain(null)
         return { ...prev, forums: updated, activeForum: active }
       })
 
@@ -212,8 +171,6 @@ export function createForumStore(): ForumStore {
     },
 
     clear() {
-      lsSaveForums([])
-      lsSetActiveDomain(null)
       _accessToken = null
       store.set({ forums: [], activeForum: null, unreadCounts: {} })
     },
@@ -235,7 +192,7 @@ export function createForumStore(): ForumStore {
           joined_at: string
         }[] = await res.json()
 
-        // Server is the source of truth — replace local state entirely
+        // Server is the source of truth
         const forums: ForumMembership[] = memberships.map(m => ({
           domain: m.forum_domain,
           name: m.forum_name,
@@ -246,10 +203,7 @@ export function createForumStore(): ForumStore {
           added_at: m.joined_at,
         }))
 
-        lsSaveForums(forums)
-        const activeDomain = lsGetActiveDomain()
-        const activeForum = activeDomain ? forums.find(f => f.domain === activeDomain) ?? null : null
-        store.set(prev => ({ ...prev, forums, activeForum }))
+        store.set(prev => ({ ...prev, forums, activeForum: null }))
       } catch { /* non-critical */ }
     },
   }
