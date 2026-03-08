@@ -129,11 +129,15 @@ func (h *Handlers) HandleListConversations(w http.ResponseWriter, r *http.Reques
 
 	conversations := make([]Conversation, 0, len(convoRows))
 	for _, cr := range convoRows {
+		members := membersMap[cr.id]
+		if members == nil {
+			members = []ConversationMember{}
+		}
 		conversations = append(conversations, Conversation{
 			ID:              cr.id,
 			IsGroup:         cr.isGroup,
 			Name:            cr.name,
-			Members:         membersMap[cr.id],
+			Members:         members,
 			LastMessage:     cr.lastMessage,
 			LastMessageTime: cr.lastMessageTime.Format(time.RFC3339),
 			UnreadCount:     cr.unreadCount,
@@ -198,7 +202,7 @@ func (h *Handlers) HandleGetConversation(w http.ResponseWriter, r *http.Request)
 	}
 	defer memberRows.Close()
 
-	var members []ConversationMember
+	members := make([]ConversationMember, 0)
 	for memberRows.Next() {
 		var userIDm, username, displayName string
 		var avatarURL *string

@@ -15,7 +15,6 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
   let newMessage = ''
   let sending = false
   let eventSource: EventSource | null = null
-  let markedRead = false
   let initialLoad = true
 
   const el = document.createElement('div')
@@ -220,9 +219,8 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
       messages = await forumlineClient.getMessages(conversationId)
       renderMessages()
 
-      // Mark as read
-      if (!markedRead && messages.length > 0) {
-        markedRead = true
+      // Mark as read on every fetch (handles new messages arriving after initial load)
+      if (messages.length > 0) {
         forumlineClient.markRead(conversationId).catch(console.error)
       }
     } catch (err) {
