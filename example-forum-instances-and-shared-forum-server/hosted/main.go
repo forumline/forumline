@@ -148,7 +148,7 @@ func main() {
 	var handler http.Handler = r
 	handler = shared.CORSMiddleware(handler)
 	handler = shared.SecurityHeaders(handler)
-	handler = spaHandler(handler)
+	handler = spaHandler(handler, store)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -179,15 +179,22 @@ func main() {
 	}
 }
 
-// spaHandler serves static files from ./dist and falls back to index.html
-// for navigation routes (paths without file extensions).
-func spaHandler(apiHandler http.Handler) http.Handler {
+// spaHandler serves static files from ./dist for tenant domains only.
+// The platform domain (hosted.forumline.net) only serves API endpoints.
+func spaHandler(apiHandler http.Handler, store *plat.TenantStore) http.Handler {
 	distDir := "./dist"
 	fileServer := http.FileServer(http.Dir(distDir))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") || strings.HasPrefix(r.URL.Path, "/.well-known/") {
 			apiHandler.ServeHTTP(w, r)
+			return
+		}
+
+		// Only serve SPA for known tenant domains, not the platform domain
+		host := strings.Split(r.Host, ":")[0]
+		if store.ByDomain(host) == nil {
+			http.NotFound(w, r)
 			return
 		}
 
