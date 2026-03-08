@@ -62,6 +62,9 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config) *chi.Mux {
 	// Data endpoints (Phase B)
 	// ================================================================
 
+	// Forum config (public)
+	r.Get("/api/config", h.HandleConfig)
+
 	// Static/config (public)
 	r.Get("/api/categories", h.HandleCategories)
 	r.Get("/api/categories/{slug}", h.HandleCategoryBySlug)

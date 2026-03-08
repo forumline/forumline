@@ -1,11 +1,12 @@
 import { api } from '../lib/api.js'
+import { getConfig } from '../lib/config.js'
 import { avatarHTML } from '../components/avatar.js'
 import { formatRelativeTime } from '../lib/date.js'
 
 export function renderHome(container) {
   container.innerHTML = `
     <div class="mb-8 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 rounded-2xl p-8 border border-indigo-800/30">
-      <h1 class="text-2xl font-bold mb-2">Welcome to Forumline</h1>
+      <h1 class="text-2xl font-bold mb-2">Welcome to ${getConfig().name}</h1>
       <p class="text-slate-300">A modern forum with real-time chat and voice rooms.</p>
     </div>
     <h2 class="text-lg font-semibold mb-4">Recent Discussions</h2>

@@ -107,6 +107,11 @@ func (ts *TenantStore) refresh(ctx context.Context) error {
 	return nil
 }
 
+// Refresh forces an immediate reload of tenants from the database.
+func (ts *TenantStore) Refresh(ctx context.Context) error {
+	return ts.refresh(ctx)
+}
+
 // ByDomain returns the tenant for the given domain, or nil if not found.
 func (ts *TenantStore) ByDomain(domain string) *Tenant {
 	ts.mu.RLock()

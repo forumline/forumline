@@ -1,7 +1,12 @@
 package platform
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -77,6 +82,26 @@ func (ph *PlatformHandlers) HandleProvision(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Register with Forumline identity API to get OAuth credentials.
+	// Use the caller's Forumline access token (from Authorization header).
+	authHeader := r.Header.Get("Authorization")
+	oauthCreds, err := registerForumWithForumline(r.Context(), result.Domain, body.Name, authHeader)
+	if err != nil {
+		log.Printf("warning: forum provisioned but OAuth registration failed: %v", err)
+		// Still return success — the forum exists, just without OAuth yet
+	} else {
+		// Store the OAuth credentials in platform_tenants
+		_, err = ph.Pool.Exec(r.Context(),
+			`UPDATE platform_tenants SET forumline_client_id = $1, forumline_client_secret = $2 WHERE slug = $3`,
+			oauthCreds.ClientID, oauthCreds.ClientSecret, body.Slug)
+		if err != nil {
+			log.Printf("warning: failed to store OAuth credentials for %s: %v", body.Slug, err)
+		} else {
+			// Refresh tenant store so the credentials are available immediately
+			ph.Store.Refresh(r.Context())
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"domain":      result.Domain,
 		"slug":        result.Tenant.Slug,
@@ -142,6 +167,66 @@ func (ph *PlatformHandlers) HandleExport(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+slug+"-export.json\"")
 	json.NewEncoder(w).Encode(data)
+}
+
+type oauthCredentials struct {
+	ClientID     string
+	ClientSecret string
+}
+
+// registerForumWithForumline calls POST /api/forums on the Forumline identity API
+// to register the new forum and obtain OAuth client credentials.
+func registerForumWithForumline(ctx context.Context, domain, name, authHeader string) (*oauthCredentials, error) {
+	forumlineURL := os.Getenv("FORUMLINE_APP_URL")
+	if forumlineURL == "" {
+		return nil, fmt.Errorf("FORUMLINE_APP_URL not set")
+	}
+
+	siteURL := "https://" + domain
+	body := map[string]interface{}{
+		"domain":       domain,
+		"name":         name,
+		"api_base":     siteURL + "/api/forumline",
+		"web_base":     siteURL,
+		"capabilities": []string{"threads", "chat", "voice", "notifications"},
+		"redirect_uris": []string{siteURL + "/api/forumline/auth/callback"},
+	}
+	bodyJSON, _ := json.Marshal(body)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", forumlineURL+"/api/forums", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("identity API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	if result.ClientID == "" || result.ClientSecret == "" {
+		return nil, fmt.Errorf("identity API did not return credentials")
+	}
+
+	log.Printf("registered forum %s with Forumline: client_id=%s", domain, result.ClientID)
+	return &oauthCredentials{ClientID: result.ClientID, ClientSecret: result.ClientSecret}, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
