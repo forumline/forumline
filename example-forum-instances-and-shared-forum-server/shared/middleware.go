@@ -19,9 +19,23 @@ func CORSMiddleware(next http.Handler) http.Handler {
 
 		allowed := false
 		for _, o := range strings.Split(allowedOrigins, ",") {
-			if strings.TrimSpace(o) == origin {
+			o = strings.TrimSpace(o)
+			if o == origin {
 				allowed = true
 				break
+			}
+			// Support wildcard subdomain patterns like "https://*.forumline.net"
+			if strings.HasPrefix(o, "https://*.") {
+				suffix := o[len("https://*"):]  // e.g. ".forumline.net"
+				if strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, suffix) {
+					// Ensure it's a direct subdomain, not nested
+					host := origin[len("https://"):]
+					host = strings.TrimSuffix(host, suffix)
+					if host != "" && !strings.Contains(host, ".") {
+						allowed = true
+						break
+					}
+				}
 			}
 		}
 
