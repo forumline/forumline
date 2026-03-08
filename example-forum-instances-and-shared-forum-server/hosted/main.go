@@ -73,6 +73,7 @@ func main() {
 	sseHub.Listen(ctx, "chat_message_changes")
 	sseHub.Listen(ctx, "voice_presence_changes")
 	sseHub.Listen(ctx, "post_changes")
+	sseHub.Listen(ctx, "voice_signal_changes")
 	sseHub.StartListening(ctx)
 
 	// Site cache for custom frontends (256MB, 5-minute TTL)
