@@ -204,11 +204,9 @@
 
         <div class="panel" id="directory">
             <div class="panel-title">forum directory</div>
-            <div class="panel-body">
+            <div class="panel-body" style="text-align: center;">
                 <p>browse forums on the forumline network — hosted and self-hosted, all federated.</p>
-                <div id="forum-directory">
-                    <div style="text-align:center; color:#5a6a7a; font-size:11px; padding:10px;">loading forums...</div>
-                </div>
+                <a href="/directory.html" class="cta-button" style="font-size:13px; padding:6px 20px;">browse forums →</a>
             </div>
         </div>
 
@@ -423,50 +421,6 @@ function completeForum(token, forumlineId) {
     });
 }
 
-// Forum directory
-(function loadDirectory() {
-    fetch(FORUMLINE_APP + '/api/forums')
-    .then(function(r) { return r.json(); })
-    .then(function(forums) {
-        // Filter out non-forum entries (no capabilities = not a real forum)
-        forums = forums.filter(function(f) {
-            return f.capabilities && f.capabilities.length > 0;
-        });
-
-        if (!forums.length) {
-            document.getElementById('forum-directory').innerHTML =
-                '<div style="text-align:center; color:#5a6a7a; font-size:11px; padding:10px;">no forums yet. be the first!</div>';
-            return;
-        }
-
-        var html = '<div class="directory-grid">';
-        forums.forEach(function(f) {
-            var desc = f.description || 'a forumline community';
-            var caps = (f.capabilities || []).map(function(c) {
-                return '<span class="dir-cap">' + c + '</span>';
-            }).join('');
-
-            html += '<a href="' + f.web_base + '" class="directory-card" target="_blank">'
-                + '<div class="dir-name">' + escapeHTML(f.name) + '</div>'
-                + '<div class="dir-domain">' + escapeHTML(f.domain) + '</div>'
-                + '<div class="dir-desc">' + escapeHTML(desc) + '</div>'
-                + '<div class="dir-caps">' + caps + '</div>'
-                + '</a>';
-        });
-        html += '</div>';
-        document.getElementById('forum-directory').innerHTML = html;
-    })
-    .catch(function() {
-        document.getElementById('forum-directory').innerHTML =
-            '<div style="text-align:center; color:#5a6a7a; font-size:11px; padding:10px;">could not load forums.</div>';
-    });
-
-    function escapeHTML(s) {
-        var d = document.createElement('div');
-        d.textContent = s || '';
-        return d.innerHTML;
-    }
-})();
 </script>
 
 </body>

@@ -163,7 +163,7 @@ func (h *Handlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	rows, err := h.Pool.Query(ctx,
-		`SELECT id, domain, name, icon_url, api_base, web_base, capabilities, description
+		`SELECT id, domain, name, icon_url, api_base, web_base, capabilities, description, screenshot_url
 		 FROM forumline_forums WHERE approved = true ORDER BY name`)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch forums"})
@@ -174,21 +174,22 @@ func (h *Handlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
 	var forums []map[string]interface{}
 	for rows.Next() {
 		var id, domain, name, apiBase, webBase string
-		var iconURL, description *string
+		var iconURL, description, screenshotURL *string
 		var capabilities []string
 
-		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &description); err != nil {
+		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &description, &screenshotURL); err != nil {
 			continue
 		}
 		forum := map[string]interface{}{
-			"id":           id,
-			"domain":       domain,
-			"name":         name,
-			"icon_url":     iconURL,
-			"api_base":     apiBase,
-			"web_base":     webBase,
-			"capabilities": capabilities,
-			"description":  description,
+			"id":             id,
+			"domain":         domain,
+			"name":           name,
+			"icon_url":       iconURL,
+			"api_base":       apiBase,
+			"web_base":       webBase,
+			"capabilities":   capabilities,
+			"description":    description,
+			"screenshot_url": screenshotURL,
 		}
 		forums = append(forums, forum)
 	}

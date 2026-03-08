@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS forumline_forums (
   description TEXT,
   owner_id UUID REFERENCES forumline_profiles(id),
   approved BOOLEAN DEFAULT false NOT NULL,
+  screenshot_url TEXT,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>forum directory ~ forumline</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='12' font-family='monospace' fill='%237eb8e8'>&gt;</text></svg>">
+    <style>
+        #directory-page { max-width: 860px; margin: 0 auto; padding: 15px 10px; }
+        .back-link { font-size: 12px; margin-bottom: 10px; display: block; }
+        .directory-list { display: flex; flex-direction: column; gap: 12px; }
+        .forum-card {
+            display: flex;
+            gap: 16px;
+            background: rgba(8, 12, 24, 0.9);
+            border: 2px solid #1a2a4a;
+            padding: 12px;
+            transition: all 0.2s;
+            text-decoration: none !important;
+            color: inherit !important;
+        }
+        .forum-card:hover {
+            border-color: #3a5a8a;
+            box-shadow: 0 0 15px rgba(126, 184, 232, 0.1);
+        }
+        .forum-screenshot {
+            flex-shrink: 0;
+            width: 320px;
+            height: 180px;
+            background: #0a0e1a;
+            border: 1px solid #1a2a4a;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .forum-screenshot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .forum-screenshot .no-preview {
+            font-size: 10px;
+            color: #3a4a6a;
+            text-align: center;
+        }
+        .forum-info { flex: 1; min-width: 0; }
+        .forum-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e8c060;
+            margin-bottom: 2px;
+        }
+        .forum-domain {
+            font-size: 11px;
+            color: #5a6a7a;
+            margin-bottom: 8px;
+        }
+        .forum-desc {
+            font-size: 12px;
+            color: #8090b0;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+        .forum-caps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .forum-cap {
+            font-size: 9px;
+            font-family: 'W95FA', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 6px;
+            background: #0f1520;
+            border: 1px solid #1a2a4a;
+            color: #6a8ab0;
+        }
+        .forum-visit {
+            display: inline-block;
+            font-size: 11px;
+            color: #7eb8e8 !important;
+            border: 1px solid #2a4a6a;
+            padding: 4px 12px;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+        .forum-card:hover .forum-visit {
+            border-color: #7eb8e8;
+            box-shadow: 0 0 8px rgba(126, 184, 232, 0.2);
+        }
+        .directory-header {
+            text-align: center;
+            padding: 5px 0 15px;
+            border-bottom: 2px dashed #1a2a4a;
+            margin-bottom: 15px;
+        }
+        .directory-header h1 {
+            font-family: 'W95FA', monospace;
+            font-size: 28px;
+            color: #7eb8e8;
+            margin: 0 0 5px;
+            letter-spacing: 2px;
+        }
+        .directory-header p {
+            color: #8aa0c0;
+            font-size: 12px;
+            margin: 0;
+        }
+        .directory-count {
+            font-size: 10px;
+            color: #5a6a7a;
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px dotted #1a2a4a;
+        }
+        .loading {
+            text-align: center;
+            color: #5a6a7a;
+            font-size: 12px;
+            padding: 40px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div id="stamp-marquee">
+    <marquee behavior="scroll" direction="left" scrollamount="2">
+        <span class="blinkie">FORUMS ARE BACK</span>
+        <span class="blinkie" style="background:#1a2a1a;border-color:#4a8a4a;">OPEN SOURCE</span>
+        <span class="blinkie" style="background:#2a1a1a;border-color:#8a4a4a;">NOT A DISCORD CLONE</span>
+        <span class="blinkie" style="background:#1a1a2a;border-color:#4a4a8a;">SELF-HOSTABLE</span>
+        <span class="blinkie" style="background:#2a2a1a;border-color:#8a8a4a;">FEDERATED</span>
+    </marquee>
+</div>
+
+<div id="directory-page">
+    <a href="/" class="back-link">&lt; back to forumline.net</a>
+
+    <div class="directory-header">
+        <h1>.:* forum directory *:.</h1>
+        <p>browse forums on the forumline network — hosted and self-hosted, all federated</p>
+    </div>
+
+    <div id="directory-content">
+        <div class="loading">loading forums...</div>
+    </div>
+</div>
+
+<div id="footer" style="max-width:860px;">
+    <p>.:* forumline ~ forums for the rest of us *:.<br>
+    <span style="font-size: 9px;"><a href="/">home</a> &middot; <a href="https://app.forumline.net">forumline app</a> &middot; <a href="https://github.com/johnvondrashek/forumline">source code</a></span></p>
+</div>
+
+<script>
+var FORUMLINE_APP = 'https://app.forumline.net';
+
+fetch(FORUMLINE_APP + '/api/forums')
+.then(function(r) { return r.json(); })
+.then(function(forums) {
+    forums = forums.filter(function(f) {
+        return f.capabilities && f.capabilities.length > 0;
+    });
+
+    if (!forums.length) {
+        document.getElementById('directory-content').innerHTML =
+            '<div class="loading">no forums yet. <a href="/">create the first one</a>!</div>';
+        return;
+    }
+
+    var html = '<div class="directory-list">';
+    forums.forEach(function(f) {
+        var desc = f.description || 'a forumline community';
+        var caps = (f.capabilities || []).map(function(c) {
+            return '<span class="forum-cap">' + c + '</span>';
+        }).join('');
+
+        var screenshot = '';
+        if (f.screenshot_url) {
+            screenshot = '<img src="' + escapeAttr(f.screenshot_url) + '" alt="' + escapeAttr(f.name) + '" loading="lazy">';
+        } else {
+            screenshot = '<div class="no-preview">no preview yet</div>';
+        }
+
+        html += '<a href="' + escapeAttr(f.web_base) + '" class="forum-card" target="_blank">'
+            + '<div class="forum-screenshot">' + screenshot + '</div>'
+            + '<div class="forum-info">'
+            + '<div class="forum-name">' + escapeHTML(f.name) + '</div>'
+            + '<div class="forum-domain">' + escapeHTML(f.domain) + '</div>'
+            + '<div class="forum-desc">' + escapeHTML(desc) + '</div>'
+            + '<div class="forum-caps">' + caps + '</div>'
+            + '<span class="forum-visit">visit forum →</span>'
+            + '</div>'
+            + '</a>';
+    });
+    html += '</div>';
+    html += '<div class="directory-count">' + forums.length + ' forum' + (forums.length !== 1 ? 's' : '') + ' on the network</div>';
+    document.getElementById('directory-content').innerHTML = html;
+})
+.catch(function() {
+    document.getElementById('directory-content').innerHTML =
+        '<div class="loading">could not load forums. try again later.</div>';
+});
+
+function escapeHTML(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+function escapeAttr(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+
+</body>
+</html>
