@@ -24,6 +24,9 @@ type Tenant struct {
 	ForumlineClientID     string
 	ForumlineClientSecret string
 	Active                bool
+	HasCustomSite         bool
+	SiteStorageBytes      int64
+	SiteStorageLimit      int64
 }
 
 // TenantStore caches tenant configs in memory and refreshes from the database
@@ -73,7 +76,8 @@ func (ts *TenantStore) refresh(ctx context.Context) error {
 		SELECT id, slug, name, schema_name, domain, owner_forumline_id,
 		       COALESCE(description, ''), COALESCE(icon_url, ''),
 		       theme, COALESCE(forumline_client_id, ''),
-		       COALESCE(forumline_client_secret, ''), active
+		       COALESCE(forumline_client_secret, ''), active,
+		       has_custom_site, site_storage_bytes, site_storage_limit
 		FROM platform_tenants
 		WHERE active = true
 	`)
@@ -90,7 +94,7 @@ func (ts *TenantStore) refresh(ctx context.Context) error {
 			&t.ID, &t.Slug, &t.Name, &t.SchemaName, &t.Domain,
 			&t.OwnerForumlineID, &t.Description, &t.IconURL,
 			&t.Theme, &t.ForumlineClientID, &t.ForumlineClientSecret,
-			&t.Active,
+			&t.Active, &t.HasCustomSite, &t.SiteStorageBytes, &t.SiteStorageLimit,
 		); err != nil {
 			return fmt.Errorf("scan tenant: %w", err)
 		}
