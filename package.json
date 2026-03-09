@@ -7,7 +7,7 @@
     "tauri:dev": "TAURI_DIR=desktop-and-mobile-tauri-apps tauri dev",
     "tauri:build": "TAURI_DIR=desktop-and-mobile-tauri-apps tauri build",
     "dev:app": "pnpm --filter forumline-central-services dev",
-    "build": "turbo run build",
+    "build": "pnpm -r run build",
     "clean": "pnpm -r --if-present run clean",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -17,7 +17,6 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.0.0",
-    "turbo": "^2",
     "typescript-eslint": "^8.0.0"
   }
 }
