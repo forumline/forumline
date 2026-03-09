@@ -37,6 +37,7 @@ let forumlineStore: ForumlineStore | null = null
 let pendingCandidates: RTCIceCandidateInit[] = []
 let webrtcStarted = false
 let signalQueue: Promise<void> = Promise.resolve()
+let iceRestartAttempted = false
 
 const listeners = new Set<CallStateListener>()
 let tauriActionCleanup: (() => void) | null = null
@@ -227,6 +228,7 @@ async function handleSignal(signal: any) {
     pendingCandidates = []
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
+    console.log('[Call] Sending answer SDP (first 200 chars):', pc.localDescription!.sdp?.substring(0, 200))
     await sendSignal('answer', { sdp: pc.localDescription!.sdp, type: pc.localDescription!.type })
     return
   }
@@ -403,9 +405,17 @@ async function startWebRTC(isInitiator: boolean) {
     if (!remoteAudioEl) {
       remoteAudioEl = new Audio()
       remoteAudioEl.autoplay = true
+      // Safari: needed for audio to play even with autoplay attribute
+      remoteAudioEl.playsInline = true
       document.body.appendChild(remoteAudioEl)
     }
     remoteAudioEl.srcObject = stream
+    // Safari requires explicit play() — autoplay attribute alone is not enough
+    // when the user gesture context has been consumed by getUserMedia earlier.
+    remoteAudioEl.play().catch(err => {
+      console.warn('[Call] Audio play() failed (autoplay policy):', err)
+    })
+    console.log('[Call] Remote track received:', event.track.kind, 'readyState:', event.track.readyState)
   }
 
   pc.onicecandidate = (event) => {
@@ -423,6 +433,20 @@ async function startWebRTC(isInitiator: boolean) {
 
   pc.oniceconnectionstatechange = () => {
     console.log('[Call] ICE connection state:', pc?.iceConnectionState)
+    // ICE restart: if connection drops to "disconnected", try one restart
+    // before giving up. This handles transient network blips and Safari
+    // ICE agent quirks when it's the controlled (answerer) side.
+    if (pc?.iceConnectionState === 'disconnected' && !iceRestartAttempted) {
+      iceRestartAttempted = true
+      console.log('[Call] Attempting ICE restart...')
+      pc.createOffer({ iceRestart: true }).then(offer => {
+        return pc!.setLocalDescription(offer)
+      }).then(() => {
+        return sendSignal('offer', { sdp: pc!.localDescription!.sdp, type: pc!.localDescription!.type })
+      }).catch(err => {
+        console.error('[Call] ICE restart failed:', err)
+      })
+    }
   }
 
   pc.onsignalingstatechange = () => {
@@ -465,6 +489,7 @@ async function startWebRTC(isInitiator: boolean) {
   if (isInitiator) {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
+    console.log('[Call] Sending offer SDP (first 200 chars):', pc.localDescription!.sdp?.substring(0, 200))
     await sendSignal('offer', { sdp: pc.localDescription!.sdp, type: pc.localDescription!.type })
   }
 }
@@ -502,6 +527,7 @@ function cleanup() {
 
   muted = false
   webrtcStarted = false
+  iceRestartAttempted = false
   pendingCandidates = []
   signalQueue = Promise.resolve()
   setState('idle', null)
