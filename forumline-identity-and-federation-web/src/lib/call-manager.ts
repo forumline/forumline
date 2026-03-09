@@ -410,8 +410,23 @@ async function startWebRTC(isInitiator: boolean) {
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      console.log('[Call] ICE candidate generated:', event.candidate.type, event.candidate.protocol, event.candidate.address)
       sendSignal('ice-candidate', event.candidate.toJSON())
+    } else {
+      console.log('[Call] ICE gathering complete')
     }
+  }
+
+  pc.onicegatheringstatechange = () => {
+    console.log('[Call] ICE gathering state:', pc?.iceGatheringState)
+  }
+
+  pc.oniceconnectionstatechange = () => {
+    console.log('[Call] ICE connection state:', pc?.iceConnectionState)
+  }
+
+  pc.onsignalingstatechange = () => {
+    console.log('[Call] Signaling state:', pc?.signalingState)
   }
 
   // Timeout: if WebRTC doesn't connect within 15s, end the call.
@@ -424,9 +439,22 @@ async function startWebRTC(isInitiator: boolean) {
   }, 15000)
 
   pc.onconnectionstatechange = () => {
-    console.log('[Call] WebRTC connection state:', pc?.connectionState)
+    console.log('[Call] WebRTC connection state:', pc?.connectionState, '| ICE:', pc?.iceConnectionState, '| signaling:', pc?.signalingState)
     if (pc?.connectionState === 'connected') {
       clearTimeout(connectTimeout)
+      // Log the selected candidate pair for debugging
+      pc.getStats().then(stats => {
+        stats.forEach(report => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            console.log('[Call] Active candidate pair:', JSON.stringify({
+              local: report.localCandidateId,
+              remote: report.remoteCandidateId,
+              bytesSent: report.bytesSent,
+              bytesReceived: report.bytesReceived,
+            }))
+          }
+        })
+      }).catch(() => {})
     }
     if (pc?.connectionState === 'failed' || pc?.connectionState === 'closed') {
       clearTimeout(connectTimeout)
