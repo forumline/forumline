@@ -36,6 +36,7 @@ let sseReconnectAttempts = 0
 let forumlineStore: ForumlineStore | null = null
 let pendingCandidates: RTCIceCandidateInit[] = []
 let webrtcStarted = false
+let signalQueue: Promise<void> = Promise.resolve()
 
 const listeners = new Set<CallStateListener>()
 let tauriActionCleanup: (() => void) | null = null
@@ -154,7 +155,10 @@ function connectSignalSSE() {
     try {
       const signal = JSON.parse(event.data)
       console.log('[Call] SSE signal received:', signal.type, signal)
-      handleSignal(signal).catch(err => {
+      // Serialize signal handling — each signal must fully complete before
+      // the next starts. WebRTC operations (setRemoteDescription, createAnswer,
+      // addIceCandidate) must not run concurrently or Safari drops the connection.
+      signalQueue = signalQueue.then(() => handleSignal(signal)).catch(err => {
         console.error('[Call] handleSignal error:', err)
       })
     } catch (err) {
@@ -471,6 +475,7 @@ function cleanup() {
   muted = false
   webrtcStarted = false
   pendingCandidates = []
+  signalQueue = Promise.resolve()
   setState('idle', null)
 }
 
