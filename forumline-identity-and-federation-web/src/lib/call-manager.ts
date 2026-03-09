@@ -283,6 +283,18 @@ export async function acceptCall() {
   if (callTimer) { clearTimeout(callTimer); callTimer = null }
   dismissNativeCallNotification()
 
+  // Acquire mic NOW while we have the user gesture (Accept button click).
+  // Must happen before any await, or Safari drops the gesture context.
+  if (!localStream) {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      console.error('[Call] Microphone access denied:', err)
+      cleanup()
+      return
+    }
+  }
+
   try {
     await forumlineClient.respondToCall(callInfo.callId, 'accept')
     setState('active')
