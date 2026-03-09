@@ -44,6 +44,18 @@ struct WebViewContainer: UIViewRepresentable {
         // handles safe areas itself. Without this, insets are applied twice:
         // once by the scroll view and once by CSS.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.alwaysBounceVertical = true
+
+        webView.navigationDelegate = context.coordinator
+
+        // Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(
+            context.coordinator,
+            action: #selector(WebViewCoordinator.handleRefresh(_:)),
+            for: .valueChanged
+        )
+        webView.scrollView.refreshControl = refreshControl
 
         // Store reference for native → web messaging
         WebViewBridge.shared.webView = webView
@@ -77,7 +89,7 @@ struct WebViewContainer: UIViewRepresentable {
 
         // Also inject CSS to force 16px font on inputs (belt and suspenders)
         var style = document.createElement('style');
-        style.textContent = 'input, select, textarea { font-size: 16px !important; }';
+        style.textContent = 'input, select, textarea { font-size: 16px !important; } body { overflow: visible !important; }';
         (document.head || document.documentElement).appendChild(style);
 
         // Re-apply after page fully loads (SPA may recreate viewport meta)
@@ -110,7 +122,19 @@ struct WebViewContainer: UIViewRepresentable {
 }
 
 /// Handles messages from web → native
-class WebViewCoordinator: NSObject, WKScriptMessageHandler {
+class WebViewCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+    @objc func handleRefresh(_ sender: UIRefreshControl) {
+        guard let webView = WebViewBridge.shared.webView else {
+            sender.endRefreshing()
+            return
+        }
+        webView.reload()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        webView.scrollView.refreshControl?.endRefreshing()
+    }
+
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
