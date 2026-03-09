@@ -55,10 +55,13 @@ func (h *Handlers) HandleInitiateCall(w http.ResponseWriter, r *http.Request) {
 
 	// Check no existing ringing/active call in this conversation
 	var existingCall bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE conversation_id = $1 AND status IN ('ringing', 'active'))`,
 		body.ConversationID,
-	).Scan(&existingCall)
+	).Scan(&existingCall); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check call status"})
+		return
+	}
 	if existingCall {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "Call already in progress"})
 		return
@@ -66,10 +69,13 @@ func (h *Handlers) HandleInitiateCall(w http.ResponseWriter, r *http.Request) {
 
 	// Check caller doesn't have another active call
 	var callerBusy bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE (caller_id = $1 OR callee_id = $1) AND status IN ('ringing', 'active'))`,
 		userID,
-	).Scan(&callerBusy)
+	).Scan(&callerBusy); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check call status"})
+		return
+	}
 	if callerBusy {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "You are already in a call"})
 		return
@@ -77,10 +83,13 @@ func (h *Handlers) HandleInitiateCall(w http.ResponseWriter, r *http.Request) {
 
 	// Check callee isn't busy with another call
 	var calleeBusy bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE (caller_id = $1 OR callee_id = $1) AND status IN ('ringing', 'active'))`,
 		calleeID,
-	).Scan(&calleeBusy)
+	).Scan(&calleeBusy); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check call status"})
+		return
+	}
 	if calleeBusy {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "User is busy"})
 		return
@@ -104,9 +113,12 @@ func (h *Handlers) HandleInitiateCall(w http.ResponseWriter, r *http.Request) {
 	// Get caller info for notification
 	var callerUsername, callerDisplayName string
 	var callerAvatarURL *string
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT username, display_name, avatar_url FROM forumline_profiles WHERE id = $1`, userID,
-	).Scan(&callerUsername, &callerDisplayName, &callerAvatarURL)
+	).Scan(&callerUsername, &callerDisplayName, &callerAvatarURL); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get caller info"})
+		return
+	}
 
 	displayName := callerDisplayName
 	if displayName == "" {
@@ -124,13 +136,16 @@ func (h *Handlers) HandleInitiateCall(w http.ResponseWriter, r *http.Request) {
 		"caller_avatar_url":  callerAvatarURL,
 		"target_user_id":   calleeID,
 	})
-	h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+	shared.LogIfErr(ctx, "pg_notify call_signal", func() error {
+		_, err := h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+		return err
+	})
 
 	// Send push notification to callee (use background context since HTTP handler returns immediately)
 	go func() {
 		bgCtx := context.Background()
 		title := fmt.Sprintf("Incoming call from %s", displayName)
-		sent := sendPushNotifications(bgCtx, h.Pool, calleeID, title, "Tap to answer", "", "")
+		sent := sendPushNotifications(bgCtx, h.Pool.Pool, calleeID, title, "Tap to answer", "", "")
 		if sent > 0 {
 			log.Printf("Call push: sent %d notifications to %s", sent, calleeID)
 		}
@@ -194,7 +209,10 @@ func (h *Handlers) HandleRespondToCall(w http.ResponseWriter, r *http.Request) {
 		"call_id":        callID,
 		"target_user_id": callerID,
 	})
-	h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+	shared.LogIfErr(ctx, "pg_notify call_signal", func() error {
+		_, err := h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+		return err
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": body.Action + "ed"})
 }
@@ -255,7 +273,10 @@ func (h *Handlers) HandleEndCall(w http.ResponseWriter, r *http.Request) {
 		"ended_by":       userID,
 		"target_user_id": otherUserID,
 	})
-	h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+	shared.LogIfErr(ctx, "pg_notify call_signal", func() error {
+		_, err := h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+		return err
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": newStatus})
 }
@@ -288,12 +309,15 @@ func (h *Handlers) HandleCallSignal(w http.ResponseWriter, r *http.Request) {
 
 	// Verify sender is a participant of this call and target is the other participant
 	var exists bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_calls
 		 WHERE id = $1 AND status IN ('ringing', 'active')
 		 AND ((caller_id = $2 AND callee_id = $3) OR (caller_id = $3 AND callee_id = $2)))`,
 		body.CallID, userID, body.TargetUserID,
-	).Scan(&exists)
+	).Scan(&exists); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify call"})
+		return
+	}
 	if !exists {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Not a participant of this call"})
 		return
@@ -306,7 +330,10 @@ func (h *Handlers) HandleCallSignal(w http.ResponseWriter, r *http.Request) {
 		"target_user_id": body.TargetUserID,
 		"payload":        body.Payload,
 	})
-	h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+	shared.LogIfErr(ctx, "pg_notify call_signal", func() error {
+		_, err := h.Pool.Exec(ctx, "SELECT pg_notify('call_signal', $1)", string(signalData))
+		return err
+	})
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

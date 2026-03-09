@@ -246,10 +246,13 @@ func (h *Handlers) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Verify membership
 	var isMember bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2)`,
 		conversationID, userID,
-	).Scan(&isMember)
+	).Scan(&isMember); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify membership"})
+		return
+	}
 	if !isMember {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
@@ -333,10 +336,13 @@ func (h *Handlers) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Verify membership
 	var isMember bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2)`,
 		conversationID, userID,
-	).Scan(&isMember)
+	).Scan(&isMember); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify membership"})
+		return
+	}
 	if !isMember {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
@@ -370,7 +376,10 @@ func (h *Handlers) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update conversation updated_at
-	h.Pool.Exec(ctx, `UPDATE forumline_conversations SET updated_at = now() WHERE id = $1`, conversationID)
+	shared.LogIfErr(ctx, "update conversation timestamp", func() error {
+		_, err := h.Pool.Exec(ctx, `UPDATE forumline_conversations SET updated_at = now() WHERE id = $1`, conversationID)
+		return err
+	})
 
 	writeJSON(w, http.StatusCreated, msg)
 }
@@ -423,9 +432,12 @@ func (h *Handlers) HandleGetOrCreateDM(w http.ResponseWriter, r *http.Request) {
 
 	// Verify other user exists
 	var exists bool
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, body.UserID,
-	).Scan(&exists)
+	).Scan(&exists); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify user"})
+		return
+	}
 	if !exists {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "User not found"})
 		return
@@ -449,7 +461,7 @@ func (h *Handlers) HandleGetOrCreateDM(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create conversation"})
 			return
 		}
-		defer tx.Rollback(ctx)
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		err = tx.QueryRow(ctx,
 			`INSERT INTO forumline_conversations (is_group, created_by) VALUES (false, $1) RETURNING id`, userID,
@@ -524,9 +536,12 @@ func (h *Handlers) HandleCreateConversation(w http.ResponseWriter, r *http.Reque
 
 	// Verify all users exist
 	var existCount int
-	h.Pool.QueryRow(ctx,
+	if err := h.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM forumline_profiles WHERE id = ANY($1)`, uniqueMembers,
-	).Scan(&existCount)
+	).Scan(&existCount); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify users"})
+		return
+	}
 	if existCount != len(uniqueMembers) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "One or more users not found"})
 		return
@@ -537,7 +552,7 @@ func (h *Handlers) HandleCreateConversation(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create group"})
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var convoID string
 	err = tx.QueryRow(ctx,
@@ -573,7 +588,7 @@ func (h *Handlers) HandleCreateConversation(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Fetch full conversation to return
-	profiles := fetchProfilesByIDs(ctx, h.Pool, uniqueMembers)
+	profiles := fetchProfilesByIDs(ctx, h.Pool.Pool, uniqueMembers)
 	members := make([]ConversationMember, 0, len(uniqueMembers))
 	for _, id := range uniqueMembers {
 		p := profiles[id]
@@ -650,12 +665,15 @@ func (h *Handlers) HandleUpdateConversation(w http.ResponseWriter, r *http.Reque
 
 	// Batch add members: insert only valid profiles in a single query
 	if len(body.AddMembers) > 0 {
-		h.Pool.Exec(ctx,
-			`INSERT INTO forumline_conversation_members (conversation_id, user_id)
-			 SELECT $1, p.id FROM forumline_profiles p WHERE p.id = ANY($2)
-			 ON CONFLICT DO NOTHING`,
-			conversationID, body.AddMembers,
-		)
+		shared.LogIfErr(ctx, "batch add conversation members", func() error {
+			_, err := h.Pool.Exec(ctx,
+				`INSERT INTO forumline_conversation_members (conversation_id, user_id)
+				 SELECT $1, p.id FROM forumline_profiles p WHERE p.id = ANY($2)
+				 ON CONFLICT DO NOTHING`,
+				conversationID, body.AddMembers,
+			)
+			return err
+		})
 	}
 
 	// Batch remove members (excluding self)
@@ -667,10 +685,13 @@ func (h *Handlers) HandleUpdateConversation(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		if len(filtered) > 0 {
-			h.Pool.Exec(ctx,
-				`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = ANY($2)`,
-				conversationID, filtered,
-			)
+			shared.LogIfErr(ctx, "batch remove conversation members", func() error {
+				_, err := h.Pool.Exec(ctx,
+					`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = ANY($2)`,
+					conversationID, filtered,
+				)
+				return err
+			})
 		}
 	}
 
@@ -791,7 +812,7 @@ func (h *Handlers) resolveConversationID(w http.ResponseWriter, r *http.Request)
 		if txErr != nil {
 			return ""
 		}
-		defer tx.Rollback(ctx)
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		err = tx.QueryRow(ctx,
 			`INSERT INTO forumline_conversations (is_group, created_by) VALUES (false, $1) RETURNING id`, userID,

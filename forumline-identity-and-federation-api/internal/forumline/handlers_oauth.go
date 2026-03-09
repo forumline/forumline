@@ -57,7 +57,7 @@ func (h *Handlers) HandleOAuthAuthorize(w http.ResponseWriter, r *http.Request) 
 
 	// Fetch forum name for display
 	var forumName string
-	h.Pool.QueryRow(ctx,
+	_ = h.Pool.QueryRow(ctx,
 		`SELECT COALESCE(name, domain) FROM forumline_forums WHERE id = $1`, forumID,
 	).Scan(&forumName)
 	if forumName == "" {
@@ -83,11 +83,11 @@ func (h *Handlers) HandleOAuthAuthorize(w http.ResponseWriter, r *http.Request) 
 		}
 		if pendingToken == "" && r.Method == http.MethodPost {
 			// Try form-encoded first, then JSON
-			r.ParseForm()
+			_ = r.ParseForm()
 			pendingToken = r.FormValue("access_token")
 			if pendingToken == "" {
 				var body map[string]string
-				json.NewDecoder(r.Body).Decode(&body)
+				_ = json.NewDecoder(r.Body).Decode(&body)
 				pendingToken = body["access_token"]
 			}
 		}
@@ -103,7 +103,7 @@ func (h *Handlers) HandleOAuthAuthorize(w http.ResponseWriter, r *http.Request) 
 	if userID == "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(renderLoginPage(clientID, redirectURI, state, forumName)))
+		_, _ = w.Write([]byte(renderLoginPage(clientID, redirectURI, state, forumName)))
 		return
 	}
 
@@ -127,12 +127,15 @@ func (h *Handlers) HandleOAuthAuthorize(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Upsert membership
-	h.Pool.Exec(ctx,
-		`INSERT INTO forumline_memberships (user_id, forum_id)
-		 VALUES ($1, $2)
-		 ON CONFLICT (user_id, forum_id) DO NOTHING`,
-		userID, forumID,
-	)
+	shared.LogIfErr(ctx, "upsert membership on OAuth authorize", func() error {
+		_, err := h.Pool.Exec(ctx,
+			`INSERT INTO forumline_memberships (user_id, forum_id)
+			 VALUES ($1, $2)
+			 ON CONFLICT (user_id, forum_id) DO NOTHING`,
+			userID, forumID,
+		)
+		return err
+	})
 
 	// Clear pending auth cookie
 	http.SetCookie(w, &http.Cookie{
@@ -230,7 +233,10 @@ func (h *Handlers) HandleOAuthToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark code as used
-	h.Pool.Exec(ctx, `UPDATE forumline_auth_codes SET used = true WHERE id = $1`, authCodeID)
+	shared.LogIfErr(ctx, "mark auth code as used", func() error {
+		_, err := h.Pool.Exec(ctx, `UPDATE forumline_auth_codes SET used = true WHERE id = $1`, authCodeID)
+		return err
+	})
 
 	// Fetch user profile
 	var profile struct {

@@ -166,7 +166,7 @@ export function createForumStore(): ForumStore {
       store.set({ ...state, forums: updated })
 
       // Sync to server (fire-and-forget)
-      serverJoinForum(manifest.domain)
+      void serverJoinForum(manifest.domain)
     },
 
     removeForum(domain: string) {
@@ -177,7 +177,7 @@ export function createForumStore(): ForumStore {
       })
 
       // Sync to server (fire-and-forget)
-      serverLeaveForum(domain)
+      void serverLeaveForum(domain)
     },
 
     setUnreadCounts(domain: string, counts: UnreadCounts) {

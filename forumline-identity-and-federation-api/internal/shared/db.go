@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -50,4 +51,12 @@ func NewDBPool(ctx context.Context) (*pgxpool.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+// LogIfErr executes fn and logs any error. Use for non-blocking side effects
+// that shouldn't fail the HTTP response but must be observable.
+func LogIfErr(ctx context.Context, label string, fn func() error) {
+	if err := fn(); err != nil {
+		slog.ErrorContext(ctx, label, "err", err)
+	}
 }

@@ -28,7 +28,7 @@ export function warmAudioContext() {
   warmed = true
   const handler = () => {
     const ctx = getAudioCtx()
-    if (ctx.state === 'suspended') ctx.resume()
+    if (ctx.state === 'suspended') void ctx.resume()
     document.removeEventListener('click', handler)
     document.removeEventListener('keydown', handler)
     document.removeEventListener('touchstart', handler)
@@ -103,7 +103,7 @@ export function playRingtone(type: 'incoming' | 'outgoing'): () => void {
   }
 
   // Resume audio context if suspended (browser autoplay policy)
-  ctx.resume().then(loop)
+  void ctx.resume().then(loop)
 
   return () => {
     stopped = true

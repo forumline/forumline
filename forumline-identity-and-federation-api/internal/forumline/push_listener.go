@@ -79,7 +79,7 @@ func (pl *PushListener) listenOnce(ctx context.Context) {
 
 		// Fetch sender username for notification title
 		var senderUsername string
-		pl.Pool.QueryRow(ctx,
+		_ = pl.Pool.QueryRow(ctx,
 			`SELECT username FROM forumline_profiles WHERE id = $1`, payload.SenderID,
 		).Scan(&senderUsername)
 		if senderUsername == "" {

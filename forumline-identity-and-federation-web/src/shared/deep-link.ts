@@ -58,6 +58,6 @@ export function setupDeepLinkListener(onDeepLink: (target: DeepLinkTarget) => vo
     }
   }
 
-  setup()
+  void setup()
   return () => unlisten?.()
 }

@@ -104,7 +104,7 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
         p({ class: 'text-sm text-muted' }, forumlineSession.user.email || '') as HTMLElement,
       )
       profileRow.appendChild(info)
-      profileRow.appendChild(createButton({ text: 'Sign Out', variant: 'secondary', onClick: () => auth.signOut() }))
+      profileRow.appendChild(createButton({ text: 'Sign Out', variant: 'secondary', onClick: () => void auth.signOut() }))
       accountContentArea.appendChild(profileRow)
     } else {
       const { el: authEl } = createForumlineAuth({ auth })
@@ -126,7 +126,7 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
     const muteBtn = tags.button({
       class: 'btn--icon',
       title: muted ? 'Unmute notifications' : 'Mute notifications',
-      onclick: () => toggleMute(domain, !isMuted(domain)),
+      onclick: () => void toggleMute(domain, !isMuted(domain)),
     }) as HTMLButtonElement
     muteBtn.innerHTML = muted
       ? `<svg class="icon-sm" style="color:var(--color-text-faint)" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>`
@@ -259,9 +259,9 @@ export function createSettingsPage({ forumlineSession, forumStore, forumlineStor
   }
 
   renderHubContent()
-  fetchMemberships()
-  fetchAvatar()
-  fetchOwnedSites()
+  void fetchMemberships()
+  void fetchAvatar()
+  void fetchOwnedSites()
 
   return {
     el,

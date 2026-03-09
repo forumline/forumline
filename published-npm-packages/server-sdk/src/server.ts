@@ -20,7 +20,7 @@ import type {
   NotificationInput,
 } from '@johnvondrashek/forumline-protocol'
 
-import { parseCookies, decodeJwtPayload, verifyJwt } from './utils/cookies.js'
+import { decodeJwtPayload, verifyJwt } from './utils/cookies.js'
 
 export interface ForumlineServerConfig {
   /** Forum name */

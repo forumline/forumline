@@ -59,7 +59,7 @@ function startUpdates(forumlineStore: ForumlineStore): () => void {
 
   if (refCount === 1) {
     // First subscriber -- kick off fetching
-    fetchConversations()
+    void fetchConversations()
 
     sseUnsub = subscribeDmEvents(() => {
       if (sseDebounce) clearTimeout(sseDebounce)

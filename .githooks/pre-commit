@@ -84,3 +84,22 @@ done
 if [ "$sops_errors" -ne 0 ]; then
   exit 1
 fi
+
+# --- Lint checks ---
+# Run Go linter if any Go files are staged in the API
+if git diff --cached --name-only | grep -q '^forumline-identity-and-federation-api/.*\.go$'; then
+  echo "Running golangci-lint..."
+  if ! (cd forumline-identity-and-federation-api && golangci-lint run ./...); then
+    echo "ERROR: golangci-lint failed. Fix errors before committing."
+    exit 1
+  fi
+fi
+
+# Run TypeScript linter if any TS/JS files are staged in workspace packages
+if git diff --cached --name-only | grep -qE '^(forumline-identity-and-federation-web|published-npm-packages)/.*\.(ts|tsx|js|mjs)$'; then
+  echo "Running eslint..."
+  if ! pnpm lint --max-warnings 0; then
+    echo "ERROR: eslint found errors or warnings. Fix them before committing."
+    exit 1
+  fi
+fi

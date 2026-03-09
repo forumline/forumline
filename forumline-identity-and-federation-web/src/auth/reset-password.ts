@@ -76,7 +76,7 @@ export function createResetPassword({ auth, onComplete }: ResetPasswordOptions) 
         p({ class: 'auth-form__subtitle' }, 'Enter your new password below.'),
       )
 
-      const form = formTag({ class: 'auth-form__fields', onsubmit: handleSubmit }) as HTMLFormElement
+      const form = formTag({ class: 'auth-form__fields', onsubmit: (e: Event) => void handleSubmit(e) }) as HTMLFormElement
 
       const pwInput = createInput({ type: 'password', placeholder: 'New password', required: true, minLength: 6, value: password.val })
       pwInput.addEventListener('input', () => { password.val = pwInput.value })

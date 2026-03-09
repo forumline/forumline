@@ -67,7 +67,7 @@ export function createApp(root: HTMLElement) {
     cleanup()
     root.innerHTML = ''
 
-    forumlineStore.init({
+    void forumlineStore.init({
       access_token: session.access_token,
       user_id: session.user.id,
     })
@@ -98,7 +98,7 @@ export function createApp(root: HTMLElement) {
 
   renderLoading()
 
-  forumlineAuth.restoreSessionFromUrl()
+  void forumlineAuth.restoreSessionFromUrl()
 
   const unsubscribe = forumlineAuth.onAuthStateChange((event, session) => {
     currentSession = session

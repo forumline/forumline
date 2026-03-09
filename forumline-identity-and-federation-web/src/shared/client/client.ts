@@ -14,26 +14,41 @@
  * - Throw descriptive errors when API calls fail
  */
 import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile } from '@johnvondrashek/forumline-protocol'
+import { showToast } from '../ui.js'
+
+interface FetchOptions extends RequestInit {
+  silent?: boolean
+}
+
 export class CentralServicesClient {
   constructor(
     private forumlineUrl: string,
     private accessToken: string,
   ) {}
 
-  private async fetch<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.forumlineUrl}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.accessToken}`,
-        ...options?.headers,
-      },
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || `Central Services API error: ${res.status}`)
+  private async fetch<T>(path: string, options?: FetchOptions): Promise<T> {
+    // Strip custom options before passing to native fetch
+    const { silent, ...fetchOptions } = options ?? {}
+    try {
+      const res = await fetch(`${this.forumlineUrl}${path}`, {
+        ...fetchOptions,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.accessToken}`,
+          ...fetchOptions.headers,
+        },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Central Services API error: ${res.status}`)
+      }
+      return res.json() as Promise<T>
+    } catch (err) {
+      if (!silent) {
+        showToast(err instanceof Error ? err.message : 'Something went wrong', 'error')
+      }
+      throw err
     }
-    return res.json()
   }
 
   /** List all conversations (1:1 and group) */
@@ -61,7 +76,7 @@ export class CentralServicesClient {
 
   /** Mark a conversation as read */
   async markRead(conversationId: string): Promise<void> {
-    await this.fetch(`/api/conversations/${conversationId}/read`, { method: 'POST' })
+    await this.fetch(`/api/conversations/${conversationId}/read`, { method: 'POST', silent: true })
   }
 
   /** Get or create a 1:1 conversation with a user */
@@ -110,6 +125,7 @@ export class CentralServicesClient {
   async sendCallSignal(callId: string, targetUserId: string, type: string, payload: unknown): Promise<void> {
     await this.fetch('/api/calls/signal', {
       method: 'POST',
+      silent: true,
       body: JSON.stringify({
         call_id: callId,
         target_user_id: targetUserId,

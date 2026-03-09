@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
 )
 
-func NewRouter(pool *pgxpool.Pool, sseHub *shared.SSEHub) *chi.Mux {
+func NewRouter(pool *shared.ObservablePool, sseHub *shared.SSEHub) *chi.Mux {
 	r := chi.NewRouter()
 
 	h := &Handlers{

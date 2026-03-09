@@ -10,6 +10,7 @@
     "build": "pnpm -r run build",
     "clean": "pnpm -r --if-present run clean",
     "lint": "eslint .",
+    "lint:go": "cd forumline-identity-and-federation-api && golangci-lint run ./...",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

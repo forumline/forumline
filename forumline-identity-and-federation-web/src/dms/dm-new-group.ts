@@ -140,7 +140,7 @@ export function createDmNewGroup({ forumlineStore, onCreated }: DmNewGroupOption
     text: 'Create Group',
     variant: 'primary',
     className: 'w-full',
-    onClick: handleCreate,
+    onClick: () => void handleCreate(),
   })
   const bottomBar = div({ class: 'p-lg', style: 'border-top:1px solid var(--color-border)' }, createBtn) as HTMLElement
   el.appendChild(bottomBar)

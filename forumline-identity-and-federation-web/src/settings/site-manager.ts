@@ -18,7 +18,7 @@
  */
 import type { GoTrueAuthClient } from '../auth/gotrue-auth.js'
 import { tags, html, vanX } from '../shared/dom.js'
-import { createButton, createInput, createCard, createSpinner, showToast } from '../shared/ui.js'
+import { createButton, createCard, createSpinner, showToast } from '../shared/ui.js'
 
 const { div, h1, h2, p } = tags
 
@@ -60,7 +60,7 @@ function formatBytes(bytes: number): string {
   return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-function fileIcon(name: string): string {
+function fileIcon(_name: string): string {
   return `<svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`
 }
 
@@ -201,7 +201,7 @@ export function createSiteManager({ slug, forumName, domain, auth, onClose }: Si
 
     const btnRow = div({ style: 'display:flex;gap:0.5rem' }) as HTMLElement
     btnRow.append(
-      createButton({ text: 'Save', variant: 'primary', onClick: () => { if (ui.editingFile) saveFile(ui.editingFile, textarea.value) } }),
+      createButton({ text: 'Save', variant: 'primary', onClick: () => { if (ui.editingFile) void saveFile(ui.editingFile, textarea.value) } }),
       createButton({ text: 'Cancel', variant: 'secondary', onClick: () => { ui.editingFile = null; ui.editingContent = null } }),
     )
     editorCard.appendChild(btnRow)
@@ -230,16 +230,16 @@ export function createSiteManager({ slug, forumName, domain, auth, onClose }: Si
     actionsCard.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.5rem'
     const uploadInput = tags.input({
       type: 'file', multiple: true, style: 'display:none',
-      onchange: () => { if ((uploadInput as HTMLInputElement).files?.length) uploadFiles((uploadInput as HTMLInputElement).files!) },
+      onchange: () => { if ((uploadInput as HTMLInputElement).files?.length) void uploadFiles((uploadInput as HTMLInputElement).files!) },
     }) as HTMLInputElement
     actionsCard.appendChild(uploadInput)
     actionsCard.append(
       createButton({ text: ui.uploading ? 'Uploading...' : 'Upload Files', variant: 'primary', disabled: ui.uploading, onClick: () => uploadInput.click() }),
-      createButton({ text: 'New File', variant: 'secondary', onClick: createNewFile }),
+      createButton({ text: 'New File', variant: 'secondary', onClick: () => void createNewFile() }),
       createButton({ html: `<svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="vertical-align:middle"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg> Preview`, variant: 'ghost', onClick: () => window.open(`https://${domain}`, '_blank') }),
     )
     const fileKeys = Object.keys(m.files)
-    if (fileKeys.length > 0) actionsCard.appendChild(createButton({ text: 'Reset to Default', variant: 'danger', onClick: resetSite }))
+    if (fileKeys.length > 0) actionsCard.appendChild(createButton({ text: 'Reset to Default', variant: 'danger', onClick: () => void resetSite() }))
     wrapper.appendChild(actionsCard)
 
     // Drop zone
@@ -249,7 +249,7 @@ export function createSiteManager({ slug, forumName, domain, auth, onClose }: Si
       ondragleave: () => dropZone.classList.remove('site-drop-zone--active'),
       ondrop: (e: DragEvent) => {
         e.preventDefault(); dropZone.classList.remove('site-drop-zone--active')
-        if (e.dataTransfer?.files.length) uploadFiles(e.dataTransfer.files)
+        if (e.dataTransfer?.files.length) void uploadFiles(e.dataTransfer.files)
       },
     }, 'Drag and drop files here') as HTMLElement
     wrapper.appendChild(dropZone)
@@ -277,11 +277,11 @@ export function createSiteManager({ slug, forumName, domain, auth, onClose }: Si
 
       const btnGroup = div({ style: 'display:flex;gap:0.25rem' }) as HTMLElement
       if (isTextFile(path)) {
-        btnGroup.appendChild(createButton({ text: 'Edit', variant: 'ghost', className: 'text-xs', onClick: () => openEditor(path) }))
+        btnGroup.appendChild(createButton({ text: 'Edit', variant: 'ghost', className: 'text-xs', onClick: () => void openEditor(path) }))
       }
       btnGroup.appendChild(createButton({
         text: 'Delete', variant: 'link-muted', className: 'text-xs',
-        onClick: () => { if (confirm(`Delete ${path}?`)) deleteFile(path) },
+        onClick: () => { if (confirm(`Delete ${path}?`)) void deleteFile(path) },
       }))
       row.appendChild(btnGroup)
       fileList.appendChild(row)
@@ -316,7 +316,7 @@ export function createSiteManager({ slug, forumName, domain, auth, onClose }: Si
     ),
   ) as HTMLElement
 
-  fetchManifest()
+  void fetchManifest()
 
   return { el, destroy() {} }
 }

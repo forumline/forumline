@@ -122,10 +122,22 @@ export function showToast(message: string, variant: 'error' | 'success' | 'info'
   }
 
   const toast = div({ class: `toast toast--${variant}` }) as HTMLElement
-  toast.innerHTML = `
-    <svg class="toast__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[variant]}</svg>
-    <span class="toast__text">${message}</span>
-  `
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('class', 'toast__icon')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '2')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.innerHTML = icons[variant]  // safe: hardcoded icons
+
+  const text = span({ class: 'toast__text' }) as HTMLElement
+  text.textContent = message  // safe: textContent escapes HTML
+
+  toast.appendChild(svg)
+  toast.appendChild(text)
   toastContainer.appendChild(toast)
 
   setTimeout(() => {

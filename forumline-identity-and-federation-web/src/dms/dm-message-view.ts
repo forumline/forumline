@@ -31,7 +31,7 @@ import { subscribeDmEvents } from './dm-sse.js'
 import { fetchConversations as refreshDmConversations } from './dm-store.js'
 import { initiateCall, callState } from '../calls/call-manager.js'
 
-const { div, h3, p, span, button } = tags
+const { div, h3, span, button } = tags
 
 interface DmMessageViewOptions {
   forumlineStore: ForumlineStore
@@ -96,7 +96,7 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
       const { forumlineUserId } = forumlineStore.get()
       const other = convo.members.find((m: ForumlineConversationMember) => m.id !== forumlineUserId)
       if (!other) return
-      initiateCall(conversationId, other.id, other.displayName || other.username, (other as any).avatarUrl ?? null)
+      void initiateCall(conversationId, other.id, other.displayName || other.username, other.avatarUrl ?? null)
     },
   }, html(`<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>`)) as HTMLButtonElement
 
@@ -121,7 +121,7 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
     memberPanel.appendChild(label)
     for (const m of conversation.members) {
       const row = div({ style: 'display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0' }) as HTMLElement
-      row.appendChild(createAvatar({ avatarUrl: (m as any).avatarUrl ?? null, seed: m.username, size: 24 }))
+      row.appendChild(createAvatar({ avatarUrl: m.avatarUrl ?? null, seed: m.username, size: 24 }))
       row.appendChild(span({ class: 'text-sm text-secondary' },
         m.id === forumlineUserId ? `${m.displayName || m.username} (you)` : (m.displayName || m.username),
       ) as HTMLElement)
@@ -207,13 +207,13 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
   let newMessage = ''
   messageInput.addEventListener('input', () => { newMessage = messageInput.value })
   messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() }
   })
 
   const sendBtn = createButton({
     html: `<svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>`,
     variant: 'primary',
-    onClick: handleSend,
+    onClick: () => void handleSend(),
   })
 
   el.appendChild(div({ class: 'compose-bar' }, messageInput, sendBtn) as HTMLElement)
@@ -284,8 +284,8 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
       if (spinnerWrap.parentNode) spinnerWrap.remove()
       onMessagesUpdated()
       if (data.length > 0) {
-        forumlineClient.markRead(conversationId).then(() => {
-          refreshDmConversations()
+        void forumlineClient.markRead(conversationId).then(() => {
+          void refreshDmConversations()
         }).catch(console.error)
       }
     } catch (err) {
@@ -334,8 +334,8 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
   messagesContainer.appendChild(listEl)
   messagesContainer.appendChild(emptyState)
 
-  fetchConversationInfo()
-  fetchMessages()
+  void fetchConversationInfo()
+  void fetchMessages()
 
   // SSE
   let sseDebounce: ReturnType<typeof setTimeout> | null = null

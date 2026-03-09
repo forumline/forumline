@@ -33,7 +33,7 @@ interface DmPanelOptions {
   onGoToSettings: () => void
 }
 
-export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPanelOptions) {
+export function createDmPanel({ forumlineStore, onClose: _onClose, onGoToSettings }: DmPanelOptions) {
   let dmView: DmView = 'list'
   let selectedConversationId: string | null = null
   let ephemeralChild: { el: HTMLElement; destroy: () => void } | null = null
@@ -129,17 +129,16 @@ export function createDmPanel({ forumlineStore, onClose, onGoToSettings }: DmPan
       if (listChild) listChild.el.style.display = 'none'
       const newMsg = createDmNewMessage({
         forumlineStore,
-        onSelectUser: async (userId) => {
+        onSelectUser: (userId) => {
           const { forumlineClient } = forumlineStore.get()
           if (!forumlineClient) return
-          try {
-            const { id } = await forumlineClient.getOrCreateDM(userId)
+          void forumlineClient.getOrCreateDM(userId).then(({ id }) => {
             selectedConversationId = id
             dmView = 'conversation'
             render()
-          } catch (err) {
+          }).catch((err) => {
             console.error('[Forumline:DM] Failed to get/create DM:', err)
-          }
+          })
         },
       })
       ephemeralChild = newMsg

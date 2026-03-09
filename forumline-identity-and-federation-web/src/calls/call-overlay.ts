@@ -84,7 +84,7 @@ export function createCallOverlay() {
             'background:#ef4444;border:none;color:white;cursor:pointer;padding:0.25rem 0.5rem;border-radius:1rem;font-size:0.75rem;font-weight:600',
           onclick: (e: MouseEvent) => {
             e.stopPropagation()
-            endCall()
+            void endCall()
           },
         },
         'End',
@@ -100,11 +100,11 @@ export function createCallOverlay() {
 
     const btnRow =
       ringState === 'ringing-outgoing'
-        ? div({ style: 'display:flex;gap:1.5rem;margin-top:1rem' }, makeCircleBtn('red', hangUpIcon, () => endCall()))
+        ? div({ style: 'display:flex;gap:1.5rem;margin-top:1rem' }, makeCircleBtn('red', hangUpIcon, () => void endCall()))
         : div(
             { style: 'display:flex;gap:2rem;margin-top:1rem' },
-            makeCircleBtn('red', hangUpIcon, () => declineCall()),
-            makeCircleBtn('green', phoneIcon, () => acceptCall()),
+            makeCircleBtn('red', hangUpIcon, () => void declineCall()),
+            makeCircleBtn('green', phoneIcon, () => void acceptCall()),
           )
 
     return div(

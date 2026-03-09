@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -45,7 +46,11 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read auth response"})
+		return
+	}
 
 	if resp.StatusCode != 200 {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid email or password"})
@@ -162,7 +167,11 @@ func (h *Handlers) HandleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read auth response"})
+		return
+	}
 
 	if resp.StatusCode != 200 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Signup failed"})
@@ -286,10 +295,19 @@ func deleteGoTrueUser(userID string) {
 		return
 	}
 
-	req, _ := http.NewRequest(http.MethodDelete, gotrueURL+"/admin/users/"+userID, nil)
+	req, err := http.NewRequest(http.MethodDelete, gotrueURL+"/admin/users/"+userID, nil)
+	if err != nil {
+		slog.Error("deleteGoTrueUser: failed to create request", "err", err)
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+serviceKey)
 	req.Header.Set("Content-Type", "application/json")
-	http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error("deleteGoTrueUser: request failed", "err", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 func extractTokenFromRequest(r *http.Request) string {

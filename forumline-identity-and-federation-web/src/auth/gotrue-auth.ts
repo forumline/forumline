@@ -224,7 +224,7 @@ export class GoTrueAuthClient {
     if (!this.currentSession) return null
     if (this.currentSession.expires_at * 1000 < Date.now()) {
       // Token expired — refresh will happen via timer, return null for now
-      this.refreshSession()
+      void this.refreshSession()
       return null
     }
     return this.currentSession

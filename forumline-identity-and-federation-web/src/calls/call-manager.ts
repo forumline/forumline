@@ -93,7 +93,7 @@ const CALL_CHANNEL_ID = 'calls'
 export function initCallManager(store: ForumlineStore) {
   forumlineStore = store
   connectSignalSSE()
-  setupTauriCallActions()
+  void setupTauriCallActions()
 }
 
 /** Register Tauri notification action types and channel for incoming calls. */
@@ -120,15 +120,15 @@ async function setupTauriCallActions() {
       ],
     }])
 
-    const listener = await onAction((event: any) => {
+    const listener = await onAction((event: { notification?: { id?: string }; actionId?: string }) => {
       // Only handle actions from our call notification
       if (event.notification?.id !== CALL_NOTIFICATION_ID) return
       const actionId = event.actionId ?? ''
-      if (actionId === 'accept') acceptCall()
-      else if (actionId === 'decline') declineCall()
+      if (actionId === 'accept') void acceptCall()
+      else if (actionId === 'decline') void declineCall()
     })
 
-    tauriActionCleanup = () => listener.unregister()
+    tauriActionCleanup = () => void listener.unregister()
   } catch (err) {
     console.error('[Call] Failed to setup Tauri call actions:', err)
   }
@@ -210,7 +210,7 @@ function connectSignalSSE() {
   }
 }
 
-async function handleSignal(signal: any) {
+async function handleSignal(signal: Record<string, unknown>) {
   const { type } = signal
 
   if (type === 'incoming_call') {
@@ -223,7 +223,7 @@ async function handleSignal(signal: any) {
       remoteAvatarUrl: signal.caller_avatar_url || null,
     })
     // Show native notification (Tauri) for incoming call
-    showNativeCallNotification(signal.caller_display_name || signal.caller_username || 'Unknown')
+    void showNativeCallNotification(signal.caller_display_name || signal.caller_username || 'Unknown')
 
     // Auto-dismiss after 30s
     callTimer = setTimeout(() => {
@@ -309,9 +309,9 @@ export async function initiateCall(conversationId: string, remoteUserId: string,
 
     // Auto-cancel after 30s if not answered
     callTimer = setTimeout(() => {
-      if (callState.state === 'ringing-outgoing') endCall()
+      if (callState.state === 'ringing-outgoing') void endCall()
     }, 30000)
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Call] Failed to initiate call:', err)
     // Release mic if call initiation failed
     if (localStream) {
@@ -329,7 +329,7 @@ export async function acceptCall() {
   if (!forumlineClient) return
 
   if (callTimer) { clearTimeout(callTimer); callTimer = null }
-  dismissNativeCallNotification()
+  void dismissNativeCallNotification()
 
   // Acquire mic NOW while we have the user gesture (Accept button click).
   // Must happen before any await, or Safari drops the gesture context.
@@ -404,7 +404,7 @@ async function startWebRTC(isInitiator: boolean) {
       localStream = await acquireMic()
     } catch (err) {
       console.error('[Call] Failed to get microphone:', err)
-      endCall()
+      void endCall()
       return
     }
   }
@@ -433,7 +433,7 @@ async function startWebRTC(isInitiator: boolean) {
   }
 
   pc.onicecandidate = (event) => {
-    if (event.candidate) sendSignal('ice-candidate', event.candidate.toJSON())
+    if (event.candidate) void sendSignal('ice-candidate', event.candidate.toJSON())
   }
 
   pc.oniceconnectionstatechange = () => {
@@ -456,7 +456,7 @@ async function startWebRTC(isInitiator: boolean) {
   const connectTimeout = setTimeout(() => {
     if (pc && pc.connectionState !== 'connected') {
       console.error('[Call] WebRTC connection timed out')
-      endCall()
+      void endCall()
     }
   }, 15000)
 
@@ -466,7 +466,7 @@ async function startWebRTC(isInitiator: boolean) {
     }
     if (pc?.connectionState === 'failed' || pc?.connectionState === 'closed') {
       clearTimeout(connectTimeout)
-      endCall()
+      void endCall()
     }
   }
 
@@ -477,7 +477,7 @@ async function startWebRTC(isInitiator: boolean) {
   }
 }
 
-async function sendSignal(type: string, payload: any) {
+async function sendSignal(type: string, payload: unknown) {
   if (!callState.callInfo) return
   const { forumlineClient } = forumlineStore!.get()
   if (!forumlineClient) return
@@ -491,7 +491,7 @@ async function sendSignal(type: string, payload: any) {
 
 function cleanup() {
   if (callTimer) { clearTimeout(callTimer); callTimer = null }
-  dismissNativeCallNotification()
+  void dismissNativeCallNotification()
 
   if (pc) {
     pc.close()

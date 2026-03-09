@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -99,15 +100,13 @@ func (h *Handlers) HandleUpdateMembershipAuth(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	forumID := getForumIDByDomain(ctx, h.Pool, body.ForumDomain)
+	forumID := getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
 	if forumID == "" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
 		return
 	}
 
-	var authedAt interface{}
 	if *body.Authed {
-		authedAt = "now()"
 		_, err := h.Pool.Exec(ctx,
 			`UPDATE forumline_memberships SET forum_authed_at = now()
 			 WHERE user_id = $1 AND forum_id = $2`, userID, forumID)
@@ -123,7 +122,6 @@ func (h *Handlers) HandleUpdateMembershipAuth(w http.ResponseWriter, r *http.Req
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update auth state"})
 			return
 		}
-		_ = authedAt
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -146,7 +144,7 @@ func (h *Handlers) HandleToggleMembershipMute(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	forumID := getForumIDByDomain(ctx, h.Pool, body.ForumDomain)
+	forumID := getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
 	if forumID == "" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
 		return
@@ -180,7 +178,7 @@ func (h *Handlers) HandleJoinForum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Look up forum by domain
-	forumID := getForumIDByDomain(ctx, h.Pool, body.ForumDomain)
+	forumID := getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
 
 	// If not found, fetch manifest and auto-register
 	if forumID == "" {
@@ -258,7 +256,7 @@ func (h *Handlers) HandleLeaveForum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forumID := getForumIDByDomain(ctx, h.Pool, body.ForumDomain)
+	forumID := getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
 	if forumID == "" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
 		return
@@ -353,7 +351,10 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 
 	// Check quota (max 5)
 	var count int
-	h.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM forumline_forums WHERE owner_id = $1`, userID).Scan(&count)
+	if err := h.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM forumline_forums WHERE owner_id = $1`, userID).Scan(&count); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check forum quota"})
+		return
+	}
 	if count >= 5 {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Maximum of 5 forums per user"})
 		return
@@ -361,7 +362,10 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 
 	// Check domain uniqueness
 	var domainExists bool
-	h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM forumline_forums WHERE domain = $1)`, body.Domain).Scan(&domainExists)
+	if err := h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM forumline_forums WHERE domain = $1)`, body.Domain).Scan(&domainExists); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check domain"})
+		return
+	}
 	if domainExists {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "Forum with this domain is already registered"})
 		return
@@ -413,7 +417,10 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 		forumID, clientID, clientSecretHash, redirectURIs,
 	)
 	if err != nil {
-		h.Pool.Exec(ctx, `DELETE FROM forumline_forums WHERE id = $1`, forumID)
+		shared.LogIfErr(ctx, "rollback forum after OAuth client creation failure", func() error {
+			_, err := h.Pool.Exec(ctx, `DELETE FROM forumline_forums WHERE id = $1`, forumID)
+			return err
+		})
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create OAuth credentials"})
 		return
 	}
@@ -624,10 +631,13 @@ func (h *Handlers) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Missing endpoint"})
 			return
 		}
-		h.Pool.Exec(ctx,
-			`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`,
-			userID, body.Endpoint,
-		)
+		shared.LogIfErr(ctx, "delete push subscription", func() error {
+			_, err := h.Pool.Exec(ctx,
+				`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`,
+				userID, body.Endpoint,
+			)
+			return err
+		})
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
@@ -650,10 +660,13 @@ func (h *Handlers) handlePushNotify(w http.ResponseWriter, r *http.Request) {
 		// Check if it's an OAuth client secret hash
 		ctx := r.Context()
 		var clientExists bool
-		h.Pool.QueryRow(ctx,
+		if err := h.Pool.QueryRow(ctx,
 			`SELECT EXISTS(SELECT 1 FROM forumline_oauth_clients WHERE client_secret_hash = $1)`,
 			token,
-		).Scan(&clientExists)
+		).Scan(&clientExists); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify authorization"})
+			return
+		}
 
 		if !clientExists {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid authorization"})
@@ -700,13 +713,16 @@ func (h *Handlers) handlePushNotify(w http.ResponseWriter, r *http.Request) {
 
 	// Check if forum is muted
 	if body.ForumDomain != "" {
-		forumID := getForumIDByDomain(ctx, h.Pool, body.ForumDomain)
+		forumID := getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
 		if forumID != "" {
 			var muted *bool
-			h.Pool.QueryRow(ctx,
+			if err := h.Pool.QueryRow(ctx,
 				`SELECT notifications_muted FROM forumline_memberships
 				 WHERE user_id = $1 AND forum_id = $2`, targetUserID, forumID,
-			).Scan(&muted)
+			).Scan(&muted); err != nil && err != pgx.ErrNoRows {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check mute status"})
+				return
+			}
 			if muted != nil && *muted {
 				writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "skipped": "forum_muted"})
 				return
@@ -715,7 +731,7 @@ func (h *Handlers) handlePushNotify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send push notifications
-	sent := sendPushNotifications(ctx, h.Pool, targetUserID, body.Title, body.Body, body.Link, body.ForumDomain)
+	sent := sendPushNotifications(ctx, h.Pool.Pool, targetUserID, body.Title, body.Body, body.Link, body.ForumDomain)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "sent": sent})
 }
@@ -811,7 +827,10 @@ func sendPushNotifications(ctx context.Context, pool *pgxpool.Pool, userID, titl
 
 	// Batch cleanup stale endpoints
 	if len(staleEndpoints) > 0 {
-		pool.Exec(ctx, `DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = ANY($2)`, userID, staleEndpoints)
+		shared.LogIfErr(ctx, "cleanup stale push endpoints", func() error {
+			_, err := pool.Exec(ctx, `DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = ANY($2)`, userID, staleEndpoints)
+			return err
+		})
 	}
 
 	return int(sent)
@@ -860,7 +879,7 @@ func fetchForumManifest(domain string) (*forumManifest, error) {
 
 func getForumIDByDomain(ctx context.Context, pool *pgxpool.Pool, domain string) string {
 	var id string
-	pool.QueryRow(ctx, `SELECT id FROM forumline_forums WHERE domain = $1`, domain).Scan(&id)
+	_ = pool.QueryRow(ctx, `SELECT id FROM forumline_forums WHERE domain = $1`, domain).Scan(&id)
 	return id
 }
 

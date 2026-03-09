@@ -22,7 +22,6 @@ export interface ForumlineState {
 export interface ForumlineStoreOptions {
   forumlineUrl: string
   forumlineTokenEndpoint?: string
-  heartbeatInterval?: number
 }
 
 export interface ForumlineStore extends Store<ForumlineState> {
@@ -34,7 +33,6 @@ export interface ForumlineStore extends Store<ForumlineState> {
 export function createForumlineStore(options: ForumlineStoreOptions): ForumlineStore {
   const {
     forumlineUrl,
-    heartbeatInterval = 30000,
   } = options
 
   const store = createStore<ForumlineState>({

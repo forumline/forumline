@@ -101,7 +101,7 @@ export function createForumlineAuth({ auth }: ForumlineAuthOptions) {
         : mode.val === 'signup' ? 'Create an account to start messaging across forums'
         : "Enter your email and we'll send you a reset link"
 
-      const form = formTag({ class: 'auth-form__fields', onsubmit: handleSubmit }) as HTMLFormElement
+      const form = formTag({ class: 'auth-form__fields', onsubmit: (e: Event) => void handleSubmit(e) }) as HTMLFormElement
 
       if (mode.val === 'signup') {
         const usernameInput = createInput({ type: 'text', placeholder: 'Username', required: true, value: username.val })

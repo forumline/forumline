@@ -20,11 +20,12 @@ func main() {
 	defer cancel()
 
 	// Database
-	pool, err := shared.NewDBPool(ctx)
+	rawPool, err := shared.NewDBPool(ctx)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer pool.Close()
+	defer rawPool.Close()
+	pool := shared.NewObservablePool(rawPool)
 
 	// SSE hub for LISTEN/NOTIFY — uses direct connection (bypasses PgBouncer)
 	listenDSN := os.Getenv("DATABASE_URL_DIRECT")
@@ -48,7 +49,7 @@ func main() {
 	}
 
 	// Push notification listener
-	pushListener := forumlineapp.NewPushListener(pool, sseHub)
+	pushListener := forumlineapp.NewPushListener(rawPool, sseHub)
 	go pushListener.Start(ctx)
 
 	// Router
@@ -81,7 +82,7 @@ func main() {
 		cancel()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
-		srv.Shutdown(shutdownCtx)
+		_ = srv.Shutdown(shutdownCtx)
 	}()
 
 	log.Printf("forumline server listening on http://localhost:%s", port)

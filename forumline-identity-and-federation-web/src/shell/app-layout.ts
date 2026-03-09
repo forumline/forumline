@@ -176,7 +176,7 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
       }).catch(console.error)
     } else if ('Notification' in window) {
       if (Notification.permission === 'default') {
-        Notification.requestPermission().then(() => {
+        void Notification.requestPermission().then(() => {
           if (Notification.permission === 'granted') new Notification(title, { body })
         })
       } else if (Notification.permission === 'granted') {
@@ -230,7 +230,7 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
         console.error('[Forumline] Push subscription failed:', err)
       }
     }
-    doRegister()
+    void doRegister()
     cleanups.push(() => { cancelled = true })
   }
 
@@ -249,7 +249,7 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
     const { activeForum } = forumStore.get()
     if (!activeForum) return
     const url = activeForum.web_base + forumPath
-    navigator.clipboard.writeText(url).then(() => {
+    void navigator.clipboard.writeText(url).then(() => {
       copied = true
       renderForumHeader()
       if (copiedTimeout) clearTimeout(copiedTimeout)
@@ -316,11 +316,11 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
         initialPath: deepLinkPath,
         onAuthed: (domain) => {
           authedForums?.add(domain)
-          updateForumAuthState(auth, domain, true)
+          void updateForumAuthState(auth, domain, true)
         },
         onSignedOut: (domain) => {
           authedForums?.delete(domain)
-          updateForumAuthState(auth, domain, false)
+          void updateForumAuthState(auth, domain, false)
         },
         onUnreadCounts: (domain, counts) => forumStore.setUnreadCounts(domain, counts),
         onNotification: handleForumNotification,
@@ -430,7 +430,7 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
   cleanups.push(callOverlay.destroy)
 
   // ---- Init ----
-  fetchMemberships()
+  void fetchMemberships()
   registerPush()
   startDmUpdates()
 

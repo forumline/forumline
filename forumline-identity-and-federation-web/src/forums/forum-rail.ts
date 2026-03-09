@@ -224,7 +224,7 @@ export function createForumRail(opts: ForumRailOptions): ForumRailInstance {
     disabled: () => modal.adding,
     oninput: (e: Event) => { modal.url = (e.target as HTMLInputElement).value },
     onkeydown: (e: KeyboardEvent) => {
-      if (e.key === 'Enter') handleAdd()
+      if (e.key === 'Enter') void handleAdd()
       if (e.key === 'Escape') closeModal()
     },
   }) as HTMLInputElement
@@ -247,7 +247,7 @@ export function createForumRail(opts: ForumRailOptions): ForumRailInstance {
           {
             class: 'btn btn--primary',
             disabled: () => modal.adding || !modal.url.trim(),
-            onclick: handleAdd,
+            onclick: () => void handleAdd(),
           },
           () => modal.adding ? 'Adding...' : 'Add Forum',
         ),
