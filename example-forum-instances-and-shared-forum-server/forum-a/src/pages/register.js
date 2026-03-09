@@ -1,3 +1,15 @@
+/*
+ * Registration Page
+ *
+ * Allows new users to create a forum account so they can participate in discussions, chat, and voice rooms.
+ *
+ * It must:
+ * - Show a username/email/password form for self-hosted forums with local auth
+ * - Show a "Sign up with Forumline" button as the sole option on hosted forums
+ * - Automatically sign the user in and redirect to the home page after successful registration
+ * - Display validation errors for duplicate emails, weak passwords, or taken usernames
+ */
+
 import { signUp } from '../lib/auth.js'
 import { navigate } from '../router.js'
 import { getConfig } from '../lib/config.js'

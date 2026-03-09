@@ -1,3 +1,14 @@
+/*
+ * Cookie and JWT Utilities
+ *
+ * Provides low-level helpers for reading session cookies and verifying Forumline identity tokens on the server side.
+ *
+ * It must:
+ * - Parse raw Cookie headers into key-value pairs so forum servers can read Forumline session cookies without a framework dependency
+ * - Decode JWT payloads for quick, unsigned inspection of identity tokens (e.g., displaying the user's name before full verification)
+ * - Verify JWT signatures against the shared Forumline secret to securely authenticate users and reject tampered or expired tokens
+ */
+
 /** Parse a Cookie header string into a key-value record */
 export function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {}

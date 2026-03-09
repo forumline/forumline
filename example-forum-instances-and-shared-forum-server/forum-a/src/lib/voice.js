@@ -1,6 +1,14 @@
-/**
- * Voice module — P2P WebRTC by default, escalates to LiveKit for screen sharing
- * or rooms with 5+ participants.
+/*
+ * Voice Room Orchestrator
+ *
+ * Lets forum members join voice chat rooms for real-time audio conversations, with automatic infrastructure scaling.
+ *
+ * It must:
+ * - Default to peer-to-peer WebRTC for low-latency, zero-cost audio in small rooms (up to 4 participants)
+ * - Automatically escalate to LiveKit server infrastructure when screen sharing is requested or 5+ users join
+ * - Track who is in each voice room via presence so the sidebar and room pages show live participant counts
+ * - Provide mute, deafen, and screen share controls that work seamlessly across both P2P and LiveKit backends
+ * - Clean up all audio connections and presence records when a user leaves or navigates away
  */
 
 import { createStore } from '../state.js'

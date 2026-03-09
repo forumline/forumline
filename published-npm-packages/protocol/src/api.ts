@@ -1,3 +1,14 @@
+/*
+ * Forum API Contract
+ *
+ * Defines the HTTP endpoints that every forum on the Forumline network must implement to participate in cross-forum features.
+ *
+ * It must:
+ * - Specify the required endpoints (unread counts, notifications, real-time streaming) so the Forumline app can aggregate activity across all forums a user belongs to
+ * - Specify the optional OAuth-based auth endpoints so users can sign into any forum with their single Forumline identity
+ * - Serve as the canonical, version-controlled contract that both forum authors and the Forumline app code against
+ */
+
 // ============================================================================
 // Forumline API Contract — Required & optional endpoints
 // ============================================================================

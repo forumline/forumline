@@ -1,3 +1,13 @@
+/*
+ * DOM utility helpers
+ *
+ * This file provides lightweight helpers for creating elements, attaching events, and toggling classes without a framework.
+ *
+ * It must:
+ * - Create HTML elements with attributes and children in a single call (h function)
+ * - Bind event listeners with automatic "on" prefix handling and return a cleanup function
+ * - Toggle CSS classes on an element based on a boolean record, supporting space-separated class strings
+ */
 /** Create an HTML element with optional attributes and children. */
 export function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,

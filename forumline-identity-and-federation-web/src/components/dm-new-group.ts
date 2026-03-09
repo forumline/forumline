@@ -1,3 +1,19 @@
+/*
+ * New group conversation creator
+ *
+ * This file lets users create a new group DM conversation with multiple Forumline users.
+ *
+ * It must:
+ * - Provide a text input for naming the group
+ * - Let users search for Forumline users by username with debounced queries
+ * - Display search results with avatars, display names, and usernames
+ * - Allow selecting multiple users, shown as removable chips above the search
+ * - Exclude the current user and already-selected users from search results
+ * - Validate that a group name is provided and at least 2 members are selected
+ * - Show validation messages that auto-dismiss after 3 seconds
+ * - Create the group conversation on the server and navigate to it on success
+ * - Show a loading state on the create button while the request is in progress
+ */
 import type { ForumlineStore } from '../lib/index.js'
 import type { ForumlineProfile } from '@johnvondrashek/forumline-protocol'
 import { createAvatar, createButton, createInput, createSpinner } from './ui.js'

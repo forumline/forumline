@@ -1,3 +1,16 @@
+/*
+ * Real-Time Chat Page
+ *
+ * Provides live text chat channels where forum members can have casual, real-time conversations outside of threaded discussions.
+ *
+ * It must:
+ * - Display messages in chronological order with date separators and grouped consecutive messages from the same author
+ * - Send messages optimistically (show immediately) and reconcile with the server response
+ * - Receive new messages in real time via SSE without requiring a page refresh
+ * - Auto-scroll to the latest message while preserving scroll position when the user is reading history
+ * - Require authentication to send messages, prompting guests to sign in
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

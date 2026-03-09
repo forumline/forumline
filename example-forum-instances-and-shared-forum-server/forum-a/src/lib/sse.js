@@ -1,6 +1,13 @@
-/**
- * SSE helper with auto-reconnect.
- * Returns a cleanup function.
+/*
+ * Real-Time Event Stream
+ *
+ * Keeps the forum UI live-updated by maintaining a persistent server connection for push events (new messages, posts, notifications).
+ *
+ * It must:
+ * - Establish an EventSource connection to the server's SSE endpoint for a given resource
+ * - Automatically reconnect after network interruptions so users don't miss updates
+ * - Attach the user's auth token when the stream requires authentication
+ * - Return a cleanup function so pages can disconnect when the user navigates away
  */
 
 import { getAccessToken } from './auth.js'

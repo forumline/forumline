@@ -1,8 +1,15 @@
-/**
- * Web Audio API ringtones for call states.
- * No audio files needed — generates tones procedurally.
+/*
+ * Call ringtone audio
+ *
+ * This file generates ringtone sounds for voice calls using the Web Audio API, with no audio file dependencies.
+ *
+ * It must:
+ * - Generate a double-ring pattern (ring-ring, pause) for incoming calls
+ * - Generate a single long tone pattern (ringback) for outgoing calls
+ * - Pre-warm the AudioContext on user gesture so ringtones work for SSE-triggered incoming calls
+ * - Return a stop function that immediately silences and cleans up the oscillator
+ * - Handle browser autoplay policies by resuming the AudioContext before playing
  */
-
 let audioCtx: AudioContext | null = null
 let warmed = false
 

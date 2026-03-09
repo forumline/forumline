@@ -1,3 +1,15 @@
+/*
+ * Admin Dashboard
+ *
+ * Gives forum administrators an overview of community health and tools to manage users and content.
+ *
+ * It must:
+ * - Restrict access to users with admin privileges only
+ * - Display key community metrics (total users, threads, posts) on an overview tab
+ * - Provide a searchable user list with role badges and join dates
+ * - Reserve space for future content moderation and report review tools
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

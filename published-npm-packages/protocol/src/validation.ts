@@ -1,3 +1,16 @@
+/*
+ * Input Validation Rules
+ *
+ * Enforces the business rules for user-submitted data shared across all Forumline clients and servers.
+ *
+ * It must:
+ * - Validate usernames (3-30 chars, alphanumeric with hyphens/underscores) to keep identities clean and URL-safe across the network
+ * - Enforce password strength requirements (8+ chars, letters and numbers) to protect user accounts
+ * - Validate email format for account registration and recovery
+ * - Cap message length (1-4000 chars) to prevent abuse while allowing meaningful content
+ * - Require HTTPS for forum URLs to ensure secure communication between forums and the Forumline app
+ */
+
 import { z } from 'zod'
 
 /** Username: 3-30 characters, letters/numbers/underscores/hyphens */

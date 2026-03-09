@@ -1,3 +1,15 @@
+/*
+ * Admin Dashboard
+ *
+ * Gives forum administrators a management interface to monitor forum health and oversee the user base.
+ *
+ * It must:
+ * - Restrict access to admin users only, denying entry to regular members
+ * - Display forum-wide statistics (total users, threads, posts) on the overview tab
+ * - Provide a searchable user list with role indicators and join dates
+ * - Reserve tabs for future content management and report review features
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

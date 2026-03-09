@@ -1,3 +1,23 @@
+/*
+ * Main application layout
+ *
+ * This file is the primary shell that ties together forums, DMs, settings, and calls into a unified app experience.
+ *
+ * It must:
+ * - Display the currently selected forum inside an embedded webview (iframe)
+ * - Show a welcome/home screen when no forum is selected
+ * - Switch between Forums, DMs, and Settings views via the mobile tab bar
+ * - Track and display unread DM counts on the tab bar badge, updated via SSE in real-time
+ * - Handle deep links (forumline:// URLs) to open specific forums and paths
+ * - Sync forum memberships and auth state with the Forumline server
+ * - Manage forum-to-Forumline single sign-on, logging users into forums automatically
+ * - Register for web push notifications and forward push subscription to the server
+ * - Show native or browser notifications for forum events when the app is in the background
+ * - Respect per-forum notification mute settings
+ * - Provide a share button to copy the current forum page URL to clipboard
+ * - Initialize and display the voice call overlay for incoming/outgoing calls
+ * - Lazily create and persistently keep alive child views (webview, DMs, settings, welcome)
+ */
 import type { GoTrueAuthClient, ForumlineSession } from '../lib/gotrue-auth.js'
 import type { ForumNotification } from '@johnvondrashek/forumline-protocol'
 import { createForumWebview, isTauri, getTauriNotification, setupDeepLinkListener, type ForumStore, type ForumlineStore, type DeepLinkTarget } from '../lib/index.js'

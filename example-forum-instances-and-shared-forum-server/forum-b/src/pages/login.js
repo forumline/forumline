@@ -1,3 +1,16 @@
+/*
+ * Sign In Page
+ *
+ * Authenticates existing users so they can access their account, post content, and use member-only features.
+ *
+ * It must:
+ * - Accept email and password credentials for local authentication
+ * - Offer a Forumline federated sign-in option for users with a Forumline identity
+ * - Display clear error messages when login fails (wrong password, account not found)
+ * - Redirect to the home page on successful authentication
+ * - Provide links to password recovery and account registration
+ */
+
 import { signIn } from '../lib/auth.js'
 import { navigate } from '../router.js'
 

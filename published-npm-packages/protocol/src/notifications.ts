@@ -1,3 +1,15 @@
+/*
+ * Cross-Forum Notification Protocol
+ *
+ * Defines the notification types that forums emit and the Forumline app aggregates into a unified inbox.
+ *
+ * It must:
+ * - Enumerate the notification categories (replies, mentions, chat mentions, DMs, custom) so the app can filter and display them appropriately
+ * - Represent individual notifications with enough context (title, body, link, source forum) for the user to act on them without leaving the app
+ * - Define unread count summaries so the app can show badge counts across all forums at a glance
+ * - Provide a server-side notification input type for forums to create new notifications through the SDK
+ */
+
 // ============================================================================
 // Forumline Notifications — Cross-forum notification protocol
 // ============================================================================

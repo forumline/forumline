@@ -1,3 +1,18 @@
+/*
+ * Forumline authentication form
+ *
+ * This file provides the sign-in, sign-up, and password reset forms for Forumline accounts.
+ *
+ * It must:
+ * - Show a sign-in form with email and password fields as the default view
+ * - Show a sign-up form with username, email, and password fields when toggled
+ * - Show a forgot-password form that sends a reset link to the user's email
+ * - Display a confirmation screen after a reset link is sent, with a "try again" option
+ * - Toggle between sign-in and sign-up modes with a link at the bottom
+ * - Show inline validation errors returned by the auth API
+ * - Show loading states on the submit button during API calls
+ * - Communicate the purpose of Forumline accounts (cross-forum DMs) in the headings
+ */
 import type { GoTrueAuthClient } from '../lib/gotrue-auth.js'
 import { createButton, createInput } from './ui.js'
 

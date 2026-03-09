@@ -1,3 +1,14 @@
+/*
+ * Reactive store primitive
+ *
+ * This file provides a minimal publish-subscribe state container used as the foundation for all app stores.
+ *
+ * It must:
+ * - Hold a single state value that can be read synchronously via get()
+ * - Accept new state via set(), supporting both direct values and updater functions
+ * - Notify all subscribers synchronously whenever state changes
+ * - Return an unsubscribe function from subscribe() for cleanup
+ */
 export type Subscriber<T> = (state: T) => void
 
 export interface Store<T> {

@@ -1,3 +1,15 @@
+/*
+ * Bookmarks Page
+ *
+ * Shows a user's saved threads so they can quickly return to discussions they care about.
+ *
+ * It must:
+ * - Require authentication and prompt sign-in for logged-out visitors
+ * - Display all bookmarked threads with their category, author, and save date
+ * - Allow users to remove individual bookmarks inline
+ * - Handle empty state gracefully with a link back to browsing threads
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

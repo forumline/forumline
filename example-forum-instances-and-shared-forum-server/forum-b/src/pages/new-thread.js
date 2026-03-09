@@ -1,3 +1,16 @@
+/*
+ * New Thread Page
+ *
+ * Lets authenticated users create a new discussion thread within a specific category, which is the primary way content enters the forum.
+ *
+ * It must:
+ * - Require authentication and display the target category name for context
+ * - Collect a thread title, body content, and an optional cover image
+ * - Allow users to crop uploaded images before they are attached to the thread
+ * - Generate a default thread image automatically if no custom image is provided
+ * - Create the thread and its first post atomically, then redirect to the new thread page
+ */
+
 import { api } from '../lib/api.js'
 import { authStore, getAccessToken } from '../lib/auth.js'
 import { uploadAvatar, uploadDefaultAvatar } from '../lib/avatars.js'

@@ -1,3 +1,16 @@
+/*
+ * New Thread Creation
+ *
+ * Lets authenticated users start a new discussion thread within a specific category.
+ *
+ * It must:
+ * - Require authentication and show the category context via breadcrumb navigation
+ * - Accept a title, body content, and optional custom thread image (with crop support)
+ * - Generate a default thread avatar from the thread ID if no custom image is provided
+ * - Create the thread and its first post atomically, then redirect to the new thread page
+ * - Validate minimum title and content length before submission
+ */
+
 import { api } from '../lib/api.js'
 import { authStore, getAccessToken } from '../lib/auth.js'
 import { uploadAvatar, uploadDefaultAvatar } from '../lib/avatars.js'

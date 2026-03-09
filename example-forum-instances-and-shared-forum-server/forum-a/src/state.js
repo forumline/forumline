@@ -1,5 +1,12 @@
-/**
- * Simple reactive state store with subscribe/notify pattern.
+/*
+ * Reactive State Management
+ *
+ * Provides shared state stores so UI components stay in sync when data changes (e.g., auth status, voice room state).
+ *
+ * It must:
+ * - Allow any component to read and update shared state without tight coupling between modules
+ * - Notify all subscribers immediately when state changes so the UI reflects the latest data
+ * - Provide a TTL-based cache to avoid redundant API calls for recently fetched data
  */
 
 export function createStore(initial) {

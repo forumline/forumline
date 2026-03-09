@@ -1,3 +1,15 @@
+/*
+ * Reset Password Page
+ *
+ * Lets users set a new password after clicking the recovery link in their email.
+ *
+ * It must:
+ * - Verify the recovery token from the URL hash before showing the password form
+ * - Show an "invalid or expired link" message if the token cannot be validated
+ * - Require password confirmation to prevent typos
+ * - Redirect to the home page after a successful password update
+ */
+
 import { updatePassword, authStore } from '../lib/auth.js'
 import { navigate } from '../router.js'
 

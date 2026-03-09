@@ -1,3 +1,16 @@
+/*
+ * Search Page
+ *
+ * Lets users find threads and posts across the entire forum by keyword, making existing content discoverable.
+ *
+ * It must:
+ * - Provide instant search-as-you-type with debounced queries for a responsive experience
+ * - Search both threads and posts simultaneously and display results with match highlighting
+ * - Allow filtering results by type (all, threads only, posts only) with result counts
+ * - Persist the search query and filter in the URL so results can be bookmarked or shared
+ * - Suggest example search terms when the search field is empty to guide new users
+ */
+
 import { api } from '../lib/api.js'
 import { avatarHTML } from '../components/avatar.js'
 import { formatRelativeTime } from '../lib/date.js'

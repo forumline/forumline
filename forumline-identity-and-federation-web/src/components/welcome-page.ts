@@ -1,3 +1,17 @@
+/*
+ * Welcome / home page
+ *
+ * This file is the landing screen users see when no forum is selected.
+ *
+ * It must:
+ * - Display a welcome message explaining Forumline's purpose (multi-forum client, DMs)
+ * - Show the user's Forumline connection status (connected as @username, or not connected)
+ * - Provide a sign-in button when the user is not connected to Forumline
+ * - Show the list of connected forums when the user has forums, with a prompt to tap one
+ * - Show an "Add Forum" prompt when the user has no forums yet
+ * - Reactively update when forums are added/removed or Forumline connection status changes
+ * - Efficiently re-render only the sections that actually changed
+ */
 import type { ForumlineSession } from '../lib/gotrue-auth.js'
 import type { ForumStore, ForumlineStore } from '../lib/index.js'
 import { createMobileForumList } from './mobile-forum-list.js'

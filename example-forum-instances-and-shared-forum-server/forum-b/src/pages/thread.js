@@ -1,3 +1,17 @@
+/*
+ * Thread View Page
+ *
+ * Displays a full discussion thread with all its posts, serving as the core content consumption experience in the forum.
+ *
+ * It must:
+ * - Show the thread title, category breadcrumb, cover image, and pinned/locked status
+ * - Paginate posts and allow navigation between pages for long discussions
+ * - Let authenticated users reply to the thread or to specific posts, with reply-to indicators
+ * - Support bookmarking threads so users can save them for later
+ * - Receive new posts in real time via SSE and show a "new posts" prompt without disrupting reading
+ * - Prevent replies on locked threads while displaying a locked notice
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

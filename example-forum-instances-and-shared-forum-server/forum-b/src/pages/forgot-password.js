@@ -1,3 +1,15 @@
+/*
+ * Forgot Password Page
+ *
+ * Allows users who have lost access to their account to request a password reset link via email.
+ *
+ * It must:
+ * - Accept the user's email address and trigger a password reset email
+ * - Show a confirmation message on success directing the user to check their inbox
+ * - Display validation errors if the reset request fails
+ * - Provide a link back to the sign-in page
+ */
+
 import { resetPassword } from '../lib/auth.js'
 
 export function renderForgotPassword(container) {

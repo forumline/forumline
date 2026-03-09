@@ -1,3 +1,15 @@
+/*
+ * Portable User Identity
+ *
+ * Defines the user identity that travels with a person across every forum on the Forumline network.
+ *
+ * It must:
+ * - Represent a single, network-wide user profile (username, display name, avatar) so users are recognizable everywhere
+ * - Track per-forum memberships so the app knows which forums a user belongs to and holds session tokens for each
+ * - Define the full OAuth 2 flow types (authorize params, token exchange, token response) that let forums authenticate users via Forumline
+ * - Provide auth session and result types for sign-in, sign-up, and token refresh operations
+ */
+
 // ============================================================================
 // Forumline Identity — Cross-forum user identity
 // ============================================================================

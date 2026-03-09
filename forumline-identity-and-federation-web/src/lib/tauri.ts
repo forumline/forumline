@@ -1,3 +1,14 @@
+/*
+ * Tauri desktop app bridge
+ *
+ * This file provides platform detection and lazy-loaded access to Tauri native APIs.
+ *
+ * It must:
+ * - Detect whether the app is running inside the Tauri desktop wrapper
+ * - Lazy-load Tauri notification, autostart, and shell plugins only when needed
+ * - Provide an openExternal helper that uses Tauri's shell.open on desktop or window.open on web
+ * - Ensure Tauri imports are tree-shaken from the web build by using dynamic imports
+ */
 export function isTauri(): boolean {
   return '__TAURI_INTERNALS__' in window
 }

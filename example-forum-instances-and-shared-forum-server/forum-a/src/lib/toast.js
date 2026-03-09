@@ -1,3 +1,14 @@
+/*
+ * Toast Notifications
+ *
+ * Displays brief, non-blocking feedback messages so users know when actions succeed or fail without interrupting their workflow.
+ *
+ * It must:
+ * - Show success, error, and informational messages as temporary overlays
+ * - Auto-dismiss after a few seconds so notifications don't require manual interaction
+ * - Animate in and out smoothly so the experience feels polished
+ */
+
 let toastId = 0
 
 export function toast(message, type = 'info') {

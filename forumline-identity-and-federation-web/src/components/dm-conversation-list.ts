@@ -1,3 +1,21 @@
+/*
+ * DM conversation list
+ *
+ * This file displays all of a user's direct message conversations, serving as the inbox for cross-forum messaging.
+ *
+ * It must:
+ * - Fetch and display all 1:1 and group conversations, sorted by most recent activity
+ * - Show each conversation's avatar, display name, last message preview, and timestamp
+ * - Display unread count badges on conversations with new messages
+ * - Distinguish group conversations (group icon) from 1:1 conversations (user avatar)
+ * - Update in real-time via SSE when new messages arrive, without full re-render
+ * - Fall back to polling every 30 seconds if the SSE connection silently drops
+ * - Show a loading spinner during the initial fetch
+ * - Show an empty state when the user has no conversations yet
+ * - Show an error state if the initial load fails
+ * - Efficiently update only changed DOM elements (badges, timestamps, previews) on refresh
+ * - Navigate to the conversation thread when a conversation is tapped
+ */
 import type { ForumlineStore } from '../lib/index.js'
 import type { ForumlineDmConversation, ForumlineConversationMember } from '@johnvondrashek/forumline-protocol'
 import { createAvatar, createSpinner } from './ui.js'

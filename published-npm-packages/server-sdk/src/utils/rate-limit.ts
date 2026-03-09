@@ -1,3 +1,14 @@
+/*
+ * API Rate Limiter
+ *
+ * Protects forum API endpoints from abuse by limiting how many requests a single client can make in a time window.
+ *
+ * It must:
+ * - Track request counts per IP address in memory so forums have basic abuse protection out of the box
+ * - Automatically respond with HTTP 429 and a Retry-After header when a client exceeds the limit
+ * - Clean up expired entries periodically without keeping serverless functions alive unnecessarily
+ */
+
 interface RateLimitEntry {
   count: number
   resetAt: number

@@ -1,8 +1,24 @@
-/**
- * 1:1 Call Manager — state machine + WebRTC + SSE signaling.
- * States: idle → ringing-outgoing/ringing-incoming → active → idle
+/*
+ * Voice call manager
+ *
+ * This file manages the entire lifecycle of 1:1 voice calls between Forumline users.
+ *
+ * It must:
+ * - Maintain a call state machine (idle, ringing-outgoing, ringing-incoming, active)
+ * - Listen for incoming call signals via a persistent SSE connection with auto-reconnect
+ * - Initiate outgoing calls by acquiring the microphone and notifying the server
+ * - Accept or decline incoming calls and notify the server of the response
+ * - Establish peer-to-peer audio via WebRTC with STUN servers for NAT traversal
+ * - Exchange WebRTC offers, answers, and ICE candidates through the Forumline signaling API
+ * - Handle ICE restarts for transient network disruptions
+ * - Time out unanswered calls after 30 seconds (both incoming and outgoing)
+ * - Time out WebRTC connections that fail to establish within 15 seconds
+ * - Provide mute/unmute toggle for the local microphone
+ * - Fall back to a synthetic silent audio stream when no microphone is available
+ * - Show native Tauri notifications with accept/decline actions for incoming calls on desktop
+ * - Notify all registered UI listeners when call state changes
+ * - Clean up all WebRTC, media, and SSE resources when a call ends
  */
-
 import { forumlineAuth } from '../app.js'
 import type { ForumlineStore } from './forumline-store.js'
 import { isTauri, getTauriNotification } from './tauri.js'

@@ -1,5 +1,12 @@
-/**
- * Simple reactive state store with subscribe/notify pattern.
+/*
+ * Reactive State Management
+ *
+ * Provides shared state containers that keep the UI in sync when data changes across the forum.
+ *
+ * It must:
+ * - Allow any component to subscribe to state changes so the UI updates reactively (e.g., auth status, voice room state)
+ * - Provide a TTL-based cache to avoid redundant API calls for recently fetched data
+ * - Support multiple independent stores so concerns like auth, voice, and page data stay isolated
  */
 
 export function createStore(initial) {

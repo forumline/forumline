@@ -1,3 +1,16 @@
+/*
+ * User Settings Page
+ *
+ * Gives authenticated users control over their profile, account security, notification preferences, and Forumline identity connection.
+ *
+ * It must:
+ * - Allow users to update their display name, bio, website, and avatar with image cropping
+ * - Provide password change functionality with confirmation validation
+ * - Let users connect or disconnect their Forumline federated identity
+ * - Offer toggleable notification preferences for thread replies, mentions, chat mentions, and direct messages
+ * - Reserve an appearance tab for future theme customization
+ */
+
 import { authStore, getAccessToken, updatePassword } from '../lib/auth.js'
 import { api } from '../lib/api.js'
 import { uploadAvatar } from '../lib/avatars.js'

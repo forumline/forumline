@@ -1,3 +1,20 @@
+/*
+ * Forum membership store
+ *
+ * This file manages the user's list of connected forums, the active forum selection, and per-forum unread counts.
+ *
+ * It must:
+ * - Store the list of forum memberships (domain, name, icon, API/web URLs, capabilities)
+ * - Track which forum is currently active (selected for viewing)
+ * - Track unread counts (notifications, chat mentions, DMs) per forum domain
+ * - Add forums by fetching and validating their Forumline manifest from /.well-known/forumline-manifest.json
+ * - Prevent duplicate forums from being added
+ * - Remove forums from the list and deselect them if active
+ * - Sync the forum list from the server (server is source of truth for memberships)
+ * - Persist join/leave actions to the server as best-effort background calls
+ * - Provide switchForum and goHome actions for navigation
+ * - Clear all state on sign-out
+ */
 import type { UnreadCounts } from '@johnvondrashek/forumline-protocol'
 import { createStore, type Store } from './store.js'
 

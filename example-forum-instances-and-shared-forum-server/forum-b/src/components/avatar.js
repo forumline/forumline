@@ -1,5 +1,12 @@
-/**
- * Gothic avatar renderer.
+/*
+ * Avatar Display Component
+ *
+ * Renders user and thread avatar images consistently across the forum so every profile, post, and sidebar entry has a recognizable visual identity.
+ *
+ * It must:
+ * - Display a user's uploaded avatar image when available, or a generic fallback silhouette when not
+ * - Support configurable sizes for different UI contexts (sidebar, posts, profile cards)
+ * - Show a globe indicator on avatars of federated Forumline users to distinguish them from local accounts
  */
 
 export function avatarHTML(opts = {}) {

@@ -1,6 +1,13 @@
-/**
- * SSE helper with auto-reconnect.
- * Returns a cleanup function.
+/*
+ * Real-Time Event Stream
+ *
+ * Delivers live updates to the user's browser so new posts, chat messages, and notifications appear instantly without refreshing.
+ *
+ * It must:
+ * - Maintain a persistent server-sent events connection to receive real-time data from the backend
+ * - Automatically reconnect after network interruptions so users never miss updates
+ * - Support authenticated streams by attaching the user's access token to the connection
+ * - Return a cleanup function so pages can disconnect when navigating away
  */
 
 import { getAccessToken } from './auth.js'

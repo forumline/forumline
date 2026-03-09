@@ -1,3 +1,15 @@
+/*
+ * User Profile Page
+ *
+ * Displays a member's public profile so other users can see their activity and identity within the community.
+ *
+ * It must:
+ * - Show the user's avatar, display name, username, bio, and join date
+ * - Display tabs for the user's threads and posts with counts
+ * - Indicate federated Forumline users with a globe badge on their avatar
+ * - Offer a "Message" button to start a direct message conversation (visible to other logged-in users)
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

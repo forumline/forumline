@@ -1,3 +1,15 @@
+/*
+ * Forumline connection store
+ *
+ * This file manages the connection state to Forumline's central services (API client, user ID, connection status).
+ *
+ * It must:
+ * - Initialize the CentralServicesClient with the user's access token after authentication
+ * - Track whether the user is currently connected to Forumline
+ * - Store the authenticated user's Forumline ID for use across the app
+ * - Provide init/teardown/destroy lifecycle methods for the app to manage the connection
+ * - Expose reactive state so UI components can show/hide features based on connection status
+ */
 import { CentralServicesClient } from './client/index.js'
 import { createStore, type Store } from './store.js'
 

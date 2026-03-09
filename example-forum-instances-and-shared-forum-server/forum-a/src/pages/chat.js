@@ -1,3 +1,16 @@
+/*
+ * Real-Time Chat Channel
+ *
+ * Provides a live messaging experience within forum chat channels, similar to Discord-style text chat.
+ *
+ * It must:
+ * - Display messages grouped by author and date with avatars and timestamps
+ * - Send messages instantly with optimistic UI updates (show before server confirms)
+ * - Receive new messages from other users in real time via SSE without page refresh
+ * - Auto-scroll to the latest messages while preserving scroll position when reading history
+ * - Require authentication to send messages but allow guests to read
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

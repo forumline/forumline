@@ -1,3 +1,16 @@
+/*
+ * Mobile bottom tab bar
+ *
+ * This file renders the bottom navigation bar with tabs for Forums, DMs, and Settings.
+ *
+ * It must:
+ * - Display three tab buttons with icons and labels: Forums, DMs, and Settings
+ * - Highlight the currently active tab
+ * - Show a red unread count badge on the DMs tab when there are unread messages
+ * - Navigate to the home/forum-list view when Forums is tapped while a forum is open
+ * - Toggle DMs and Settings views on/off (tapping the active tab returns to Forums)
+ * - Efficiently update only when the active view or DM unread count changes
+ */
 import type { ForumStore } from '../lib/index.js'
 
 export type AppView = 'forums' | 'settings' | 'dms'

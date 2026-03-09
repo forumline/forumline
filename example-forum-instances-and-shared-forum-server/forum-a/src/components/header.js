@@ -1,5 +1,15 @@
-/**
- * Header — top navigation bar.
+/*
+ * Top Navigation Header
+ *
+ * Provides the persistent top bar with forum branding, search access, notifications, and user account controls.
+ *
+ * It must:
+ * - Show the forum name and link to the home page for brand identity
+ * - Display a live notification bell with unread count, updated in real time via SSE
+ * - Provide a user menu with links to profile, bookmarks, settings, admin (if applicable), and sign out
+ * - Show sign in / sign up links for unauthenticated visitors
+ * - Toggle the mobile sidebar menu on small screens
+ * - Support the "/" keyboard shortcut to jump to search
  */
 
 import { authStore, signOut } from '../lib/auth.js'

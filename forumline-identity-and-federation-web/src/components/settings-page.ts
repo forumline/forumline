@@ -1,3 +1,21 @@
+/*
+ * Settings page
+ *
+ * This file provides the user's account and forum management settings.
+ *
+ * It must:
+ * - Display the Forumline account section: show profile (avatar, username, email) when signed in, or the auth form when not
+ * - Provide a sign-out button for the connected Forumline account
+ * - Display a list of all connected forums with their icons, names, and domains
+ * - Allow removing forums from the user's list
+ * - Allow muting/unmuting notifications per forum with optimistic UI updates
+ * - Show an "Edit Site" button for forums the user owns on the hosted platform
+ * - Open the site manager (file editor) for owned hosted forums
+ * - Fetch forum membership data and notification mute states from the server
+ * - Fetch the user's avatar from the identity API
+ * - Detect which forums are hosted sites owned by the current user
+ * - Reactively update the forum list when forums are added or removed
+ */
 import type { GoTrueAuthClient, ForumlineSession } from '../lib/gotrue-auth.js'
 import type { ForumStore, ForumlineStore } from '../lib/index.js'
 import { createForumlineAuth } from './forumline-auth.js'

@@ -1,3 +1,15 @@
+/*
+ * Bookmarks Page
+ *
+ * Lets users save and revisit threads they find interesting, acting as a personal reading list within the forum.
+ *
+ * It must:
+ * - Require authentication and prompt unauthenticated visitors to sign in
+ * - Display all bookmarked threads with their category, author, and when they were saved
+ * - Allow users to remove individual bookmarks inline without leaving the page
+ * - Show a count of total saved threads and a prompt to browse if no bookmarks exist
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

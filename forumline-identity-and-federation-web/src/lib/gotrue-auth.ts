@@ -1,11 +1,21 @@
-/**
- * GoTrueAuthClient — Direct GoTrue REST API client for Forumline auth.
- * Uses the Go Forumline server's auth endpoints which proxy to GoTrue.
+/*
+ * Authentication client
  *
- * Login/signup go through /api/auth/* (Go handlers that create profiles, set cookies).
- * Token refresh and password operations use the GoTrue proxy at /auth/v1/*.
+ * This file handles all Forumline account authentication: sign-in, sign-up, sign-out, password reset, and session management.
+ *
+ * It must:
+ * - Sign in users via email/password through the Forumline Go server's auth endpoints
+ * - Sign up new users with email, password, and username
+ * - Sign out users and clear the stored session
+ * - Send password reset emails via the GoTrue recovery endpoint
+ * - Update user passwords via the GoTrue user endpoint
+ * - Persist sessions to localStorage and restore them on page load
+ * - Automatically refresh access tokens before they expire using the refresh token
+ * - Restore sessions from URL hash tokens (used by password recovery email links)
+ * - Detect PASSWORD_RECOVERY events from URL tokens and emit them to listeners
+ * - Provide an onAuthStateChange subscription for the app to react to auth events
+ * - Emit INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, and PASSWORD_RECOVERY events
  */
-
 const STORAGE_KEY = 'forumline-session'
 
 export type AuthStateEvent = 'INITIAL_SESSION' | 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'PASSWORD_RECOVERY'

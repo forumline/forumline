@@ -1,3 +1,14 @@
+/*
+ * Toast Notifications
+ *
+ * Gives users brief, non-intrusive feedback when actions succeed or fail (e.g., "Profile updated", "Failed to bookmark").
+ *
+ * It must:
+ * - Display temporary popup messages that auto-dismiss after a few seconds
+ * - Support success and error variants so users can distinguish positive outcomes from problems
+ * - Stack multiple toasts when several actions happen in quick succession
+ */
+
 let toastId = 0
 
 export function toast(message, type = 'info') {

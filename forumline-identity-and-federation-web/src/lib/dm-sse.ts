@@ -1,3 +1,15 @@
+/*
+ * DM real-time event stream
+ *
+ * This file manages a shared SSE connection for real-time DM updates across the app.
+ *
+ * It must:
+ * - Maintain a singleton EventSource connection to the conversations stream endpoint
+ * - Open the connection when the first listener subscribes and close it when the last unsubscribes
+ * - Parse incoming SSE events and dispatch them to all registered listeners
+ * - Automatically reconnect with exponential backoff and jitter when the connection drops
+ * - Allow multiple components to subscribe independently without creating duplicate connections
+ */
 import { forumlineAuth } from '../app.js'
 
 export interface DmEvent {

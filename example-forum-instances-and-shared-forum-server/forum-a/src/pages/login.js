@@ -1,3 +1,16 @@
+/*
+ * Sign In Page
+ *
+ * Provides the login form so returning users can authenticate and access their forum account.
+ *
+ * It must:
+ * - Show an email/password form for self-hosted forums with local GoTrue auth
+ * - Show a "Sign in with Forumline" button for federated identity login (sole option on hosted forums)
+ * - Redirect to the home page on successful authentication
+ * - Display validation errors when credentials are incorrect
+ * - Link to the registration and forgot password pages
+ */
+
 import { signIn } from '../lib/auth.js'
 import { navigate } from '../router.js'
 import { getConfig } from '../lib/config.js'

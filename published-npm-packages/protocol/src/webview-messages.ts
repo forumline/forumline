@@ -1,3 +1,14 @@
+/*
+ * Webview Message Protocol
+ *
+ * Defines the typed postMessage contract between the Forumline app shell and forum iframes embedded within it.
+ *
+ * It must:
+ * - Define messages the forum sends to the app (ready signal, auth state, unread counts, notifications, navigation requests) so the app can react to forum events
+ * - Define messages the app sends to the forum (auth state requests, unread count requests) so forums respond with fresh data on demand
+ * - Provide a type guard so both sides can safely distinguish Forumline messages from unrelated postMessage traffic
+ */
+
 // ============================================================================
 // Forumline Webview Messages — Typed postMessage protocol between Forumline app and forum
 // ============================================================================

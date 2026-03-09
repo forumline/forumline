@@ -1,6 +1,14 @@
-/**
- * Simple history API router.
- * Supports :param patterns and wildcard matching.
+/*
+ * Client-Side Page Router
+ *
+ * Enables single-page navigation so users move between forum pages instantly without full reloads.
+ *
+ * It must:
+ * - Map URL paths to page handlers so every forum section has a shareable, bookmarkable URL
+ * - Intercept in-app link clicks to prevent page reloads and preserve application state
+ * - Support browser back/forward buttons so navigation history works as users expect
+ * - Clean up the previous page's resources (SSE connections, timers) before rendering a new one
+ * - Show a 404 page when users visit a URL that doesn't match any known route
  */
 
 const routes = []

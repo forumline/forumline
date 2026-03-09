@@ -1,10 +1,19 @@
-import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile } from '@johnvondrashek/forumline-protocol'
-
-/**
- * Headless HTTP client for Forumline Central Services.
- * Provides access to cross-forum conversations (1:1 and group) and profile search.
- * All requests use the Forumline access token for authentication.
+/*
+ * Forumline API client
+ *
+ * This file provides the HTTP client for all Forumline server API calls, used by the entire app for cross-forum features.
+ *
+ * It must:
+ * - List, fetch, and create DM conversations (1:1 and group)
+ * - Send and retrieve messages within conversations
+ * - Mark conversations as read
+ * - Search Forumline user profiles by username
+ * - Initiate, accept, decline, and end voice calls
+ * - Send WebRTC signaling messages (offers, answers, ICE candidates) through the server
+ * - Authenticate all requests with the user's Forumline access token
+ * - Throw descriptive errors when API calls fail
  */
+import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile } from '@johnvondrashek/forumline-protocol'
 export class CentralServicesClient {
   constructor(
     private forumlineUrl: string,

@@ -1,5 +1,12 @@
-/**
- * Render an avatar image element.
+/*
+ * Avatar Display Component
+ *
+ * Renders a user's or thread's avatar image consistently across the entire forum UI.
+ *
+ * It must:
+ * - Display the user's custom or generated avatar at the requested size
+ * - Show a generic silhouette fallback when no avatar image is available
+ * - Optionally display a globe badge to indicate federated Forumline identity users
  */
 
 export function avatarHTML(opts = {}) {

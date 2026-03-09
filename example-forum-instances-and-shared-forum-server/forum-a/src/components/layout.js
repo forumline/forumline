@@ -1,5 +1,13 @@
-/**
- * Layout — main app shell with header, sidebar, content area.
+/*
+ * App Shell Layout
+ *
+ * Assembles the top-level page structure that wraps every forum page with consistent navigation.
+ *
+ * It must:
+ * - Render the header, desktop sidebar, and mobile sidebar around a central content area
+ * - Load sidebar navigation data (categories, channels, voice rooms) on mount
+ * - Re-render the header when the user's auth state changes (sign in/out)
+ * - Expose the page content container so route handlers can render into it
  */
 
 import { renderHeader, cleanupHeader } from './header.js'

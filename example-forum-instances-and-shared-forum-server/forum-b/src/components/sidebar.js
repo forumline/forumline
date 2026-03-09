@@ -1,5 +1,15 @@
-/**
- * Gothic sidebar — navigation in bordered panels.
+/*
+ * Sidebar Navigation
+ *
+ * Provides the persistent side panel that helps users navigate between forum sections, chat channels, and voice rooms.
+ *
+ * It must:
+ * - Display forum categories with links to each category's thread listing
+ * - List available chat channels so users can jump directly into conversations
+ * - Show voice rooms with live participant counts and a "leave" button for the currently connected room
+ * - Highlight the active page/section to orient the user within the forum
+ * - Re-render automatically when voice state or the current route changes
+ * - Provide a mobile-friendly overlay variant that can be toggled from the header
  */
 
 import { api } from '../lib/api.js'

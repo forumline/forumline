@@ -1,3 +1,15 @@
+/*
+ * Reset Password Page
+ *
+ * Completes the password recovery flow by letting users set a new password after clicking the email reset link.
+ *
+ * It must:
+ * - Verify the reset token from the URL and wait for the auth session to be restored
+ * - Show an error if the reset link is invalid or expired, with an option to request a new one
+ * - Require password confirmation to prevent typos in the new password
+ * - Update the password and redirect the user to the home page on success
+ */
+
 import { updatePassword, authStore } from '../lib/auth.js'
 import { navigate } from '../router.js'
 

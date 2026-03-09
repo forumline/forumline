@@ -1,3 +1,21 @@
+/*
+ * Forum webview (iframe wrapper)
+ *
+ * This file embeds a forum inside a sandboxed iframe and bridges communication between the forum and the Forumline app.
+ *
+ * It must:
+ * - Load the forum's web URL in a sandboxed iframe with script, forms, popups, and clipboard permissions
+ * - Show a loading spinner while the forum is loading
+ * - Show a login banner when the user is signed into Forumline but not yet authenticated on the forum
+ * - Trigger forum authentication via a server-side OAuth redirect when the login banner is clicked
+ * - Detect auth errors from the OAuth redirect and show descriptive toast messages
+ * - Communicate with the forum via postMessage using the Forumline protocol message types
+ * - Request and receive auth state from the forum to track whether the user is signed in
+ * - Receive unread counts from the forum and forward them to the parent app
+ * - Receive notification events from the forum and forward them to the parent app
+ * - Track in-forum navigation and report the current path to the parent
+ * - Support an initial deep-link path to open a specific page within the forum
+ */
 import type { ForumToForumlineMessage, ForumlineToForumMessage, UnreadCounts, ForumNotification } from '@johnvondrashek/forumline-protocol'
 import type { ForumMembership } from './forum-store.js'
 import { showToast } from '../components/ui.js'

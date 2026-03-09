@@ -1,3 +1,19 @@
+/*
+ * Direct Messages panel
+ *
+ * This file is the top-level container for all DM functionality, managing navigation between DM sub-views.
+ *
+ * It must:
+ * - Show the conversation list as the default view
+ * - Navigate to a message thread when a conversation is selected
+ * - Navigate to the new 1:1 message screen when the compose button is tapped
+ * - Navigate to the new group conversation screen when the group button is tapped
+ * - Provide back navigation from any sub-view to the conversation list
+ * - Show a sign-in prompt with a link to settings when the user is not connected to Forumline
+ * - Create or retrieve a 1:1 conversation when a user is selected from the new message search
+ * - Display a header with contextual title (Messages, New Message, New Group) and action buttons
+ * - Destroy child views on navigation to prevent memory leaks
+ */
 import type { ForumlineStore } from '../lib/index.js'
 import { createButton } from './ui.js'
 import { createDmConversationList } from './dm-conversation-list.js'

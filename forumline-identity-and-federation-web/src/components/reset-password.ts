@@ -1,3 +1,17 @@
+/*
+ * Password reset form
+ *
+ * This file handles the "set new password" step after a user clicks a password recovery email link.
+ *
+ * It must:
+ * - Show a form with new password and confirm password fields
+ * - Validate that the password is at least 6 characters
+ * - Validate that both password fields match before submission
+ * - Show inline error messages for validation failures and API errors
+ * - Show a loading state on the submit button during the API call
+ * - Display a success confirmation screen after the password is updated
+ * - Auto-redirect to the main app after a 2-second delay on success
+ */
 import type { GoTrueAuthClient } from '../lib/gotrue-auth.js'
 import { createButton, createInput } from './ui.js'
 

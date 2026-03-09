@@ -1,3 +1,19 @@
+/*
+ * Mobile forum list
+ *
+ * This file renders the list of the user's connected forums as tappable cards, optimized for mobile.
+ *
+ * It must:
+ * - Display each forum as a card with its icon (or first-letter fallback), name, and domain
+ * - Highlight the currently active forum
+ * - Show unread count badges (notifications + chat mentions + DMs) on each forum card
+ * - Provide an "Add Forum" button that opens a modal dialog
+ * - Accept a forum URL in the modal, fetch its Forumline manifest, and add it to the user's list
+ * - Show error messages in the modal if the forum URL is invalid or unreachable
+ * - Switch to the tapped forum when a card is clicked
+ * - Reactively update when forums are added, removed, or unread counts change
+ * - Efficiently update only changed DOM elements (badges, active states) without full re-renders
+ */
 import type { ForumStore, ForumMembership } from '../lib/index.js'
 import { createButton, createInput } from './ui.js'
 

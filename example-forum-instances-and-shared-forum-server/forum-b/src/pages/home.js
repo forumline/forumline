@@ -1,3 +1,15 @@
+/*
+ * Home Page
+ *
+ * Serves as the forum's landing page, showing a welcome message and the most recent discussions to draw users into the community.
+ *
+ * It must:
+ * - Display a welcome banner introducing the forum to new and returning visitors
+ * - List recent threads across all categories with author avatars, reply counts, and last activity timestamps
+ * - Show pinned threads and category tags to help users find relevant discussions quickly
+ * - Indicate federated Forumline users with a globe icon on their avatar
+ */
+
 import { api } from '../lib/api.js'
 import { avatarHTML } from '../components/avatar.js'
 import { formatRelativeTime } from '../lib/date.js'

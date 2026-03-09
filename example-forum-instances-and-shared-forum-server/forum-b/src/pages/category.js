@@ -1,3 +1,15 @@
+/*
+ * Category Page
+ *
+ * Shows all discussion threads within a specific forum category, serving as the main browsing view for topical sections.
+ *
+ * It must:
+ * - Display the category name, description, and a listing of its threads sorted by activity
+ * - Let authenticated users follow or unfollow the category to control their notification preferences
+ * - Provide a "New Thread" button for logged-in users to start a discussion in this category
+ * - Show thread metadata including author, post count, pinned/locked status, and relative timestamps
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

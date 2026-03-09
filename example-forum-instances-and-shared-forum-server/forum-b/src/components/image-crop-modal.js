@@ -1,5 +1,13 @@
-/**
- * Gothic image crop modal.
+/*
+ * Image Crop Modal
+ *
+ * Lets users crop and resize images before uploading them as avatars or thread images, ensuring consistent square dimensions.
+ *
+ * It must:
+ * - Display a draggable, zoomable preview of the selected image within a square crop area
+ * - Support both mouse and touch interactions for desktop and mobile users
+ * - Export the cropped region as a 256x256 PNG blob ready for upload
+ * - Allow users to cancel without making changes
  */
 
 export function showCropModal(imageSrc) {

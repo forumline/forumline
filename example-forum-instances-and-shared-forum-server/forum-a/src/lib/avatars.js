@@ -1,3 +1,15 @@
+/*
+ * Avatar Generation and Upload
+ *
+ * Ensures every user and thread has a visual identity by generating unique default avatars and handling custom avatar uploads.
+ *
+ * It must:
+ * - Generate a deterministic default avatar from a seed (user ID or thread ID) so avatars are consistent
+ * - Use distinct visual styles for users (avataaars) versus threads (shapes) so they are easily distinguishable
+ * - Convert generated SVG avatars to PNG and upload them to the server for storage on Cloudflare R2
+ * - Support uploading custom avatar images chosen by users
+ */
+
 import { createAvatar } from '@dicebear/core'
 import * as avataaars from '@dicebear/avataaars'
 import * as shapes from '@dicebear/shapes'

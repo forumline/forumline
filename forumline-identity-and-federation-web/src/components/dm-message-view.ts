@@ -1,3 +1,23 @@
+/*
+ * DM message thread view
+ *
+ * This file renders a single conversation's full message history and compose interface.
+ *
+ * It must:
+ * - Display the conversation header with avatar, name, and a call button (1:1 only)
+ * - Show an expandable member list panel for group conversations
+ * - Render all messages as chat bubbles, with "mine" and "theirs" alignment
+ * - Show sender labels on other people's messages in group chats
+ * - Display timestamps on each message
+ * - Auto-scroll to the newest message on initial load
+ * - Preserve scroll position when new messages arrive (unless user is at the bottom)
+ * - Send messages via a compose bar with text input and send button
+ * - Support sending via Enter key
+ * - Optimistically show sent messages immediately, removing them on failure
+ * - Mark the conversation as read on open and on each new message fetch
+ * - Update in real-time via SSE, filtered to the current conversation
+ * - Initiate a voice call to the other user in 1:1 conversations
+ */
 import type { ForumlineStore } from '../lib/index.js'
 import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineConversationMember } from '@johnvondrashek/forumline-protocol'
 import { createAvatar, createButton, createInput, createSpinner } from './ui.js'

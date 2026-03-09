@@ -1,3 +1,14 @@
+/*
+ * Cross-Forum Direct Messages
+ *
+ * Defines the data types for private messaging between users across any forums on the Forumline network.
+ *
+ * It must:
+ * - Model 1:1 and group conversations so users can DM anyone on the network regardless of which forums they share
+ * - Represent conversation summaries (last message, unread count) for the inbox UI
+ * - Define user profile shapes for search results when starting new conversations
+ */
+
 // ============================================================================
 // Forumline Direct Messages — Cross-forum DM types (1:1 and group)
 // ============================================================================

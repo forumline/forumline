@@ -1,3 +1,15 @@
+/*
+ * Date and Time Formatting
+ *
+ * Displays timestamps in human-friendly formats so users can quickly understand when content was posted or updated.
+ *
+ * It must:
+ * - Show relative times (e.g., "5m ago", "2h ago") for recent activity to convey freshness at a glance
+ * - Fall back to absolute dates for older content so timestamps remain meaningful
+ * - Provide day-level labels ("Today", "Yesterday") for grouping chat messages by date
+ * - Support both short and long relative formats for different UI contexts (sidebar vs. thread view)
+ */
+
 function toDate(date) {
   return typeof date === 'string' ? new Date(date) : date
 }

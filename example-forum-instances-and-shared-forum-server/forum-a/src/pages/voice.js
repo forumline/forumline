@@ -1,3 +1,17 @@
+/*
+ * Voice Room Page
+ *
+ * Provides the UI for browsing, joining, and participating in live voice conversations.
+ *
+ * It must:
+ * - List all available voice rooms with live participant counts and avatars
+ * - Show a focused room view with participant grid, speaking indicators, and mute states
+ * - Provide mute, deafen, screen share, and disconnect controls for connected users
+ * - Display screen share video when a participant is sharing their screen
+ * - Reactively update the UI as participants join, leave, or change state
+ * - Require authentication to join a room but allow guests to view room status
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { voiceStore, joinRoom, leaveRoom, toggleMute, toggleDeafen, toggleScreenShare, getAvatarUrl } from '../lib/voice.js'

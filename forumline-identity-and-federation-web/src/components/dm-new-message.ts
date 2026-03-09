@@ -1,3 +1,16 @@
+/*
+ * New 1:1 message user picker
+ *
+ * This file lets users start a new direct message by searching for and selecting a Forumline user.
+ *
+ * It must:
+ * - Provide a search input that queries Forumline user profiles by username
+ * - Debounce search queries (300ms) to avoid excessive API calls
+ * - Display matching users with their avatar, display name, and @username
+ * - Show a loading spinner while the search is in progress
+ * - Show a "No Forumline users found" message when the search returns no results
+ * - Navigate to the conversation with the selected user when tapped
+ */
 import type { ForumlineStore } from '../lib/index.js'
 import type { ForumlineProfile } from '@johnvondrashek/forumline-protocol'
 import { createAvatar, createInput, createSpinner } from './ui.js'

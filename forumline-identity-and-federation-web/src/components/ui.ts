@@ -1,3 +1,17 @@
+/*
+ * Shared UI component factories
+ *
+ * This file provides reusable, styled UI primitives used across the entire Forumline app.
+ *
+ * It must:
+ * - Create styled buttons with consistent variants (primary, secondary, danger, ghost, etc.)
+ * - Create styled text inputs with common options (placeholder, required, autofocus, etc.)
+ * - Create card containers with consistent styling
+ * - Create avatar elements that show a user's image or fall back to a DiceBear-generated avatar
+ * - Create loading spinners in regular and small sizes
+ * - Provide a toast notification system that stacks messages at the bottom of the screen
+ * - Support error, success, and info toast variants with auto-dismiss
+ */
 /** Create a styled button element. */
 export function createButton(opts: {
   text?: string

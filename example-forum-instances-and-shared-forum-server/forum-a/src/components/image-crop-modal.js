@@ -1,6 +1,13 @@
-/**
- * Image crop modal — allows user to crop an image to a square before uploading.
- * Pure vanilla JS, no dependencies. Uses canvas for cropping.
+/*
+ * Image Crop Modal
+ *
+ * Lets users crop and zoom an image into a square before uploading it as an avatar or thread image.
+ *
+ * It must:
+ * - Show a circular crop preview so users can position their image exactly how they want
+ * - Support drag-to-pan and zoom slider for precise framing on both desktop and mobile
+ * - Export the cropped area as a 256x256 PNG blob ready for upload
+ * - Allow cancellation without making any changes
  */
 
 export function showCropModal(imageSrc) {

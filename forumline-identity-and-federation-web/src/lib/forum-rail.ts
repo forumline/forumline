@@ -1,3 +1,20 @@
+/*
+ * Forum sidebar rail (desktop layout)
+ *
+ * This file renders the vertical icon sidebar for navigating between forums on wider screens.
+ *
+ * It must:
+ * - Display a home button that deselects the active forum
+ * - Show icon buttons for each connected forum with the forum's icon or first-letter fallback
+ * - Highlight the currently active forum with a visual indicator
+ * - Display unread count badges (notifications + chat mentions + DMs) on each forum icon
+ * - Provide an "Add Forum" button that opens a modal to add a forum by URL
+ * - Show a DM button at the bottom with an unread badge for cross-forum direct messages
+ * - Show a Settings button at the bottom
+ * - Switch to the clicked forum when a forum icon is tapped
+ * - Reactively update icons, badges, and active states when store state changes
+ * - Efficiently diff forum lists to only add/remove changed buttons
+ */
 import type { ForumStore, ForumMembership } from './forum-store.js'
 import type { UnreadCounts } from '@johnvondrashek/forumline-protocol'
 

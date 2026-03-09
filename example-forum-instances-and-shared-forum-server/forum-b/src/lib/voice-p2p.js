@@ -1,6 +1,15 @@
-/**
- * P2P WebRTC voice module — full mesh topology for rooms with <= 4 participants.
- * Uses SSE + POST signaling through Postgres LISTEN/NOTIFY.
+/*
+ * Peer-to-Peer Voice Engine
+ *
+ * Handles direct browser-to-browser audio connections for small voice rooms, keeping hosting costs at zero for the majority of voice calls.
+ *
+ * It must:
+ * - Establish WebRTC peer connections in a full-mesh topology for rooms with up to 4 participants
+ * - Use server-side signaling (SSE + POST) to exchange connection offers, answers, and ICE candidates between peers
+ * - Detect who is speaking using audio analysis so the UI can show visual speaking indicators
+ * - Support mute and deafen controls that locally toggle audio tracks and playback
+ * - Signal all peers to escalate to LiveKit when the room grows beyond P2P capacity or screen sharing is requested
+ * - Clean up all peer connections, audio elements, and media streams on disconnect
  */
 
 import { getAccessToken } from './auth.js'

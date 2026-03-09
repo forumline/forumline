@@ -1,3 +1,17 @@
+/*
+ * Thread View Page
+ *
+ * Displays a full discussion thread with all its posts, and lets users participate by replying.
+ *
+ * It must:
+ * - Show the thread title, category breadcrumb, optional image, and pinned/locked status
+ * - Paginate posts and support replying to specific posts with quote context
+ * - Allow authenticated users to bookmark/unbookmark the thread
+ * - Receive new posts in real time via SSE and offer a "load new posts" prompt
+ * - Prevent replies on locked threads and prompt sign-in for unauthenticated visitors
+ * - Highlight the original poster with an "OP" badge on their posts
+ */
+
 import { api } from '../lib/api.js'
 import { authStore, getAccessToken } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

@@ -1,3 +1,17 @@
+/*
+ * Application root
+ *
+ * This file orchestrates the top-level app lifecycle based on authentication state.
+ *
+ * It must:
+ * - Initialize shared auth, forum, and Forumline stores used across the entire app
+ * - Show a loading screen while the initial session is being restored
+ * - Route to the sign-in/sign-up screen when the user is not authenticated
+ * - Route to the password reset screen when a recovery link is opened
+ * - Route to the main app layout when the user has an active session
+ * - React to auth state changes (sign-in, sign-out, token refresh, recovery) and re-render accordingly
+ * - Clean up all child views and subscriptions when the app is destroyed
+ */
 import { GoTrueAuthClient, type ForumlineSession } from './lib/gotrue-auth.js'
 import { createForumStore, createForumlineStore, type ForumStore, type ForumlineStore } from './lib/index.js'
 import { createResetPassword } from './components/reset-password.js'

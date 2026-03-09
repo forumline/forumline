@@ -1,3 +1,21 @@
+/*
+ * Hosted site file manager
+ *
+ * This file lets forum owners manage the custom frontend files of their hosted Forumline forum.
+ *
+ * It must:
+ * - Display a storage usage bar showing how much of the site's storage quota is used
+ * - List all custom files with their names, sizes, and file-type icons
+ * - Allow uploading new files via a file picker or drag-and-drop zone
+ * - Allow creating new text files (HTML, CSS, JS, etc.) with a built-in code editor
+ * - Allow editing existing text files in a textarea with basic tab support
+ * - Allow deleting individual files with a confirmation prompt
+ * - Allow resetting the entire site back to the default forum template
+ * - Provide a "Preview" link to open the live site in a new tab
+ * - Show toast notifications for upload, save, delete, and reset results
+ * - Enforce permission checks and show an error if the user lacks access
+ * - Navigate between the file list view and the editor view with back navigation
+ */
 import type { GoTrueAuthClient } from '../lib/gotrue-auth.js'
 import { createButton, createInput, createCard, createSpinner, showToast } from './ui.js'
 

@@ -1,3 +1,15 @@
+/*
+ * Category Page
+ *
+ * Displays all threads within a specific forum category so users can browse discussions by topic.
+ *
+ * It must:
+ * - Show the category name, description, and a list of its threads with author and reply counts
+ * - Let authenticated users follow or unfollow the category to control their notification preferences
+ * - Provide a "New Thread" button for authenticated users to start a discussion in this category
+ * - Highlight pinned and locked threads with visual badges
+ */
+
 import { api } from '../lib/api.js'
 import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'

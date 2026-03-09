@@ -1,3 +1,15 @@
+/*
+ * Forum Manifest
+ *
+ * Defines the self-description document that every Forumline-compatible forum publishes at /.well-known/forumline-manifest.json.
+ *
+ * It must:
+ * - Declare the forum's name, domain, icon, and description so the Forumline app can display it in the forum directory and sidebar
+ * - Advertise which capabilities the forum supports (threads, chat, voice, notifications) so the app can enable or hide features accordingly
+ * - Provide API and web base URLs so the app knows where to send API requests and where to link users for browsing
+ * - Expose optional metadata (accent color, banner, member count, invite policy) for rich forum previews
+ */
+
 // ============================================================================
 // Forum Manifest — /.well-known/forumline-manifest.json
 // ============================================================================

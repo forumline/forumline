@@ -1,3 +1,15 @@
+/*
+ * Registration Page
+ *
+ * Onboards new members by creating their account, allowing them to join discussions and become part of the community.
+ *
+ * It must:
+ * - Collect a username, email, and password to create a new account
+ * - Validate input requirements (minimum lengths) before submission
+ * - Automatically sign the user in after successful registration and redirect to the home page
+ * - Display clear error messages for duplicate emails, taken usernames, or other signup failures
+ */
+
 import { signUp } from '../lib/auth.js'
 import { navigate } from '../router.js'
 

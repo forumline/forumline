@@ -1,3 +1,15 @@
+/*
+ * Deep link handler
+ *
+ * This file parses and listens for forumline:// deep links to open specific forums and pages from outside the app.
+ *
+ * It must:
+ * - Parse forumline://forum/<domain>/<path> URLs into a domain and path
+ * - Listen for deep link events in the Tauri desktop app via the event system
+ * - Invoke a callback with the parsed target so the app can navigate to the correct forum and page
+ * - Return a cleanup function to unsubscribe from deep link events
+ * - No-op gracefully when running in a web browser (non-Tauri environment)
+ */
 import { isTauri } from './tauri.js'
 
 export interface DeepLinkTarget {

@@ -1,7 +1,12 @@
-/**
- * ForumlineSupabaseAdapter — Adapter for Supabase-based forums.
+/*
+ * Supabase Data Adapter
  *
- * Bridges Supabase data models to Forumline protocol types.
+ * Translates Supabase database rows into Forumline protocol types so forums built on Supabase can join the network with minimal glue code.
+ *
+ * It must:
+ * - Convert Supabase user profiles into portable Forumline identities, handling missing display names and avatars gracefully
+ * - Convert Supabase notification rows into the standard notification format the Forumline app expects
+ * - Compute aggregated unread counts (notifications, chat mentions, DMs) from raw notification data for the unified inbox badges
  */
 
 import type {

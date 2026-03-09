@@ -1,5 +1,15 @@
-/**
- * Gothic header with glowing title, notifications, user menu.
+/*
+ * Site Header and Notification Center
+ *
+ * Provides the top navigation bar that appears on every page, giving users access to search, notifications, and account actions.
+ *
+ * It must:
+ * - Display the forum branding and primary navigation links (search, sign in/up)
+ * - Show a notification bell with an unread count badge that updates in real time via SSE
+ * - Render a notification dropdown where users can view and mark notifications as read
+ * - Provide a user menu with links to profile, bookmarks, settings, and admin (if applicable)
+ * - Toggle the mobile sidebar for navigation on small screens
+ * - Support keyboard shortcuts (/ for search, Escape to close dropdowns)
  */
 
 import { authStore, signOut } from '../lib/auth.js'

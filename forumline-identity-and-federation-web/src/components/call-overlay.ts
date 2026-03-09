@@ -1,7 +1,20 @@
-/**
- * Call overlay — full-screen for ringing, compact top bar for active calls.
+/*
+ * Voice call overlay
+ *
+ * This file renders the user-facing UI for 1:1 voice calls across the entire app.
+ *
+ * It must:
+ * - Show a full-screen overlay with caller avatar, name, and accept/decline buttons for incoming calls
+ * - Show a full-screen overlay with a "Calling..." status and cancel button for outgoing calls
+ * - Collapse to a compact green top bar once the call is active, showing duration and controls
+ * - Play distinct ringtone patterns for incoming vs outgoing ringing states
+ * - Stop the ringtone when the call state changes (answered, declined, ended)
+ * - Provide a mute/unmute toggle during active calls
+ * - Provide an "End" button to hang up during active calls
+ * - Track and display a live call duration timer (minutes:seconds)
+ * - Hide completely when no call is in progress
+ * - React to call state changes pushed from the call manager
  */
-
 import {
   onCallStateChange,
   acceptCall,

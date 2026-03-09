@@ -1,6 +1,12 @@
-/**
- * API client — fetch-based data provider for the Go backend.
- * Port of ApiForumDataProvider.
+/*
+ * Forum API Client
+ *
+ * Provides all data access methods the forum UI needs to read and write content on the Go backend.
+ *
+ * It must:
+ * - Expose named methods for every forum operation (threads, posts, chat, bookmarks, voice, admin, notifications)
+ * - Automatically attach the user's auth token to requests that require authentication
+ * - Surface server-side error messages to callers so the UI can display meaningful feedback
  */
 
 import { getAccessToken } from './auth.js'

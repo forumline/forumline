@@ -1,5 +1,15 @@
-/**
- * ForumlineServer — Main server class for Forumline forum integration.
+/*
+ * Forum Server SDK
+ *
+ * Provides the main server class that forum authors use to integrate with the Forumline network without implementing the protocol from scratch.
+ *
+ * It must:
+ * - Generate the forum manifest automatically from config so forums are discoverable by the Forumline app
+ * - Handle the full OAuth 2 login flow (redirect to Forumline, callback, token exchange, session cookies) so users can sign in with their Forumline identity
+ * - Expose ready-made HTTP handlers for notifications, unread counts, and real-time SSE streaming so forums plug into the unified inbox
+ * - Remain framework-agnostic (generic request/response interfaces) so it works with Express, Koa, raw Node, or any HTTP server
+ * - Expose the httpOnly Forumline access token to same-origin requests so the forum frontend can pass it to the Forumline app
+ * - Allow forum authors to supply their own storage callbacks (create user, get notifications, authenticate) while the SDK handles protocol compliance
  */
 
 import type {

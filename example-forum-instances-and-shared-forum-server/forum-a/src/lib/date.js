@@ -1,3 +1,14 @@
+/*
+ * Date and Time Formatting
+ *
+ * Converts raw timestamps into human-readable labels so users see friendly times like "5m ago" or "Yesterday" throughout the forum.
+ *
+ * It must:
+ * - Show relative time (e.g., "just now", "3h ago", "2d ago") for recent activity to convey recency at a glance
+ * - Fall back to absolute dates for older content so timestamps remain meaningful
+ * - Provide day-boundary labels ("Today", "Yesterday") for chat message grouping
+ */
+
 function toDate(date) {
   return typeof date === 'string' ? new Date(date) : date
 }

@@ -1,6 +1,15 @@
-/**
- * GoTrue auth module — manages session, token refresh, sign in/up/out.
- * Port of gotrue-auth-provider.ts + auth.tsx combined into a single module.
+/*
+ * User Authentication
+ *
+ * Manages the full user identity lifecycle so members can securely sign in, sign up, and maintain their session across visits.
+ *
+ * It must:
+ * - Authenticate users via email/password and support Forumline federated sign-in via OAuth
+ * - Persist sessions in localStorage and automatically refresh tokens before they expire
+ * - Create a user profile with a generated default avatar on first sign-up
+ * - Handle password reset flows initiated via email recovery links
+ * - Restore sessions from URL hash tokens (OAuth callbacks and password recovery redirects)
+ * - Expose the current user and profile to the rest of the app via a reactive store
  */
 
 import { createStore } from '../state.js'

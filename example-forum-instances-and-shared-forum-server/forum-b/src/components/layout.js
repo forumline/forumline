@@ -1,5 +1,14 @@
-/**
- * Gothic layout — header, three-column with sidebar, floating stars.
+/*
+ * Page Layout Shell
+ *
+ * Assembles the persistent page structure that wraps every forum view, providing consistent navigation and visual framing.
+ *
+ * It must:
+ * - Render the header, sidebar, and main content area in a responsive three-column layout
+ * - Provide both desktop and mobile sidebar variants for navigation on all screen sizes
+ * - Re-render the header when the user's auth state changes (sign in/out)
+ * - Load sidebar data (categories, channels, voice rooms) and update the sidebar once ready
+ * - Add decorative floating star elements to maintain the gothic visual theme
  */
 
 import { renderHeader, cleanupHeader } from './header.js'

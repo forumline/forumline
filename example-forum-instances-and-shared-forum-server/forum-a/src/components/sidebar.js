@@ -1,5 +1,14 @@
-/**
- * Sidebar — navigation with categories, chat channels, voice rooms.
+/*
+ * Sidebar Navigation
+ *
+ * Provides persistent left-hand navigation so users can quickly move between forum categories, chat channels, and voice rooms.
+ *
+ * It must:
+ * - List all categories, chat channels, and voice rooms with active-page highlighting
+ * - Show live participant counts next to voice rooms so users can see where conversations are happening
+ * - Display a connected voice room indicator with a leave button when the user is in a call
+ * - Render both a desktop (always-visible) and mobile (overlay) version of the sidebar
+ * - Auto-refresh when voice state or the current route changes
  */
 
 import { api } from '../lib/api.js'
