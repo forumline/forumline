@@ -155,7 +155,6 @@ function connectSignalSSE() {
   signalSSE.onmessage = (event) => {
     try {
       const signal = JSON.parse(event.data)
-      console.log('[Call] SSE signal received:', signal.type, signal)
       // Serialize signal handling — each signal must fully complete before
       // the next starts. WebRTC operations (setRemoteDescription, createAnswer,
       // addIceCandidate) must not run concurrently or Safari drops the connection.
@@ -201,17 +200,13 @@ async function handleSignal(signal: any) {
   }
 
   if (type === 'call_accepted') {
-    console.log('[Call] call_accepted received, current state:', state)
     if (state !== 'ringing-outgoing') return
-    // Callee accepted — start WebRTC (we are the caller, so we send the offer)
     setState('active')
-    console.log('[Call] Starting WebRTC as initiator, localStream exists:', !!localStream)
     await startWebRTC(true)
     return
   }
 
   if (type === 'call_declined' || type === 'call_ended') {
-    console.log('[Call] call ended/declined signal received')
     cleanup()
     return
   }
@@ -228,7 +223,6 @@ async function handleSignal(signal: any) {
     pendingCandidates = []
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
-    console.log('[Call] Sending answer SDP (first 200 chars):', pc.localDescription!.sdp?.substring(0, 200))
     await sendSignal('answer', { sdp: pc.localDescription!.sdp, type: pc.localDescription!.type })
     return
   }
@@ -245,9 +239,7 @@ async function handleSignal(signal: any) {
   }
 
   if (type === 'ice-candidate') {
-    // Queue candidates if pc doesn't exist yet or remote description isn't set
     if (!pc || !pc.remoteDescription) {
-      console.log('[Call] Queuing ICE candidate (pc or remote desc not ready)')
       pendingCandidates.push(signal.payload)
       return
     }
@@ -346,8 +338,6 @@ export async function declineCall() {
 // --- End call ---
 
 export async function endCall() {
-  console.log('[Call] endCall called, state:', state, 'callInfo:', !!callInfo)
-  console.trace('[Call] endCall stack trace')
   if (!callInfo) return
   const { forumlineClient } = forumlineStore!.get()
   if (!forumlineClient) return
@@ -377,10 +367,7 @@ export function isMuted(): boolean {
 
 async function startWebRTC(isInitiator: boolean) {
   if (!callInfo) return
-  if (webrtcStarted) {
-    console.log('[Call] startWebRTC already called, skipping')
-    return
-  }
+  if (webrtcStarted) return
   webrtcStarted = true
 
   // Reuse localStream if already acquired (caller pre-acquires on button click)
@@ -415,30 +402,17 @@ async function startWebRTC(isInitiator: boolean) {
     remoteAudioEl.play().catch(err => {
       console.warn('[Call] Audio play() failed (autoplay policy):', err)
     })
-    console.log('[Call] Remote track received:', event.track.kind, 'readyState:', event.track.readyState)
   }
 
   pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      console.log('[Call] ICE candidate generated:', event.candidate.type, event.candidate.protocol, event.candidate.address)
-      sendSignal('ice-candidate', event.candidate.toJSON())
-    } else {
-      console.log('[Call] ICE gathering complete')
-    }
-  }
-
-  pc.onicegatheringstatechange = () => {
-    console.log('[Call] ICE gathering state:', pc?.iceGatheringState)
+    if (event.candidate) sendSignal('ice-candidate', event.candidate.toJSON())
   }
 
   pc.oniceconnectionstatechange = () => {
-    console.log('[Call] ICE connection state:', pc?.iceConnectionState)
     // ICE restart: if connection drops to "disconnected", try one restart
-    // before giving up. This handles transient network blips and Safari
-    // ICE agent quirks when it's the controlled (answerer) side.
+    // before giving up. Handles transient network blips and Safari quirks.
     if (pc?.iceConnectionState === 'disconnected' && !iceRestartAttempted) {
       iceRestartAttempted = true
-      console.log('[Call] Attempting ICE restart...')
       pc.createOffer({ iceRestart: true }).then(offer => {
         return pc!.setLocalDescription(offer)
       }).then(() => {
@@ -447,10 +421,6 @@ async function startWebRTC(isInitiator: boolean) {
         console.error('[Call] ICE restart failed:', err)
       })
     }
-  }
-
-  pc.onsignalingstatechange = () => {
-    console.log('[Call] Signaling state:', pc?.signalingState)
   }
 
   // Timeout: if WebRTC doesn't connect within 15s, end the call.
@@ -463,22 +433,8 @@ async function startWebRTC(isInitiator: boolean) {
   }, 15000)
 
   pc.onconnectionstatechange = () => {
-    console.log('[Call] WebRTC connection state:', pc?.connectionState, '| ICE:', pc?.iceConnectionState, '| signaling:', pc?.signalingState)
     if (pc?.connectionState === 'connected') {
       clearTimeout(connectTimeout)
-      // Log the selected candidate pair for debugging
-      pc.getStats().then(stats => {
-        stats.forEach(report => {
-          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            console.log('[Call] Active candidate pair:', JSON.stringify({
-              local: report.localCandidateId,
-              remote: report.remoteCandidateId,
-              bytesSent: report.bytesSent,
-              bytesReceived: report.bytesReceived,
-            }))
-          }
-        })
-      }).catch(() => {})
     }
     if (pc?.connectionState === 'failed' || pc?.connectionState === 'closed') {
       clearTimeout(connectTimeout)
@@ -489,7 +445,6 @@ async function startWebRTC(isInitiator: boolean) {
   if (isInitiator) {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    console.log('[Call] Sending offer SDP (first 200 chars):', pc.localDescription!.sdp?.substring(0, 200))
     await sendSignal('offer', { sdp: pc.localDescription!.sdp, type: pc.localDescription!.type })
   }
 }
