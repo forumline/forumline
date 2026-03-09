@@ -47,11 +47,51 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
   const headerEl = document.createElement('div')
   headerEl.className = 'message-header'
   const headerAvatar = createAvatar({ avatarUrl: null, seed: 'chat', size: 32 })
+  const headerTextWrap = document.createElement('div')
+  headerTextWrap.style.cssText = 'min-width:0;flex:1'
   const headerName = document.createElement('h3')
   headerName.className = 'font-medium text-white'
   headerName.textContent = 'Chat'
-  headerEl.append(headerAvatar, headerName)
+  const headerMembers = document.createElement('button')
+  headerMembers.className = 'text-xs text-muted truncate'
+  headerMembers.style.cssText = 'margin-top:1px;background:none;border:none;padding:0;cursor:pointer;text-align:left;width:100%;color:inherit'
+  headerTextWrap.append(headerName, headerMembers)
+  headerEl.append(headerAvatar, headerTextWrap)
   el.appendChild(headerEl)
+
+  // Expandable member list panel
+  const memberPanel = document.createElement('div')
+  memberPanel.style.cssText = 'display:none;background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:0.5rem 1rem;max-height:200px;overflow-y:auto'
+  el.insertBefore(memberPanel, el.children[1])
+  let memberPanelOpen = false
+
+  headerMembers.addEventListener('click', () => {
+    memberPanelOpen = !memberPanelOpen
+    memberPanel.style.display = memberPanelOpen ? '' : 'none'
+  })
+
+  function renderMemberPanel() {
+    if (!conversation?.isGroup) return
+    memberPanel.innerHTML = ''
+    const { forumlineUserId } = forumlineStore.get()
+    const label = document.createElement('div')
+    label.className = 'text-xs text-faint'
+    label.style.cssText = 'margin-bottom:0.375rem;font-weight:600'
+    label.textContent = `Members (${conversation.members.length})`
+    memberPanel.appendChild(label)
+    for (const m of conversation.members) {
+      const row = document.createElement('div')
+      row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0'
+      const avatar = createAvatar({ avatarUrl: (m as any).avatarUrl ?? null, seed: m.username, size: 24 })
+      const name = document.createElement('span')
+      name.className = 'text-sm text-secondary'
+      name.textContent = m.id === forumlineUserId
+        ? `${m.displayName || m.username} (you)`
+        : (m.displayName || m.username)
+      row.append(avatar, name)
+      memberPanel.appendChild(row)
+    }
+  }
 
   // Messages container
   const messagesContainer = document.createElement('div')
@@ -112,6 +152,26 @@ export function createDmMessageView({ forumlineStore, conversationId }: DmMessag
 
     headerName.textContent = displayName
     messageInput.placeholder = `Message ${displayName}...`
+
+    // Show member names for group chats (cap at 4 names + "N more")
+    if (conversation?.isGroup && conversation.members.length > 0) {
+      const { forumlineUserId } = forumlineStore.get()
+      const names = conversation.members.map((m: ForumlineConversationMember) =>
+        m.id === forumlineUserId ? 'you' : (m.displayName || m.username)
+      )
+      const maxShow = 4
+      const shown = names.slice(0, maxShow)
+      const remaining = names.length - maxShow
+      headerMembers.textContent = remaining > 0
+        ? `${shown.join(', ')} + ${remaining} more`
+        : names.join(', ')
+      headerMembers.style.display = ''
+      renderMemberPanel()
+    } else {
+      headerMembers.style.display = 'none'
+      memberPanel.style.display = 'none'
+      memberPanelOpen = false
+    }
   }
 
   function isAtBottom(): boolean {
