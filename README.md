@@ -25,7 +25,6 @@ Traditional forums lack real-time interaction. Chat apps lack structure. Forumli
 | Directory | Description |
 |-----------|-------------|
 | `example-forum-instances-and-shared-forum-server/forum-a/` | Example forum — web frontend + Go backend entrypoint (Vite + vanilla JS) |
-| `example-forum-instances-and-shared-forum-server/forum-b/` | Example forum — gothic theme (Vite + vanilla JS) |
 | `example-forum-instances-and-shared-forum-server/forum/` | Shared Go forum handlers and routes |
 | `example-forum-instances-and-shared-forum-server/shared/` | Shared Go infrastructure (db, auth, SSE, middleware) |
 | `forumline-identity-and-federation-web/` | Forumline app — identity & federation registry (Vite + vanilla TS) |

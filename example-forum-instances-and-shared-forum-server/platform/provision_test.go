@@ -38,7 +38,7 @@ func TestValidSlug(t *testing.T) {
 
 func TestReservedSlugs(t *testing.T) {
 	reserved := []string{"www", "app", "api", "demo", "admin", "mail", "smtp",
-		"ftp", "ssh", "ns1", "ns2", "cdn", "forum-b", "status", "docs", "blog"}
+		"ftp", "ssh", "ns1", "ns2", "cdn", "status", "docs", "blog"}
 
 	for _, slug := range reserved {
 		if !reservedSlugs[slug] {

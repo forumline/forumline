@@ -22,7 +22,7 @@ var reservedSlugs = map[string]bool{
 	"www": true, "app": true, "api": true, "demo": true,
 	"admin": true, "mail": true, "smtp": true, "ftp": true,
 	"ssh": true, "ns1": true, "ns2": true, "cdn": true,
-	"forum-b": true, "status": true, "docs": true, "blog": true,
+	"status": true, "docs": true, "blog": true,
 }
 
 // ProvisionRequest is the input for creating a new hosted forum.

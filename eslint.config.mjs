@@ -11,7 +11,6 @@ export default tseslint.config(
       '**/target/',
       '.claude/',
       'example-forum-instances-and-shared-forum-server/forum-a/',
-      'example-forum-instances-and-shared-forum-server/forum-b/',
       'website/',
       '.github/scripts/',
       'published-npm-packages/protocol/src/**/*.d.ts',
