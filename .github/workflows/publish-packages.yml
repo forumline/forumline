@@ -30,7 +30,7 @@ jobs:
 
       - name: Build and publish all packages
         run: |
-          for pkg in protocol server-sdk central-services-client; do
+          for pkg in protocol server-sdk; do
             echo "=== Building and publishing $pkg ==="
             cd "published-npm-packages/$pkg"
             pnpm run build
