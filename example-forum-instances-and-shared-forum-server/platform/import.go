@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Import loads ExportData into a forum database.

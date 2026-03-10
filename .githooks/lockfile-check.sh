@@ -17,7 +17,7 @@ workspace_pkgs=(
 
 for pkg in "${workspace_pkgs[@]}"; do
   if git diff --cached --name-only | grep -qx "$pkg"; then
-    if git diff --cached "$pkg" | grep -qE '^\+.*"(version|@johnvondrashek/)'; then
+    if git diff --cached "$pkg" | grep -qE '^\+.*"(version|@forumline/)'; then
       if ! git diff --cached --name-only | grep -qx "$ROOT_LOCK"; then
         missing+=("$ROOT_LOCK (required by staged changes in $pkg)")
         break

@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Handlers holds dependencies for all forum API handlers.

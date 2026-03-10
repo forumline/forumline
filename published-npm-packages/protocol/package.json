@@ -1,5 +1,5 @@
 {
-  "name": "@johnvondrashek/forumline-protocol",
+  "name": "@forumline/protocol",
   "version": "0.4.0",
   "description": "Forumline federation protocol types",
   "main": "./dist/index.js",
@@ -17,7 +17,7 @@
   "files": ["dist"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/JohnVonDrashek/forumline.git",
+    "url": "https://github.com/forumline/forumline.git",
     "directory": "published-npm-packages/protocol"
   },
   "publishConfig": {

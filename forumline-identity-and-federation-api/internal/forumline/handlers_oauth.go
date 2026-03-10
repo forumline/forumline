@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	shared "github.com/forumline/forumline/shared-go"
 	"golang.org/x/crypto/bcrypt"
 )
 

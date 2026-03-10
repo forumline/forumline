@@ -10,6 +10,7 @@ import (
 )
 
 // CORSMiddleware handles CORS for the API.
+// Supports exact origins and wildcard subdomain patterns like "https://*.forumline.net".
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

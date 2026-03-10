@@ -15,7 +15,7 @@
  * only changed results are re-rendered instead of rebuilding the entire list.
  */
 import type { ForumlineStore } from '../shared/forumline-store.js'
-import type { ForumlineProfile } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineProfile } from '@forumline/protocol'
 import { reactive, replace, noreactive, list } from 'vanjs-ext'
 import { tags, state } from '../shared/dom.js'
 import { createAvatar, createInput, createSpinner } from '../shared/ui.js'

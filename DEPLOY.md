@@ -37,7 +37,7 @@ Each service runs on a Proxmox LXC with Docker, SSH access via Cloudflare Tunnel
 3. Set up the deploy directory and clone the repo:
    ```bash
    mkdir -p /opt/website
-   git clone https://github.com/johnvondrashek/forumline.git /opt/website/repo
+   git clone https://github.com/forumline/forumline.git /opt/website/repo
    ```
 4. Add the deploy SSH public key to `/root/.ssh/authorized_keys`
 5. Configure Cloudflare Tunnel routes:

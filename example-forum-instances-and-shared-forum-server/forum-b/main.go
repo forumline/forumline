@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/forum"
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	"github.com/forumline/forumline/example-forum-instances-and-shared-forum-server/forum"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 func main() {

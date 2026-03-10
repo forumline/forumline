@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/platform"
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	"github.com/forumline/forumline/example-forum-instances-and-shared-forum-server/platform"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // HandleImport imports forum data from a forumline export file.

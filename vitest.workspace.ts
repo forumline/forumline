@@ -16,7 +16,7 @@ export default defineWorkspace([
     },
     resolve: {
       alias: {
-        '@johnvondrashek/forumline-protocol': './published-npm-packages/protocol/src/index.ts',
+        '@forumline/protocol': './published-npm-packages/protocol/src/index.ts',
       },
     },
   },

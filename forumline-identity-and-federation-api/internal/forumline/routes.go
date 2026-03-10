@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // use applies middleware to a handler, wrapping in right-to-left order.

@@ -19,7 +19,7 @@
  * - Lazily create and persistently keep alive child views (webview, DMs, settings, welcome)
  */
 import type { GoTrueAuthClient, ForumlineSession } from '../auth/gotrue-auth.js'
-import type { ForumNotification } from '@johnvondrashek/forumline-protocol'
+import type { ForumNotification } from '@forumline/protocol'
 import { createForumWebview, type ForumWebviewInstance } from '../forums/forum-webview.js'
 import { type ForumStore } from '../forums/forum-store.js'
 import { type ForumlineStore } from '../shared/forumline-store.js'

@@ -32,7 +32,7 @@ importers:
 
   forumline-identity-and-federation-web:
     dependencies:
-      '@johnvondrashek/forumline-protocol':
+      '@forumline/protocol':
         specifier: workspace:*
         version: link:../published-npm-packages/protocol
       vanjs-core:
@@ -61,7 +61,7 @@ importers:
 
   published-npm-packages/server-sdk:
     dependencies:
-      '@johnvondrashek/forumline-protocol':
+      '@forumline/protocol':
         specifier: workspace:*
         version: link:../protocol
       jsonwebtoken:

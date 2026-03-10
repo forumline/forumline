@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	forumlineapp "github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/forumline"
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	forumlineapp "github.com/forumline/forumline/forumline-identity-and-federation-api/internal/forumline"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 func main() {

@@ -13,7 +13,7 @@
  * - Authenticate all requests with the user's Forumline access token
  * - Throw descriptive errors when API calls fail
  */
-import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineProfile } from '@forumline/protocol'
 import { showToast } from '../ui.js'
 
 interface FetchOptions extends RequestInit {

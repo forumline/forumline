@@ -28,9 +28,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/forum"
-	plat "github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/platform"
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	"github.com/forumline/forumline/example-forum-instances-and-shared-forum-server/forum"
+	plat "github.com/forumline/forumline/example-forum-instances-and-shared-forum-server/platform"
+	shared "github.com/forumline/forumline/shared-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )

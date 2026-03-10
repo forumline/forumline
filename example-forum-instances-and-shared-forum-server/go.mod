@@ -1,4 +1,4 @@
-module github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server
+module github.com/forumline/forumline/example-forum-instances-and-shared-forum-server
 
 go 1.26.1
 
@@ -6,6 +6,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/forumline/forumline/shared-go v0.0.0-00010101000000-000000000000
 	github.com/livekit/protocol v1.45.0
 	github.com/livekit/server-sdk-go/v2 v2.15.0
 	github.com/minio/minio-go/v7 v7.0.99
@@ -96,3 +97,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/forumline/forumline/shared-go => ../shared-go

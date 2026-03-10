@@ -1,4 +1,4 @@
-module github.com/johnvondrashek/forumline/forumline-identity-and-federation-api
+module github.com/forumline/forumline/forumline-identity-and-federation-api
 
 go 1.26.1
 
@@ -6,6 +6,7 @@ require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/forumline/forumline/shared-go v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.48.0
 )
 
@@ -18,3 +19,5 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
+
+replace github.com/forumline/forumline/shared-go => ../shared-go

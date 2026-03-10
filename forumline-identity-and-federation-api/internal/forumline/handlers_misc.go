@@ -17,7 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	shared "github.com/forumline/forumline/shared-go"
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/bcrypt"
 )

@@ -18,7 +18,7 @@
  * results — only added/removed chips and results cause DOM mutations.
  */
 import type { ForumlineStore } from '../shared/forumline-store.js'
-import type { ForumlineProfile } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineProfile } from '@forumline/protocol'
 import { reactive, list, replace, noreactive } from 'vanjs-ext'
 import { tags, state } from '../shared/dom.js'
 import { createAvatar, createButton, createInput, createSpinner } from '../shared/ui.js'

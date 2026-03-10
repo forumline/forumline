@@ -1,7 +1,7 @@
 package forumline
 
 import (
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Handlers holds dependencies for all forumline API handlers.

@@ -22,7 +22,7 @@
  * efficient message list diffing — only new/changed messages touch the DOM.
  */
 import type { ForumlineStore } from '../shared/forumline-store.js'
-import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineConversationMember } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineDirectMessage, ForumlineDmConversation, ForumlineConversationMember } from '@forumline/protocol'
 import { reactive, list, replace, noreactive } from 'vanjs-ext'
 import { tags, html, state } from '../shared/dom.js'
 import { createAvatar, createButton, createInput, createSpinner } from '../shared/ui.js'

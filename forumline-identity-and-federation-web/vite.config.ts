@@ -7,7 +7,7 @@ export default defineConfig({
     // Always resolve to package source — ensures Vite bundles the latest
     // code from the monorepo rather than stale dist files.
     alias: {
-      '@johnvondrashek/forumline-protocol': path.resolve(__dirname, '../published-npm-packages/protocol/src/index.ts'),
+      '@forumline/protocol': path.resolve(__dirname, '../published-npm-packages/protocol/src/index.ts'),
     },
   },
   clearScreen: false,

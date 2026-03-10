@@ -128,7 +128,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
 	rr := httptest.NewRecorder()
 
@@ -147,7 +147,7 @@ func TestAuthMiddleware_MissingToken(t *testing.T) {
 		t.Fatal("handler should not be called")
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -164,7 +164,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 		t.Fatal("handler should not be called")
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	rr := httptest.NewRecorder()
 
@@ -188,7 +188,7 @@ func TestAuthMiddleware_NoSubject(t *testing.T) {
 		t.Fatal("handler should not be called")
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
 	rr := httptest.NewRecorder()
 
@@ -214,7 +214,7 @@ func TestAuthMiddleware_CookieToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: "sb-access-token", Value: tokenStr})
 	rr := httptest.NewRecorder()
 
@@ -243,7 +243,7 @@ func TestAuthMiddleware_QueryParamToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test?access_token="+tokenStr, nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test?access_token="+tokenStr, nil)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -271,7 +271,7 @@ func TestOptionalAuthMiddleware_WithToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenStr)
 	rr := httptest.NewRecorder()
 
@@ -292,7 +292,7 @@ func TestOptionalAuthMiddleware_WithoutToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -314,7 +314,7 @@ func TestOptionalAuthMiddleware_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer bad-token")
 	rr := httptest.NewRecorder()
 
@@ -345,10 +345,7 @@ func TestUserIDFromContext_WithValue(t *testing.T) {
 
 func TestExtractToken_Priority(t *testing.T) {
 	// Authorization header should take priority over cookie and query param
-	secret := "test-secret-for-extract-token-32char"
-	t.Setenv("JWT_SECRET", secret)
-
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test?access_token=query-token", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test?access_token=query-token", nil)
 	req.Header.Set("Authorization", "Bearer header-token")
 	req.AddCookie(&http.Cookie{Name: "sb-access-token", Value: "cookie-token"})
 
@@ -359,7 +356,7 @@ func TestExtractToken_Priority(t *testing.T) {
 }
 
 func TestExtractToken_CookieFallback(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test?access_token=query-token", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test?access_token=query-token", nil)
 	req.AddCookie(&http.Cookie{Name: "sb-access-token", Value: "cookie-token"})
 
 	got := extractToken(req)
@@ -369,7 +366,7 @@ func TestExtractToken_CookieFallback(t *testing.T) {
 }
 
 func TestExtractToken_QueryParamFallback(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),"GET", "/test?access_token=query-token", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test?access_token=query-token", nil)
 
 	got := extractToken(req)
 	if got != "query-token" {
