@@ -175,54 +175,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            desktop-and-mobile-tauri-apps/target
-          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('desktop-and-mobile-tauri-apps/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-ios-
+      - name: Generate Xcode project
+        run: xcodegen generate
+        working-directory: ios-app
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
-      - name: Initialize iOS project
-        run: cargo tauri ios init
-        working-directory: desktop-and-mobile-tauri-apps
-
-      - name: Disable code signing in Xcode project
+      - name: Build iOS app for simulator
         run: |
-          PBXPROJ="desktop-and-mobile-tauri-apps/gen/apple/forumline-demo.xcodeproj/project.pbxproj"
-          # Set CODE_SIGNING_ALLOWED = NO for all build configurations
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "-";/' "$PBXPROJ"
-          sed -i '' '/buildSettings = {/a\
-            CODE_SIGNING_ALLOWED = NO;\
-            CODE_SIGNING_REQUIRED = NO;
-          ' "$PBXPROJ"
+          xcodebuild build \
+            -project Forumline.xcodeproj \
+            -scheme Forumline \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            DERIVED_DATA_PATH=build
+        working-directory: ios-app
 
-      - name: Build iOS app
+      - name: Package simulator build
         run: |
-          # Build will succeed but export will fail without signing team — that's OK,
-          # we grab the .app from the archive instead
-          cargo tauri ios build || true
-        working-directory: desktop-and-mobile-tauri-apps
-
-      - name: Package iOS build from archive
-        run: |
-          # The .app lives inside the .xcarchive even when export fails
-          APP_DIR=$(find desktop-and-mobile-tauri-apps/gen/apple/build -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP_DIR" ]; then
-            # Also check xcarchive paths
-            APP_DIR=$(find ~/Library/Developer/Xcode/Archives -name "*.app" -type d 2>/dev/null | head -1)
-          fi
+          APP_DIR=$(find ios-app/build/Build/Products/Release-iphonesimulator -name "*.app" -type d | head -1)
           if [ -n "$APP_DIR" ]; then
             cd "$(dirname "$APP_DIR")"
             zip -r "$GITHUB_WORKSPACE/Forumline-nightly-ios-simulator.zip" "$(basename "$APP_DIR")"
