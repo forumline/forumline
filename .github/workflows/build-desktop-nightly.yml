@@ -102,6 +102,32 @@ jobs:
           name: desktop-dmg
           path: Forumline-nightly.dmg
 
+  build-windows:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Windows app
+        run: dotnet publish -c Release -o publish
+        working-directory: windows-app
+
+      - name: Package exe
+        run: |
+          Compress-Archive -Path windows-app\publish\* -DestinationPath Forumline-nightly-windows.zip
+        shell: pwsh
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: Forumline-nightly-windows.zip
+
   build-android:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
@@ -195,8 +221,8 @@ jobs:
           path: Forumline-nightly-ios-simulator.zip
 
   release:
-    needs: [check-changes, build-macos, build-android, build-ios]
-    if: always() && needs.check-changes.outputs.has_changes == 'true' && (needs.build-macos.result == 'success' || needs.build-android.result == 'success' || needs.build-ios.result == 'success')
+    needs: [check-changes, build-macos, build-windows, build-android, build-ios]
+    if: always() && needs.check-changes.outputs.has_changes == 'true' && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success' || needs.build-android.result == 'success' || needs.build-ios.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -231,6 +257,10 @@ jobs:
             BODY="$BODY
           - **Android**: \`Forumline-nightly.apk\` — Enable \"Install from unknown sources\" to install"
           fi
+          if [ -f artifacts/windows-exe/Forumline-nightly-windows.zip ]; then
+            BODY="$BODY
+          - **Windows**: \`Forumline-nightly-windows.zip\` — Extract and run Forumline.exe"
+          fi
           if [ -f artifacts/ios-simulator/Forumline-nightly-ios-simulator.zip ]; then
             BODY="$BODY
           - **iOS**: \`Forumline-nightly-ios-simulator.zip\` — Simulator build only (no code signing)"
@@ -259,6 +289,7 @@ jobs:
           mkdir -p release-files
           cp artifacts/desktop-dmg/Forumline-nightly.dmg release-files/ 2>/dev/null || true
           cp artifacts/android-apk/Forumline-nightly.apk release-files/ 2>/dev/null || true
+          cp artifacts/windows-exe/Forumline-nightly-windows.zip release-files/ 2>/dev/null || true
           cp artifacts/ios-simulator/Forumline-nightly-ios-simulator.zip release-files/ 2>/dev/null || true
           ls -la release-files/
 
