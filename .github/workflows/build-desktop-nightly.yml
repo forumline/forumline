@@ -102,6 +102,33 @@ jobs:
           name: desktop-dmg
           path: Forumline-nightly.dmg
 
+  build-linux:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Build Linux app
+        run: make
+        working-directory: linux-app
+
+      - name: Package binary
+        run: |
+          mkdir -p Forumline-linux
+          cp linux-app/forumline Forumline-linux/
+          cp linux-app/net.forumline.app.desktop Forumline-linux/
+          tar czf Forumline-nightly-linux.tar.gz Forumline-linux/
+
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: Forumline-nightly-linux.tar.gz
+
   build-windows:
     needs: check-changes
     if: needs.check-changes.outputs.has_changes == 'true'
@@ -221,8 +248,8 @@ jobs:
           path: Forumline-nightly-ios-simulator.zip
 
   release:
-    needs: [check-changes, build-macos, build-windows, build-android, build-ios]
-    if: always() && needs.check-changes.outputs.has_changes == 'true' && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success' || needs.build-android.result == 'success' || needs.build-ios.result == 'success')
+    needs: [check-changes, build-macos, build-windows, build-linux, build-android, build-ios]
+    if: always() && needs.check-changes.outputs.has_changes == 'true' && (needs.build-macos.result == 'success' || needs.build-windows.result == 'success' || needs.build-linux.result == 'success' || needs.build-android.result == 'success' || needs.build-ios.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -261,6 +288,10 @@ jobs:
             BODY="$BODY
           - **Windows**: \`Forumline-nightly-windows.zip\` — Extract and run Forumline.exe"
           fi
+          if [ -f artifacts/linux-binary/Forumline-nightly-linux.tar.gz ]; then
+            BODY="$BODY
+          - **Linux**: \`Forumline-nightly-linux.tar.gz\` — Extract and run ./forumline"
+          fi
           if [ -f artifacts/ios-simulator/Forumline-nightly-ios-simulator.zip ]; then
             BODY="$BODY
           - **iOS**: \`Forumline-nightly-ios-simulator.zip\` — Simulator build only (no code signing)"
@@ -290,6 +321,7 @@ jobs:
           cp artifacts/desktop-dmg/Forumline-nightly.dmg release-files/ 2>/dev/null || true
           cp artifacts/android-apk/Forumline-nightly.apk release-files/ 2>/dev/null || true
           cp artifacts/windows-exe/Forumline-nightly-windows.zip release-files/ 2>/dev/null || true
+          cp artifacts/linux-binary/Forumline-nightly-linux.tar.gz release-files/ 2>/dev/null || true
           cp artifacts/ios-simulator/Forumline-nightly-ios-simulator.zip release-files/ 2>/dev/null || true
           ls -la release-files/
 

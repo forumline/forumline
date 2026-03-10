@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Forumline
+Comment=Forumline Forum Network
+Exec=forumline
+Icon=net.forumline.app
+Categories=Network;Chat;
+MimeType=x-scheme-handler/forumline;
+StartupWMClass=net.forumline.app
