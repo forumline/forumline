@@ -7,7 +7,7 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - /opt/forum/postgres-data:/var/lib/postgresql/data
-      - /opt/forum/init-db/00-auth-schema.sql:/docker-entrypoint-initdb.d/00-auth-schema.sql:ro
+      - /opt/forum/repo/init-db/00-auth-schema.sql:/docker-entrypoint-initdb.d/00-auth-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 2s
@@ -56,8 +56,8 @@ services:
       gotrue:
         condition: service_healthy
     volumes:
-      - /opt/forum/init-db/01-forum-tables.sql:/01-forum-tables.sql:ro
-      - /opt/forum/init-db/02-forum-triggers.sql:/02-forum-triggers.sql:ro
+      - /opt/forum/repo/init-db/01-forum-tables.sql:/01-forum-tables.sql:ro
+      - /opt/forum/repo/init-db/02-forum-triggers.sql:/02-forum-triggers.sql:ro
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     entrypoint: >
@@ -70,7 +70,7 @@ services:
   forum:
     build:
       context: /opt/forum/repo
-      dockerfile: docker/Dockerfile.go-forum
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:

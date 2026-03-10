@@ -1,20 +1,21 @@
-name: Deploy Forumline Demo
+name: Deploy to demo.forumline.net
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'forum-server/**'
-      - 'shared-go/**'
-      - '.github/workflows/deploy-forum.yml'
-      - 'production-docker-compose-configs/forum-a/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch encrypted env from monorepo
+        run: |
+          curl -fsSL \
+            "https://raw.githubusercontent.com/forumline/forumline/main/forum-server/deploy/.env.enc" \
+            -o /tmp/.env.enc
 
       - name: Install sops and age
         run: |
@@ -26,7 +27,7 @@ jobs:
       - name: Decrypt secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: sops -d --input-type dotenv --output-type dotenv production-docker-compose-configs/forum-a/.env.enc > /tmp/forum-a.env
+        run: sops -d --input-type dotenv --output-type dotenv /tmp/.env.enc > /tmp/forum.env
 
       - name: Install cloudflared
         run: |
@@ -49,6 +50,14 @@ jobs:
 
       - name: Deploy
         run: |
-          scp /tmp/forum-a.env forum-prod:/opt/forum/.env
-          scp production-docker-compose-configs/forum-a/docker-compose.yml forum-prod:/opt/forum/docker-compose.yml
-          ssh forum-prod "cd /opt/forum/repo && git fetch origin main && git reset --hard origin/main && cd /opt/forum && docker compose up -d --build forum && docker compose ps"
+          scp /tmp/forum.env forum-prod:/opt/forum/.env
+          scp deploy/docker-compose.prod.yml forum-prod:/opt/forum/docker-compose.yml
+          ssh forum-prod "
+            cd /opt/forum/repo &&
+            git remote set-url origin https://github.com/forumline/forum-server.git 2>/dev/null || true &&
+            git fetch origin main &&
+            git reset --hard origin/main &&
+            cd /opt/forum &&
+            docker compose up -d --build forum &&
+            docker compose ps
+          "
