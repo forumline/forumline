@@ -16,7 +16,7 @@
  * - Track in-forum navigation and report the current path to the parent
  * - Support an initial deep-link path to open a specific page within the forum
  */
-import type { ForumToForumlineMessage, ForumlineToForumMessage, UnreadCounts, ForumNotification } from '@johnvondrashek/forumline-protocol'
+import type { ForumToForumlineMessage, ForumlineToForumMessage, UnreadCounts, ForumNotification } from '@forumline/protocol'
 import type { ForumMembership } from './forum-store.js'
 import { tags, vanX } from '../shared/dom.js'
 import { showToast } from '../shared/ui.js'

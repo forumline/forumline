@@ -18,7 +18,7 @@ import type {
   ForumlineIdentity,
   ForumNotification,
   NotificationInput,
-} from '@johnvondrashek/forumline-protocol'
+} from '@forumline/protocol'
 
 import { decodeJwtPayload, verifyJwt } from './utils/cookies.js'
 

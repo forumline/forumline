@@ -15,7 +15,7 @@
  * - Provide switchForum and goHome actions for navigation
  * - Clear all state on sign-out
  */
-import type { UnreadCounts } from '@johnvondrashek/forumline-protocol'
+import type { UnreadCounts } from '@forumline/protocol'
 import { createStore, type Store } from '../shared/store.js'
 
 // ============================================================================

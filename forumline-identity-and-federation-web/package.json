@@ -9,7 +9,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@johnvondrashek/forumline-protocol": "workspace:*",
+    "@forumline/protocol": "workspace:*",
     "vanjs-core": "^1.6.0",
     "vanjs-ext": "^0.6.3"
   },

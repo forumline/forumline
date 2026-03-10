@@ -15,7 +15,7 @@
  * - Navigate to the conversation thread when a conversation is tapped
  */
 import type { ForumlineStore } from '../shared/forumline-store.js'
-import type { ForumlineConversationMember } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineConversationMember } from '@forumline/protocol'
 import { tags, html } from '../shared/dom.js'
 import { createAvatar, createSpinner } from '../shared/ui.js'
 import { formatShortTimeAgo } from '../shared/dateFormatters.js'

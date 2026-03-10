@@ -1,5 +1,5 @@
 {
-  "name": "@johnvondrashek/forumline-server-sdk",
+  "name": "@forumline/server-sdk",
   "version": "0.3.3",
   "description": "Forumline server SDK for forum operators",
   "main": "./dist/index.js",
@@ -13,7 +13,7 @@
   "files": ["dist"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/JohnVonDrashek/forumline.git",
+    "url": "https://github.com/forumline/forumline.git",
     "directory": "published-npm-packages/server-sdk"
   },
   "publishConfig": {
@@ -24,7 +24,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@johnvondrashek/forumline-protocol": "workspace:*",
+    "@forumline/protocol": "workspace:*",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {

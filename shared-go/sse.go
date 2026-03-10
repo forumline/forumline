@@ -14,10 +14,11 @@ import (
 
 // SSEClient represents a connected SSE client with a filter.
 type SSEClient struct {
-	Channel string            // LISTEN channel name
-	Filter  map[string]string // e.g. {"recipient_id": "uuid"}
-	Send    chan []byte
-	Done    chan struct{}
+	Channel    string                                 // LISTEN channel name
+	Filter     map[string]string                      // e.g. {"recipient_id": "uuid"}
+	FilterFunc func(data map[string]interface{}) bool // dynamic filter (used instead of Filter when set)
+	Send       chan []byte
+	Done       chan struct{}
 }
 
 // SSEHub manages LISTEN/NOTIFY subscriptions and fans out to SSE clients.
@@ -105,6 +106,10 @@ func (h *SSEHub) broadcast(channel string, payload []byte) {
 	clients := h.clients[channel]
 	h.mu.RUnlock()
 
+	if len(clients) == 0 {
+		return
+	}
+
 	// Parse payload for filtering
 	var data map[string]interface{}
 	if err := json.Unmarshal(payload, &data); err != nil {
@@ -113,7 +118,13 @@ func (h *SSEHub) broadcast(channel string, payload []byte) {
 	}
 
 	for _, client := range clients {
-		if matchesFilter(data, client.Filter) {
+		matched := false
+		if client.FilterFunc != nil {
+			matched = client.FilterFunc(data)
+		} else {
+			matched = matchesFilter(data, client.Filter)
+		}
+		if matched {
 			select {
 			case client.Send <- payload:
 			default:

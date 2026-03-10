@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 // HandleVoiceSignal handles POST /api/voice-signal — relays WebRTC signaling

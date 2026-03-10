@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnvondrashek/forumline/forumline-identity-and-federation-api/internal/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 type DirectMessage struct {

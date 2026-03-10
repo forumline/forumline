@@ -9,7 +9,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 func (h *Handlers) r2Client() (*minio.Client, error) {

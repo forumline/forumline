@@ -15,7 +15,7 @@
  * - Reactively update icons, badges, and active states when store state changes
  */
 import type { ForumStore, ForumMembership } from './forum-store.js'
-import type { UnreadCounts } from '@johnvondrashek/forumline-protocol'
+import type { UnreadCounts } from '@forumline/protocol'
 import { tags, html, state, add } from '../shared/dom.js'
 import { reactive, list, replace, noreactive } from 'vanjs-ext'
 

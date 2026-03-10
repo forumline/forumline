@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/johnvondrashek/forumline/example-forum-instances-and-shared-forum-server/shared"
+	shared "github.com/forumline/forumline/shared-go"
 )
 
 func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config) *chi.Mux {

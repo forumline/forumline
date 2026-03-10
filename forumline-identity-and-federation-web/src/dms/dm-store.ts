@@ -12,7 +12,7 @@
  * - Expose a refreshConversations function so dm-message-view can trigger a re-fetch after marking read
  */
 import type { ForumlineStore } from '../shared/forumline-store.js'
-import type { ForumlineDmConversation } from '@johnvondrashek/forumline-protocol'
+import type { ForumlineDmConversation } from '@forumline/protocol'
 import { state, derive } from '../shared/dom.js'
 import { subscribeDmEvents } from './dm-sse.js'
 
