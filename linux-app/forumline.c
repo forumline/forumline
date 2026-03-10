@@ -135,7 +135,7 @@ static void activate(GtkApplication *app, gpointer user_data)
         WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
         NULL, NULL
     );
-    webkit_user_content_manager_add_user_script(content_manager, script);
+    webkit_user_content_manager_add_script(content_manager, script);
     webkit_user_script_unref(script);
 
     /* Register the message handler for web -> native */

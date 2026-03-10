@@ -3,7 +3,7 @@ PKG_CONFIG ?= pkg-config
 GTK_CFLAGS := $(shell $(PKG_CONFIG) --cflags gtk4 webkitgtk-6.0)
 GTK_LIBS := $(shell $(PKG_CONFIG) --libs gtk4 webkitgtk-6.0)
 
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
 PREFIX ?= /usr/local
 
 forumline: forumline.c
