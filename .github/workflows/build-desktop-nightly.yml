@@ -59,6 +59,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -80,11 +84,17 @@ jobs:
 
       - name: Create DMG
         run: |
-          hdiutil create \
-            -volname "Forumline" \
-            -srcfolder native-applications/macos/build/Build/Products/Release/Forumline.app \
-            -ov -format UDZO \
-            Forumline-nightly.dmg
+          APP_PATH="native-applications/macos/build/Build/Products/Release/Forumline.app"
+          npx create-dmg "$APP_PATH" --overwrite --dmg-title "Forumline Nightly" --no-code-sign || true
+
+          DMG_FILE=$(ls -1 Forumline*.dmg 2>/dev/null | head -1)
+          if [ -n "$DMG_FILE" ]; then
+            mv "$DMG_FILE" Forumline-nightly.dmg
+            echo "Created: Forumline-nightly.dmg"
+          else
+            echo "::error::DMG was not created"
+            exit 1
+          fi
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
