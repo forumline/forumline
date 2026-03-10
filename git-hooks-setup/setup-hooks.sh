@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Configure git to use the repo's .githooks/ directory for hooks.
+# Git hooks are now managed by Lefthook.
+# Just run `pnpm install` — the postinstall script handles everything.
 
-set -euo pipefail
-
-git config core.hooksPath .githooks
-echo "Git hooks path set to .githooks/"
+echo "Hooks are now managed by Lefthook."
+echo "Run 'pnpm install' to set them up automatically."
