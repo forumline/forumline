@@ -1,0 +1,11 @@
+name = "forumline-status"
+main = "src/worker.ts"
+compatibility_date = "2024-12-01"
+
+# Routes — intercept all forumline domains (except status page itself)
+routes = [
+  { pattern = "forumline.net/*", zone_name = "forumline.net" },
+  { pattern = "app.forumline.net/*", zone_name = "forumline.net" },
+  { pattern = "demo.forumline.net/*", zone_name = "forumline.net" },
+  { pattern = "hosted.forumline.net/*", zone_name = "forumline.net" },
+]
