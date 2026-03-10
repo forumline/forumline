@@ -25,7 +25,7 @@ COPY forumline-identity-and-federation-web/ forumline-identity-and-federation-we
 
 # Install all dependencies
 ARG GITHUB_PACKAGES_TOKEN
-RUN GITHUB_PACKAGES_TOKEN=${GITHUB_PACKAGES_TOKEN} pnpm install --frozen-lockfile
+RUN GITHUB_PACKAGES_TOKEN=${GITHUB_PACKAGES_TOKEN} pnpm install --frozen-lockfile --ignore-scripts
 
 # Vite build-time env vars (public keys only — baked into frontend bundle)
 ARG VITE_VAPID_PUBLIC_KEY
