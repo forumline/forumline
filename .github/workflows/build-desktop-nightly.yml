@@ -59,16 +59,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
-        working-directory: macos-app
+        working-directory: native-applications/macos
 
       - name: Build macOS app
         run: |
@@ -80,21 +76,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="-" \
             -derivedDataPath build
-        working-directory: macos-app
+        working-directory: native-applications/macos
 
       - name: Create DMG
         run: |
-          APP_PATH="macos-app/build/Build/Products/Release/Forumline.app"
-          npx create-dmg "$APP_PATH" --overwrite --dmg-title "Forumline Nightly" --no-code-sign || true
-
-          DMG_FILE=$(ls -1 Forumline*.dmg 2>/dev/null | head -1)
-          if [ -n "$DMG_FILE" ]; then
-            mv "$DMG_FILE" Forumline-nightly.dmg
-            echo "Created: Forumline-nightly.dmg"
-          else
-            echo "::error::DMG was not created"
-            exit 1
-          fi
+          hdiutil create \
+            -volname "Forumline" \
+            -srcfolder native-applications/macos/build/Build/Products/Release/Forumline.app \
+            -ov -format UDZO \
+            Forumline-nightly.dmg
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
@@ -114,13 +104,13 @@ jobs:
 
       - name: Build Linux app
         run: make
-        working-directory: linux-app
+        working-directory: native-applications/linux
 
       - name: Package binary
         run: |
           mkdir -p Forumline-linux
-          cp linux-app/forumline Forumline-linux/
-          cp linux-app/net.forumline.app.desktop Forumline-linux/
+          cp native-applications/linux/forumline Forumline-linux/
+          cp native-applications/linux/net.forumline.app.desktop Forumline-linux/
           tar czf Forumline-nightly-linux.tar.gz Forumline-linux/
 
       - name: Upload Linux build
@@ -142,11 +132,11 @@ jobs:
 
       - name: Build Windows app
         run: dotnet publish -c Release -o publish
-        working-directory: windows-app
+        working-directory: native-applications/windows
 
       - name: Package exe
         run: |
-          Compress-Archive -Path windows-app\publish\* -DestinationPath Forumline-nightly-windows.zip
+          Compress-Archive -Path native-applications/windows\publish\* -DestinationPath Forumline-nightly-windows.zip
         shell: pwsh
 
       - name: Upload Windows build
@@ -176,17 +166,17 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android-app/**/*.gradle.kts') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('native-applications/android/**/*.gradle.kts') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
       - name: Build Android APK
         run: ./gradlew assembleRelease
-        working-directory: android-app
+        working-directory: native-applications/android
 
       - name: Collect APK
         run: |
-          APK=$(find android-app/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          APK=$(find native-applications/android/app/build/outputs/apk -name "*.apk" -type f | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" Forumline-nightly.apk
             echo "Found APK: $APK"
@@ -213,7 +203,7 @@ jobs:
 
       - name: Generate Xcode project
         run: xcodegen generate
-        working-directory: ios-app
+        working-directory: native-applications/ios
 
       - name: Build iOS app for simulator
         run: |
@@ -227,11 +217,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="-" \
             -derivedDataPath build
-        working-directory: ios-app
+        working-directory: native-applications/ios
 
       - name: Package simulator build
         run: |
-          APP_DIR=$(find ios-app/build/Build/Products/Release-iphonesimulator -name "*.app" -type d | head -1)
+          APP_DIR=$(find native-applications/ios/build/Build/Products/Release-iphonesimulator -name "*.app" -type d | head -1)
           if [ -n "$APP_DIR" ]; then
             cd "$(dirname "$APP_DIR")"
             zip -r "$GITHUB_WORKSPACE/Forumline-nightly-ios-simulator.zip" "$(basename "$APP_DIR")"
