@@ -1,0 +1,48 @@
+pre-commit:
+  parallel: true
+  commands:
+    lockfile-check:
+      run: bash .githooks/lockfile-check.sh
+      glob: "**/package.json"
+
+    sops-check:
+      run: bash .githooks/sops-check.sh
+      glob: "**/.env*"
+
+    eslint-workspace:
+      glob: "{forumline-identity-and-federation-web,published-npm-packages}/**/*.{ts,tsx,js,mjs}"
+      run: pnpm lint
+
+    eslint-forum-a:
+      root: "example-forum-instances-and-shared-forum-server/forum-a/"
+      glob: "src/**/*.js"
+      run: pnpm lint
+
+    golangci-lint-api:
+      glob: "forumline-identity-and-federation-api/**/*.go"
+      root: "forumline-identity-and-federation-api/"
+      run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./...
+
+    golangci-lint-forum:
+      glob: "example-forum-instances-and-shared-forum-server/**/*.go"
+      root: "example-forum-instances-and-shared-forum-server/"
+      run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./...
+
+    go-test-api:
+      glob: "forumline-identity-and-federation-api/**/*.go"
+      root: "forumline-identity-and-federation-api/"
+      run: go test ./...
+
+    go-test-forum:
+      glob: "example-forum-instances-and-shared-forum-server/**/*.go"
+      root: "example-forum-instances-and-shared-forum-server/"
+      run: go test ./...
+
+    ts-test:
+      glob: "{forumline-identity-and-federation-web,published-npm-packages}/**/*.{ts,tsx,js,mjs}"
+      run: pnpm test
+
+pre-push:
+  commands:
+    github-actions-status:
+      run: bash .githooks/pre-push
