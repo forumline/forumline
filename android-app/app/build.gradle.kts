@@ -13,6 +13,10 @@ android {
     namespace = "net.forumline.app"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "net.forumline.app"
         minSdk = 26
