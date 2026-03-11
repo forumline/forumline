@@ -3,9 +3,9 @@ FROM golang:1.26-alpine AS go-build
 
 WORKDIR /app
 COPY services/hosted/go.mod services/hosted/go.sum ./
-COPY packages/shared-go/ /shared-go/
-COPY services/forum/forum/ /forum-server/forum/
-COPY services/forum/go.mod /forum-server/go.mod
+COPY packages/shared-go/ /packages/shared-go/
+COPY services/forum/forum/ /forum/forum/
+COPY services/forum/go.mod /forum/go.mod
 RUN go mod download
 
 COPY services/hosted/platform/ platform/
