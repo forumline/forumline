@@ -15,7 +15,6 @@ import { api } from '../lib/api.js'
 import { authStore, getAccessToken } from '../lib/auth.js'
 import { uploadAvatar, uploadDefaultAvatar } from '../lib/avatars.js'
 import { navigate } from '../router.js'
-import { toast } from '../lib/toast.js'
 import { showCropModal } from '../components/image-crop-modal.js'
 
 export function renderNewThread(container, { categorySlug }) {

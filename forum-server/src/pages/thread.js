@@ -13,9 +13,9 @@
  */
 
 import { api } from '../lib/api.js'
-import { authStore, getAccessToken } from '../lib/auth.js'
+import { authStore } from '../lib/auth.js'
 import { avatarHTML } from '../components/avatar.js'
-import { formatRelativeTime, formatDate } from '../lib/date.js'
+import { formatRelativeTime } from '../lib/date.js'
 import { toast } from '../lib/toast.js'
 import { connectSSE } from '../lib/sse.js'
 
@@ -176,7 +176,7 @@ export function renderThread(container, { threadId }) {
             currentPage = Math.ceil(posts.length / POSTS_PER_PAGE)
             replyingTo = null
             render()
-          } catch (err) {
+          } catch (_err) {
             toast.error('Failed to post reply')
             postBtn.disabled = false
             postBtn.textContent = 'Post Reply'

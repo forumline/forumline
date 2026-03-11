@@ -12,9 +12,7 @@
  */
 
 import { api } from '../lib/api.js'
-import { avatarHTML } from '../components/avatar.js'
 import { formatRelativeTime } from '../lib/date.js'
-import { navigate } from '../router.js'
 
 export function renderSearch(container) {
   let debounceTimer = null

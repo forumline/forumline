@@ -174,7 +174,7 @@ function renderActiveRoomBar(voice) {
   `
 }
 
-function renderRoomCard(r, voice, user) {
+function renderRoomCard(r, voice, _user) {
   const info = voice.roomParticipantCounts[r.slug]
   const isActive = voice.connectedRoomSlug === r.slug
   return `

@@ -27,8 +27,6 @@ export const authStore = createStore({
 
 let currentSession = null
 let refreshTimer = null
-const listeners = new Set()
-
 // --- Internal helpers ---
 
 function gotrueHeaders(token) {

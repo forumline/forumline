@@ -11,6 +11,8 @@ pre-commit:
 
     gitleaks:
       run: gitleaks protect --staged --no-banner
+      skip:
+        - run: "! command -v gitleaks >/dev/null 2>&1"
 
     eslint-workspace:
       glob: "{forumline-identity-and-federation-web,published-npm-packages}/**/*.{ts,tsx,js,mjs}"

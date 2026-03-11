@@ -18,8 +18,8 @@ import { connectSSE } from './sse.js'
 import {
   setStoreCallback, setEscalateCallback, sendEscalateSignal,
   joinRoomP2P, leaveRoomP2P, toggleMuteP2P,
-  toggleDeafenP2P, handlePeerJoined, handlePeerLeft, isP2PActive,
-  cleanupP2P, getP2PPeerCount,
+  toggleDeafenP2P, handlePeerJoined,
+  cleanupP2P,
 } from './voice-p2p.js'
 
 export const voiceStore = createStore({

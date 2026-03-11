@@ -427,7 +427,7 @@ function startRemoteSpeakingDetection(userID, stream) {
 
 export function cleanupP2P() {
   leaveRoomP2P()
-  for (const [id, { ctx, interval }] of remoteAnalysers) {
+  for (const [_id, { ctx, interval }] of remoteAnalysers) {
     clearInterval(interval)
     ctx.close().catch(() => {})
   }
