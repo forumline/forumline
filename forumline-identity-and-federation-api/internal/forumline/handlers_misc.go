@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -188,14 +191,32 @@ func (h *Handlers) HandleJoinForum(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Always use the requested domain, not the manifest's claim, to prevent spoofing
+		manifest.Domain = body.ForumDomain
+
+		manifestTags := normalizeTags(manifest.Tags)
+
 		err = h.Pool.QueryRow(ctx,
-			`INSERT INTO forumline_forums (domain, name, icon_url, api_base, web_base, capabilities, approved)
-			 VALUES ($1, $2, $3, $4, $5, $6, true)
-			 ON CONFLICT (domain) DO UPDATE SET domain = EXCLUDED.domain
+			`INSERT INTO forumline_forums (domain, name, icon_url, api_base, web_base, capabilities, tags, approved)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+			 ON CONFLICT (domain) DO UPDATE SET
+			   name = EXCLUDED.name,
+			   icon_url = EXCLUDED.icon_url,
+			   api_base = EXCLUDED.api_base,
+			   web_base = EXCLUDED.web_base,
+			   capabilities = EXCLUDED.capabilities,
+			   tags = EXCLUDED.tags
+			 WHERE forumline_forums.approved = false
 			 RETURNING id`,
 			manifest.Domain, manifest.Name, manifest.IconURL,
-			manifest.APIBase, manifest.WebBase, manifest.Capabilities,
+			manifest.APIBase, manifest.WebBase, manifest.Capabilities, manifestTags,
 		).Scan(&forumID)
+
+		// If RETURNING returned nothing (forum exists and is approved), fetch the existing ID
+		if err == pgx.ErrNoRows {
+			forumID = getForumIDByDomain(ctx, h.Pool.Pool, body.ForumDomain)
+			err = nil
+		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to register forum"})
 			return
@@ -278,10 +299,64 @@ func (h *Handlers) HandleLeaveForum(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	q := r.URL.Query()
 
-	rows, err := h.Pool.Query(ctx,
-		`SELECT id, domain, name, icon_url, api_base, web_base, capabilities, description, screenshot_url
-		 FROM forumline_forums WHERE approved = true ORDER BY name`)
+	// Search filter
+	search := strings.TrimSpace(q.Get("q"))
+	// Tag filter
+	tag := strings.TrimSpace(q.Get("tag"))
+	// Sort: popular (default), recent, name
+	sort := q.Get("sort")
+	if sort == "" {
+		sort = "popular"
+	}
+	// Pagination
+	limit := 50
+	offset := 0
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+	if v := q.Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	// Build query dynamically
+	query := `SELECT id, domain, name, icon_url, api_base, web_base, capabilities, description, screenshot_url, tags, member_count
+		 FROM forumline_forums WHERE approved = true`
+	var args []interface{}
+	argIdx := 1
+
+	if search != "" {
+		// Escape ILIKE wildcards in user input
+		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		query += fmt.Sprintf(` AND (name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d)`, argIdx, argIdx, argIdx)
+		args = append(args, "%"+escaped+"%")
+		argIdx++
+	}
+
+	if tag != "" {
+		query += fmt.Sprintf(` AND $%d = ANY(tags)`, argIdx)
+		args = append(args, tag)
+		argIdx++
+	}
+
+	switch sort {
+	case "recent":
+		query += ` ORDER BY created_at DESC`
+	case "name":
+		query += ` ORDER BY name`
+	default: // "popular"
+		query += ` ORDER BY member_count DESC, name`
+	}
+
+	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := h.Pool.Query(ctx, query, args...)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch forums"})
 		return
@@ -292,9 +367,10 @@ func (h *Handlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, domain, name, apiBase, webBase string
 		var iconURL, description, screenshotURL *string
-		var capabilities []string
+		var capabilities, forumTags []string
+		var memberCount int
 
-		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &description, &screenshotURL); err != nil {
+		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &description, &screenshotURL, &forumTags, &memberCount); err != nil {
 			continue
 		}
 		forum := map[string]interface{}{
@@ -307,6 +383,110 @@ func (h *Handlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
 			"capabilities":   capabilities,
 			"description":    description,
 			"screenshot_url": screenshotURL,
+			"tags":           forumTags,
+			"member_count":   memberCount,
+		}
+		forums = append(forums, forum)
+	}
+
+	if forums == nil {
+		forums = []map[string]interface{}{}
+	}
+
+	writeJSON(w, http.StatusOK, forums)
+}
+
+// HandleListForumTags returns all unique tags used by approved forums.
+func (h *Handlers) HandleListForumTags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rows, err := h.Pool.Query(ctx,
+		`SELECT DISTINCT unnest(tags) AS tag FROM forumline_forums WHERE approved = true ORDER BY tag`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch tags"})
+		return
+	}
+	defer rows.Close()
+
+	var tagList []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			continue
+		}
+		tagList = append(tagList, tag)
+	}
+
+	if tagList == nil {
+		tagList = []string{}
+	}
+
+	writeJSON(w, http.StatusOK, tagList)
+}
+
+// HandleRecommendedForums returns forums that the user's forum-mates have joined
+// but the user hasn't. This is the "waggle dance" — peer signal amplification.
+func (h *Handlers) HandleRecommendedForums(w http.ResponseWriter, r *http.Request) {
+	userID := shared.UserIDFromContext(r.Context())
+	ctx := r.Context()
+
+	// Find forums that people who share forums with this user are also in,
+	// ranked by how many shared-forum-mates are members.
+	// Excludes forums the user is already in.
+	rows, err := h.Pool.Query(ctx,
+		`WITH my_forums AS (
+			SELECT forum_id FROM forumline_memberships WHERE user_id = $1
+		),
+		forum_mates AS (
+			SELECT DISTINCT m.user_id
+			FROM forumline_memberships m
+			JOIN my_forums mf ON m.forum_id = mf.forum_id
+			WHERE m.user_id != $1
+		)
+		SELECT f.id, f.domain, f.name, f.icon_url, f.api_base, f.web_base,
+		       f.capabilities, f.description, f.screenshot_url, f.tags, f.member_count,
+		       COUNT(m2.user_id) AS shared_member_count
+		FROM forumline_memberships m2
+		JOIN forum_mates fm ON m2.user_id = fm.user_id
+		JOIN forumline_forums f ON f.id = m2.forum_id
+		WHERE f.approved = true
+		  AND f.id NOT IN (SELECT forum_id FROM my_forums)
+		GROUP BY f.id
+		ORDER BY shared_member_count DESC, f.member_count DESC
+		LIMIT 10`,
+		userID,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
+		return
+	}
+	defer rows.Close()
+
+	var forums []map[string]interface{}
+	for rows.Next() {
+		var id, domain, name, apiBase, webBase string
+		var iconURL, description, screenshotURL *string
+		var capabilities, forumTags []string
+		var memberCount, sharedMemberCount int
+
+		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase,
+			&capabilities, &description, &screenshotURL, &forumTags, &memberCount,
+			&sharedMemberCount); err != nil {
+			continue
+		}
+		forum := map[string]interface{}{
+			"id":                  id,
+			"domain":              domain,
+			"name":                name,
+			"icon_url":            iconURL,
+			"api_base":            apiBase,
+			"web_base":            webBase,
+			"capabilities":       capabilities,
+			"description":        description,
+			"screenshot_url":     screenshotURL,
+			"tags":               forumTags,
+			"member_count":       memberCount,
+			"shared_member_count": sharedMemberCount,
 		}
 		forums = append(forums, forum)
 	}
@@ -329,6 +509,7 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 		WebBase      string   `json:"web_base"`
 		Capabilities []string `json:"capabilities"`
 		Description  *string  `json:"description"`
+		Tags         []string `json:"tags"`
 		RedirectURIs []string `json:"redirect_uris"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -338,6 +519,12 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 
 	if body.Domain == "" || body.Name == "" || body.APIBase == "" || body.WebBase == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain, name, api_base, and web_base are required"})
+		return
+	}
+
+	// Validate domain
+	if err := validateDomain(body.Domain); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("invalid domain: %v", err)})
 		return
 	}
 
@@ -372,13 +559,15 @@ func (h *Handlers) HandleRegisterForum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create forum
+	tags := normalizeTags(body.Tags)
+
 	var forumID string
 	err := h.Pool.QueryRow(ctx,
-		`INSERT INTO forumline_forums (domain, name, api_base, web_base, capabilities, description, owner_id, approved)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+		`INSERT INTO forumline_forums (domain, name, api_base, web_base, capabilities, description, tags, owner_id, approved)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
 		 RETURNING id`,
 		body.Domain, body.Name, body.APIBase, body.WebBase,
-		body.Capabilities, body.Description, userID,
+		body.Capabilities, body.Description, tags, userID,
 	).Scan(&forumID)
 
 	if err != nil {
@@ -846,9 +1035,40 @@ type forumManifest struct {
 	APIBase          string   `json:"api_base"`
 	WebBase          string   `json:"web_base"`
 	Capabilities     []string `json:"capabilities"`
+	Tags             []string `json:"tags"`
+}
+
+// validateDomain checks that a domain is a plausible public hostname,
+// rejecting path separators, query strings, and private/loopback IPs.
+func validateDomain(domain string) error {
+	if domain == "" {
+		return fmt.Errorf("domain is empty")
+	}
+	// Reject characters that could be used for path traversal or injection
+	if strings.ContainsAny(domain, "/#?@ \t\n\r") {
+		return fmt.Errorf("domain contains invalid characters")
+	}
+	// Strip optional port for IP check
+	host := domain
+	if h, _, err := net.SplitHostPort(domain); err == nil {
+		host = h
+	}
+	// Reject IP addresses (only allow hostnames)
+	if ip := net.ParseIP(host); ip != nil {
+		return fmt.Errorf("domain must be a hostname, not an IP address")
+	}
+	// Must contain at least one dot (e.g. "example.com")
+	if !strings.Contains(host, ".") {
+		return fmt.Errorf("domain must be a fully qualified hostname")
+	}
+	return nil
 }
 
 func fetchForumManifest(domain string) (*forumManifest, error) {
+	if err := validateDomain(domain); err != nil {
+		return nil, fmt.Errorf("invalid domain: %w", err)
+	}
+
 	client := &http.Client{Timeout: 5 * time.Second}
 	manifestReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("https://%s/.well-known/forumline-manifest.json", domain), nil)
 	if err != nil {
@@ -873,12 +1093,40 @@ func fetchForumManifest(domain string) (*forumManifest, error) {
 		return nil, fmt.Errorf("manifest missing required fields")
 	}
 
-	// Use the requested domain if manifest doesn't specify one
-	if manifest.Domain == "" {
-		manifest.Domain = domain
-	}
+	// Always use the requested domain — never trust the manifest's domain claim
+	manifest.Domain = domain
 
 	return &manifest, nil
+}
+
+// normalizeTags lowercases, trims, deduplicates, and caps tags.
+// Max 10 tags, max 32 chars each.
+func normalizeTags(raw []string) []string {
+	if len(raw) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]bool)
+	var result []string
+	for _, t := range raw {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "" || seen[t] {
+			continue
+		}
+		// Truncate to 32 characters (rune-safe)
+		if utf8.RuneCountInString(t) > 32 {
+			runes := []rune(t)
+			t = string(runes[:32])
+		}
+		seen[t] = true
+		result = append(result, t)
+		if len(result) >= 10 {
+			break
+		}
+	}
+	if result == nil {
+		return []string{}
+	}
+	return result
 }
 
 func getForumIDByDomain(ctx context.Context, pool *pgxpool.Pool, domain string) string {

@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS forumline_forums (
   owner_id UUID REFERENCES forumline_profiles(id),
   approved BOOLEAN DEFAULT false NOT NULL,
   screenshot_url TEXT,
+  tags TEXT[] DEFAULT '{}',
+  member_count INTEGER DEFAULT 0 NOT NULL CHECK (member_count >= 0),
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
@@ -98,7 +100,32 @@ CREATE INDEX IF NOT EXISTS idx_forumline_dms_sender ON forumline_direct_messages
 
 -- Performance indexes for memberships and forum ownership lookups
 CREATE INDEX IF NOT EXISTS idx_forumline_memberships_user_id ON forumline_memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_forumline_memberships_forum_id ON forumline_memberships(forum_id);
 CREATE INDEX IF NOT EXISTS idx_forumline_forums_owner_id ON forumline_forums(owner_id);
+
+-- Forum discovery indexes
+CREATE INDEX IF NOT EXISTS idx_forumline_forums_approved ON forumline_forums(approved) WHERE approved = true;
+CREATE INDEX IF NOT EXISTS idx_forumline_forums_tags ON forumline_forums USING GIN(tags) WHERE approved = true;
+CREATE INDEX IF NOT EXISTS idx_forumline_forums_member_count ON forumline_forums(member_count DESC) WHERE approved = true;
+
+-- Keep member_count in sync with memberships
+CREATE OR REPLACE FUNCTION update_forum_member_count() RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE forumline_forums SET member_count = member_count + 1 WHERE id = NEW.forum_id;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE forumline_forums SET member_count = GREATEST(member_count - 1, 0) WHERE id = OLD.forum_id;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_forum_member_count_trigger ON forumline_memberships;
+CREATE TRIGGER update_forum_member_count_trigger
+  AFTER INSERT OR DELETE ON forumline_memberships
+  FOR EACH ROW EXECUTE FUNCTION update_forum_member_count();
 
 -- Push subscriptions
 CREATE TABLE IF NOT EXISTS push_subscriptions (

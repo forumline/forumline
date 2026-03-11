@@ -54,4 +54,7 @@ export interface ForumManifest {
 
   /** Whether joining requires an invite */
   invite_required?: boolean
+
+  /** Optional tags for categorization and discovery (e.g. "gaming", "programming") */
+  tags?: string[]
 }

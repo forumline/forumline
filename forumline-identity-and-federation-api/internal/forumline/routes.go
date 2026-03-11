@@ -77,6 +77,8 @@ func NewRouter(pool *shared.ObservablePool, sseHub *shared.SSEHub) *http.ServeMu
 
 	// Forums (public GET, authenticated POST)
 	mux.HandleFunc("GET /api/forums", h.HandleListForums)
+	mux.HandleFunc("GET /api/forums/tags", h.HandleListForumTags)
+	mux.Handle("GET /api/forums/recommended", use(h.HandleRecommendedForums, auth))
 	mux.Handle("POST /api/forums", use(h.HandleRegisterForum, auth))
 
 	// Screenshot update (service key auth)

@@ -9,12 +9,14 @@
  * - Provide a sign-in button when the user is not connected to Forumline
  * - Show the list of connected forums when the user has forums, with a prompt to tap one
  * - Show an "Add Forum" prompt when the user has no forums yet
+ * - Show the forum discovery section with search, tags, and recommendations
  * - Reactively update when forums are added/removed or Forumline connection status changes
  */
-import type { ForumlineSession } from '../auth/gotrue-auth.js'
+import type { GoTrueAuthClient, ForumlineSession } from '../auth/gotrue-auth.js'
 import type { ForumStore } from './forum-store.js'
 import type { ForumlineStore } from '../shared/forumline-store.js'
 import { createMobileForumList } from './mobile-forum-list.js'
+import { createForumDiscovery } from './forum-discovery.js'
 import { createButton } from '../shared/ui.js'
 import { tags, html } from '../shared/dom.js'
 
@@ -24,17 +26,26 @@ interface WelcomePageOptions {
   forumlineSession: ForumlineSession | null
   forumStore: ForumStore
   forumlineStore: ForumlineStore
+  auth: GoTrueAuthClient
   onGoToSettings: () => void
 }
 
-export function createWelcomePage({ forumlineSession, forumStore, forumlineStore, onGoToSettings }: WelcomePageOptions) {
+export function createWelcomePage({ forumlineSession, forumStore, forumlineStore, auth, onGoToSettings }: WelcomePageOptions) {
   let forumListInstance: ReturnType<typeof createMobileForumList> | null = null
+  let discoveryInstance: ReturnType<typeof createForumDiscovery> | null = null
 
   function ensureForumList() {
     if (!forumListInstance) {
       forumListInstance = createMobileForumList({ forumStore })
     }
     return forumListInstance
+  }
+
+  function ensureDiscovery() {
+    if (!discoveryInstance) {
+      discoveryInstance = createForumDiscovery({ forumStore, auth })
+    }
+    return discoveryInstance
   }
 
   const el = div({
@@ -53,7 +64,7 @@ export function createWelcomePage({ forumlineSession, forumStore, forumlineStore
     },
 
     // Center content
-    div({ class: 'flex flex-1 items-center justify-center' },
+    div({ class: 'flex items-center justify-center', style: 'padding:2rem 0 1rem' },
       div({ class: 'text-center', style: 'max-width:28rem' },
         // Icon
         (() => {
@@ -116,12 +127,18 @@ export function createWelcomePage({ forumlineSession, forumStore, forumlineStore
         ),
       ),
     ),
+
+    // Forum discovery section
+    div({ class: 'mx-auto', style: 'max-width:36rem;width:100%;padding-bottom:2rem' },
+      ensureDiscovery().el,
+    ),
   )
 
   return {
     el: el as HTMLElement,
     destroy() {
       forumListInstance?.destroy()
+      discoveryInstance?.destroy()
     },
   }
 }

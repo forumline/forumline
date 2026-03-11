@@ -381,6 +381,7 @@ export function createAppLayout({ forumlineSession, forumStore, forumlineStore, 
         forumlineSession,
         forumStore,
         forumlineStore,
+        auth,
         onGoToSettings: () => { view = 'settings'; switchView() },
       })
       mainArea.appendChild(welcomeChild.el)

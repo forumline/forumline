@@ -62,6 +62,7 @@ interface ForumManifest {
   web_base: string
   capabilities: string[]
   accent_color?: string
+  tags?: string[]
 }
 
 async function fetchManifest(url: string): Promise<ForumManifest> {
