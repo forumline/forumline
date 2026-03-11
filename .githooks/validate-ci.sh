@@ -34,7 +34,7 @@ with open('$workflow') as f:
 done
 
 # --- 2. Validate Dockerfiles use --ignore-scripts for workspace installs ---
-for dockerfile in docker/Dockerfile.*; do
+for dockerfile in deploy/docker/Dockerfile.*; do
   [ -f "$dockerfile" ] || continue
   if grep -q "pnpm-workspace.yaml" "$dockerfile" 2>/dev/null; then
     if grep "pnpm install" "$dockerfile" | grep -qv "\-\-ignore-scripts"; then
@@ -49,8 +49,8 @@ publish_workflow=".github/workflows/publish-packages.yml"
 if [ -f "$publish_workflow" ]; then
   grep -oE 'for pkg in [^;]+;' "$publish_workflow" 2>/dev/null | sed 's/for pkg in //;s/;$//' | tr ' ' '\n' | while read -r pkg; do
     [ -z "$pkg" ] && continue
-    if [ ! -d "published-npm-packages/$pkg" ]; then
-      echo "❌ $publish_workflow references non-existent package: published-npm-packages/$pkg"
+    if [ ! -d "packages/$pkg" ]; then
+      echo "❌ $publish_workflow references non-existent package: packages/$pkg"
       echo 1 > "$errfile"
     fi
   done
