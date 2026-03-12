@@ -18,7 +18,7 @@ import { reactive, replace, noreactive, list } from 'vanjs-ext'
 import { tags, state } from '../shared/dom.js'
 import { createAvatar, createSpinner } from '../shared/ui.js'
 
-const { div, button, input, span } = tags
+const { div, button, input } = tags
 
 interface DmNewMessageOptions {
   forumlineStore: ForumlineStore
@@ -83,7 +83,6 @@ export function createDmNewMessage({ forumlineStore, onSelectUser }: DmNewMessag
       return list(div({ class: 'ichat-buddy-list' }), results, (v, _deleter, _k) => {
         const profile = v.val as ForumlineProfile
         const btn = button({ class: 'ichat-buddy', onclick: () => onSelectUser(profile.id) }) as HTMLElement
-        btn.appendChild(span({ class: 'ichat-presence-orb ichat-presence--available' }) as HTMLElement)
         btn.appendChild(createAvatar({ avatarUrl: profile.avatar_url, seed: profile.username, size: 36 }))
         btn.appendChild(
           div({ class: 'ichat-buddy-info' },

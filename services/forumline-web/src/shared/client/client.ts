@@ -100,6 +100,17 @@ export class CentralServicesClient {
     return this.fetch(`/api/profiles/search?q=${encodeURIComponent(query)}`)
   }
 
+  /** Send a presence heartbeat */
+  async presenceHeartbeat(): Promise<void> {
+    await this.fetch('/api/presence/heartbeat', { method: 'POST', silent: true })
+  }
+
+  /** Get online status for a list of user IDs */
+  async getPresenceStatus(userIds: string[]): Promise<Record<string, boolean>> {
+    if (userIds.length === 0) return {}
+    return this.fetch(`/api/presence/status?userIds=${userIds.join(',')}`)
+  }
+
   /** Initiate a 1:1 call in a conversation */
   async initiateCall(conversationId: string): Promise<{ id: string; conversation_id: string; caller_id: string; callee_id: string; status: string }> {
     return this.fetch('/api/calls', {

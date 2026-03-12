@@ -23,8 +23,9 @@ func NewRouter(pool *shared.ObservablePool, sseHub *shared.SSEHub) *http.ServeMu
 	mux := http.NewServeMux()
 
 	h := &Handlers{
-		Pool:   pool,
-		SSEHub: sseHub,
+		Pool:     pool,
+		SSEHub:   sseHub,
+		Presence: NewPresenceTracker(90 * time.Second),
 	}
 
 	auth := shared.AuthMiddleware
@@ -88,6 +89,10 @@ func NewRouter(pool *shared.ObservablePool, sseHub *shared.SSEHub) *http.ServeMu
 	mux.HandleFunc("PUT /api/forums/icon", h.HandleUpdateIcon)
 	mux.HandleFunc("PUT /api/forums/health", h.HandleUpdateHealth)
 	mux.HandleFunc("GET /api/forums/all", h.HandleListAllForums)
+
+	// Presence
+	mux.Handle("POST /api/presence/heartbeat", use(h.HandlePresenceHeartbeat, auth))
+	mux.Handle("GET /api/presence/status", use(h.HandlePresenceStatus, auth))
 
 	// Identity (authenticated)
 	mux.Handle("GET /api/identity", use(h.HandleGetIdentity, auth))

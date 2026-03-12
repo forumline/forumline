@@ -6,6 +6,7 @@ import (
 
 // Handlers holds dependencies for all forumline API handlers.
 type Handlers struct {
-	Pool   *shared.ObservablePool
-	SSEHub *shared.SSEHub
+	Pool     *shared.ObservablePool
+	SSEHub   *shared.SSEHub
+	Presence *PresenceTracker
 }

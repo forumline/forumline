@@ -114,7 +114,6 @@ export function createDmNewGroup({ forumlineStore, onCreated }: DmNewGroupOption
           class: 'ichat-buddy',
           onclick: () => { selectedMembers[id] = noreactive(profile) },
         }) as HTMLElement
-        profileBtn.appendChild(span({ class: 'ichat-presence-orb ichat-presence--available' }) as HTMLElement)
         profileBtn.appendChild(createAvatar({ avatarUrl: profile.avatar_url, seed: profile.username, size: 36 }))
         profileBtn.appendChild(
           div({ class: 'ichat-buddy-info' },

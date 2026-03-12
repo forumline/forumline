@@ -19,6 +19,7 @@ import { tags, html } from '../shared/dom.js'
 import { createAvatar, createSpinner } from '../shared/ui.js'
 import { formatShortTimeAgo } from '../shared/dateFormatters.js'
 import { conversations, initialLoad, loadError, startUpdates, type Conversation } from './dm-store.js'
+import { startPresence, setTrackedUsers, onlineUsers } from './dm-presence.js'
 
 const { div, span, p, button } = tags
 
@@ -29,6 +30,7 @@ interface DmConversationListOptions {
 
 export function createDmConversationList({ forumlineStore, onSelectConversation }: DmConversationListOptions) {
   const stopUpdates = startUpdates(forumlineStore)
+  const stopPresence = startPresence(forumlineStore)
 
   function getConvoDisplayName(convo: Conversation): string {
     if (convo.isGroup && convo.name) return convo.name
@@ -52,6 +54,13 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
     return other?.avatarUrl ?? null
   }
 
+  function getOtherUserId(convo: Conversation): string | null {
+    if (convo.isGroup) return null
+    const { forumlineUserId } = forumlineStore.get()
+    const other = convo.members.find((m: ForumlineConversationMember) => m.id !== forumlineUserId)
+    return other?.id ?? null
+  }
+
   function createConvoItem(convo: Conversation, index: number): HTMLElement {
     const displayName = getConvoDisplayName(convo)
     const isEven = index % 2 === 0
@@ -60,9 +69,14 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
       onclick: () => onSelectConversation(convo.id),
     }) as HTMLElement
 
-    // Presence orb (always show for visual consistency)
-    const orb = span({ class: 'ichat-presence-orb ichat-presence--available' }) as HTMLElement
-    btn.appendChild(orb)
+    // Presence orb — only for 1:1 conversations
+    if (!convo.isGroup) {
+      const otherId = getOtherUserId(convo)
+      const isOnline = otherId ? (onlineUsers.val[otherId] ?? false) : false
+      const presenceClass = isOnline ? 'ichat-presence--available' : 'ichat-presence--offline'
+      const orb = span({ class: `ichat-presence-orb ${presenceClass}` }) as HTMLElement
+      btn.appendChild(orb)
+    }
 
     // Avatar
     const avatarWrap = div({ class: 'ichat-buddy-avatar-wrap' }) as HTMLElement
@@ -125,6 +139,16 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
         return empty
       }
 
+      // Update tracked users for presence polling (1:1 other-user IDs)
+      const otherIds = conversations.val
+        .filter(c => !c.isGroup)
+        .map(c => getOtherUserId(c))
+        .filter((id): id is string => id !== null)
+      setTrackedUsers(otherIds)
+
+      // Access onlineUsers.val to make Van.js re-render when presence changes
+      void onlineUsers.val
+
       const container = div({ class: 'ichat-buddy-list' })
       conversations.val.forEach((convo, i) => {
         container.appendChild(createConvoItem(convo, i))
@@ -137,6 +161,7 @@ export function createDmConversationList({ forumlineStore, onSelectConversation 
     el,
     destroy() {
       stopUpdates()
+      stopPresence()
     },
   }
 }
