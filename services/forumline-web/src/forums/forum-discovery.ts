@@ -21,6 +21,8 @@ import { createSpinner, showToast } from '../shared/ui.js'
 
 const { div, h2, p, button: btn, input: inputTag, span } = tags
 
+const PIN_COLORS = ['red', 'blue', 'green', 'yellow', 'white'] as const
+
 interface DiscoveryForum {
   id: string
   domain: string
@@ -187,7 +189,22 @@ export function createForumDiscovery({ forumStore, auth }: ForumDiscoveryOptions
           onclick: () => void joinForum(forum),
         }, () => state.joiningDomain === forum.domain ? 'Joining...' : 'Join')
 
-    const card = div({ class: 'discovery-card' },
+    // Deterministic rotation and pin based on domain name
+    const hash = Array.from(forum.domain).reduce((a, c) => a + c.charCodeAt(0), 0)
+    const rotation = ((hash % 5) - 2) * 0.6 // -1.2 to 1.2 degrees
+    const pinColor = PIN_COLORS[hash % PIN_COLORS.length]
+    const pinOffset = 10 + (hash % 60) // 10-70% from left
+
+    const pin = div({
+      class: `discovery-card__pin discovery-card__pin--${pinColor}`,
+      style: `left:${pinOffset}%`,
+    }) as HTMLElement
+
+    const card = div({
+      class: 'discovery-card',
+      style: `transform:rotate(${rotation}deg)`,
+    },
+      pin,
       div({ class: 'discovery-card__header' },
         iconEl,
         div({ class: 'discovery-card__info' },
