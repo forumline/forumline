@@ -87,6 +87,15 @@ export function initCallManager(store: ForumlineStore) {
   connectSignalSSE()
 }
 
+/** Force-reconnect the call signal SSE stream (e.g. after a token refresh). */
+export function reconnectCallSSE() {
+  if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null }
+  signalSSE?.close()
+  signalSSE = null
+  sseReconnectAttempts = 0
+  connectSignalSSE()
+}
+
 function setState(newState: CallState, info: CallInfo | null = callState.callInfo) {
   callState.state = newState
   callState.callInfo = info ? noreactive(info) : null

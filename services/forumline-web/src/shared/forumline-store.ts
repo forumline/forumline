@@ -26,6 +26,7 @@ export interface ForumlineStoreOptions {
 
 export interface ForumlineStore extends Store<ForumlineState> {
   init: (session: { access_token: string; user_id: string }) => Promise<void>
+  updateToken: (token: string) => void
   teardown: () => void
   destroy: () => void
 }
@@ -73,6 +74,13 @@ export function createForumlineStore(options: ForumlineStoreOptions): ForumlineS
     }
   }
 
+  function updateToken(token: string) {
+    const current = store.get()
+    if (current.forumlineClient) {
+      current.forumlineClient.updateToken(token)
+    }
+  }
+
   function destroy() {
     teardown()
   }
@@ -80,6 +88,7 @@ export function createForumlineStore(options: ForumlineStoreOptions): ForumlineS
   return {
     ...store,
     init,
+    updateToken,
     teardown,
     destroy,
   }

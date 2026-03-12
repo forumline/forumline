@@ -77,6 +77,16 @@ function disconnect() {
   reconnectAttempts = 0
 }
 
+/** Force-reconnect the SSE stream (e.g. after a token refresh). */
+export function reconnectDmSSE() {
+  if (listeners.size === 0) return // no subscribers, nothing to reconnect
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+  eventSource?.close()
+  eventSource = null
+  reconnectAttempts = 0
+  connect()
+}
+
 export function subscribeDmEvents(fn: DmEventListener): () => void {
   listeners.add(fn)
   destroyed = false

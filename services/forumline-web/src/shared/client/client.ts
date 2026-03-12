@@ -26,6 +26,11 @@ export class CentralServicesClient {
     private accessToken: string,
   ) {}
 
+  /** Update the access token (e.g. after a token refresh) */
+  updateToken(token: string) {
+    this.accessToken = token
+  }
+
   private async fetch<T>(path: string, options?: FetchOptions): Promise<T> {
     // Strip custom options before passing to native fetch
     const { silent, ...fetchOptions } = options ?? {}

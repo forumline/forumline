@@ -18,6 +18,8 @@ import { createForumlineStore, type ForumlineStore } from './shared/forumline-st
 import { createResetPassword } from './auth/reset-password.js'
 import { createForumlineAuth } from './auth/forumline-auth.js'
 import { createAppLayout } from './shell/app-layout.js'
+import { reconnectDmSSE } from './dms/dm-sse.js'
+import { reconnectCallSSE } from './calls/call-manager.js'
 import { tags } from './shared/dom.js'
 
 const { div } = tags
@@ -107,9 +109,21 @@ export function createApp(root: HTMLElement) {
       renderForSession(session)
       hasRenderedApp = !!session
     } else if (event === 'TOKEN_REFRESHED') {
-      // Token refresh doesn't need to re-create the app layout
+      if (session) {
+        if (!hasRenderedApp) {
+          // Expired token was refreshed before the app rendered — render now
+          renderForSession(session)
+          hasRenderedApp = true
+        } else {
+          forumlineStore.updateToken(session.access_token)
+          reconnectDmSSE()
+          reconnectCallSSE()
+        }
+      }
     } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
       if (!hasRenderedApp) {
+        // If session is null but a refresh is in-flight, keep the loading screen
+        if (!session && forumlineAuth.isRefreshing) return
         renderForSession(session)
         hasRenderedApp = !!session
       }

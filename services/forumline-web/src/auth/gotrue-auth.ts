@@ -41,6 +41,7 @@ export class GoTrueAuthClient {
   private listeners: Set<AuthCallback> = new Set()
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private currentSession: ForumlineSession | null = null
+  private _isRefreshing = false
 
   constructor() {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -52,7 +53,12 @@ export class GoTrueAuthClient {
       }
     }
     if (this.currentSession) {
-      this.scheduleRefresh(this.currentSession)
+      if (this.currentSession.expires_at * 1000 < Date.now()) {
+        // Token already expired (e.g. user returned after being away) — refresh immediately
+        void this.refreshSession()
+      } else {
+        this.scheduleRefresh(this.currentSession)
+      }
     }
   }
 
@@ -77,8 +83,12 @@ export class GoTrueAuthClient {
     this.refreshTimer = setTimeout(() => this.refreshSession(), refreshIn)
   }
 
+  /** Whether a token refresh is currently in-flight */
+  get isRefreshing() { return this._isRefreshing }
+
   private async refreshSession(): Promise<boolean> {
     if (!this.currentSession?.refresh_token) return false
+    this._isRefreshing = true
     try {
       const res = await fetch('/auth/v1/token?grant_type=refresh_token', {
         method: 'POST',
@@ -86,6 +96,7 @@ export class GoTrueAuthClient {
         body: JSON.stringify({ refresh_token: this.currentSession.refresh_token }),
       })
       if (!res.ok) {
+        this._isRefreshing = false
         this.saveSession(null)
         this.emit('SIGNED_OUT', null)
         return false
@@ -98,10 +109,12 @@ export class GoTrueAuthClient {
         expires_at: data.expires_at,
         user: data.user ?? this.currentSession.user,
       }
+      this._isRefreshing = false
       this.saveSession(session)
       this.emit('TOKEN_REFRESHED', session)
       return true
     } catch {
+      this._isRefreshing = false
       return false
     }
   }
@@ -274,11 +287,9 @@ export class GoTrueAuthClient {
 
   onAuthStateChange(callback: AuthCallback): Unsubscribe {
     this.listeners.add(callback)
-    if (this.currentSession) {
-      setTimeout(() => callback('INITIAL_SESSION', this.currentSession), 0)
-    } else {
-      setTimeout(() => callback('INITIAL_SESSION', null), 0)
-    }
+    // Use getSession() so expired tokens emit null (keeps loading screen up while refresh runs)
+    const session = this.getSession()
+    setTimeout(() => callback('INITIAL_SESSION', session), 0)
     return () => { this.listeners.delete(callback) }
   }
 }
