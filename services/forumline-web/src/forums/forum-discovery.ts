@@ -200,6 +200,20 @@ export function createForumDiscovery({ forumStore, auth }: ForumDiscoveryOptions
       style: `left:${pinOffset}%`,
     }) as HTMLElement
 
+    const screenshotEl = forum.screenshot_url
+      ? div({ class: 'discovery-card__screenshot' },
+          tags.img({
+            src: forum.screenshot_url,
+            alt: `Preview of ${forum.name}`,
+            class: 'discovery-card__screenshot-img',
+            loading: 'lazy',
+            onerror: (e: Event) => {
+              (e.target as HTMLImageElement).closest('.discovery-card__screenshot')!.remove()
+            },
+          }),
+        ) as HTMLElement
+      : document.createTextNode('')
+
     const card = div({
       class: 'discovery-card',
       style: `transform:rotate(${rotation}deg)`,
@@ -213,6 +227,7 @@ export function createForumDiscovery({ forumStore, auth }: ForumDiscoveryOptions
         ),
         actionBtn,
       ),
+      screenshotEl,
       forum.description
         ? p({ class: 'discovery-card__desc' }, forum.description)
         : document.createTextNode(''),

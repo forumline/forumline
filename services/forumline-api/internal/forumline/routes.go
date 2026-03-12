@@ -85,6 +85,7 @@ func NewRouter(pool *shared.ObservablePool, sseHub *shared.SSEHub) *http.ServeMu
 
 	// Forum admin (service key auth)
 	mux.HandleFunc("PUT /api/forums/screenshot", h.HandleUpdateScreenshot)
+	mux.HandleFunc("PUT /api/forums/icon", h.HandleUpdateIcon)
 	mux.HandleFunc("PUT /api/forums/health", h.HandleUpdateHealth)
 	mux.HandleFunc("GET /api/forums/all", h.HandleListAllForums)
 

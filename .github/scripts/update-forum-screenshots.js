@@ -46,6 +46,32 @@ async function updateScreenshotViaAPI(domain, screenshotUrl) {
   }
 }
 
+async function updateIconViaAPI(domain, iconUrl) {
+  const res = await fetch(`${API_URL}/api/forums/icon`, {
+    method: 'PUT',
+    headers: serviceHeaders,
+    body: JSON.stringify({ domain, icon_url: iconUrl }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`API returned ${res.status}: ${text}`)
+  }
+}
+
+async function syncIconFromManifest(domain) {
+  try {
+    const manifestRes = await fetch(`https://${domain}/.well-known/forumline-manifest.json`, {
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!manifestRes.ok) return
+    const manifest = await manifestRes.json()
+    if (manifest.icon_url) {
+      await updateIconViaAPI(domain, manifest.icon_url)
+      log(`  Synced icon for ${domain}: ${manifest.icon_url}`)
+    }
+  } catch { /* non-critical */ }
+}
+
 async function reportHealth(domain, healthy) {
   try {
     const res = await fetch(`${API_URL}/api/forums/health`, {
@@ -133,7 +159,8 @@ async function main() {
       await updateScreenshotViaAPI(domain, screenshotUrl)
       updated++
 
-      // Report healthy
+      // Sync icon from manifest and report healthy
+      await syncIconFromManifest(domain)
       await reportHealth(domain, true)
       healthy++
     } catch (err) {
@@ -158,6 +185,11 @@ async function main() {
         signal: AbortSignal.timeout(10000),
       })
       if (manifestRes.ok) {
+        const manifest = await manifestRes.json()
+        if (manifest.icon_url) {
+          await updateIconViaAPI(forum.domain, manifest.icon_url)
+          log(`  Synced icon for ${forum.domain}: ${manifest.icon_url}`)
+        }
         await reportHealth(forum.domain, true)
         healthy++
       } else {

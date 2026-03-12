@@ -783,6 +783,50 @@ func (h *Handlers) HandleUpdateScreenshot(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// HandleUpdateIcon updates a forum's icon_url (service key auth).
+func (h *Handlers) HandleUpdateIcon(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization"})
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	serviceKey := os.Getenv("FORUMLINE_SERVICE_ROLE_KEY")
+	if serviceKey == "" || token != serviceKey {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid authorization"})
+		return
+	}
+
+	var body struct {
+		Domain  string `json:"domain"`
+		IconURL string `json:"icon_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if body.Domain == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain is required"})
+		return
+	}
+
+	ctx := r.Context()
+	tag, err := h.Pool.Exec(ctx,
+		`UPDATE forumline_forums SET icon_url = $1, updated_at = now() WHERE domain = $2`,
+		body.IconURL, body.Domain,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update icon"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "forum not found"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // --- Forum Health (service key auth) ---
 
 func (h *Handlers) HandleUpdateHealth(w http.ResponseWriter, r *http.Request) {
