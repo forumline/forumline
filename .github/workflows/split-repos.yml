@@ -6,110 +6,26 @@ on:
     paths:
       - 'packages/shared-go/**'
       - 'services/forum/**'
-
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  tag-shared-go:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.version.outputs.tag }}
-      changed: ${{ steps.changed.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check if shared-go changed
-        id: changed
-        run: |
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q '^packages/shared-go/'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Determine next version
-        id: version
-        run: |
-          latest=$(git tag -l 'shared-go/v*' --sort=-version:refname | head -1)
-          if [ -z "$latest" ]; then
-            next="shared-go/v0.1.0"
-          else
-            version=${latest#shared-go/v}
-            major=$(echo "$version" | cut -d. -f1)
-            minor=$(echo "$version" | cut -d. -f2)
-            patch=$(echo "$version" | cut -d. -f3)
-            next="shared-go/v${major}.${minor}.$((patch + 1))"
-          fi
-          echo "tag=$next" >> "$GITHUB_OUTPUT"
-
-      - name: Tag shared-go
-        if: steps.changed.outputs.changed == 'true'
-        run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-
-  split-forum-server:
-    needs: tag-shared-go
+  split:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-go@v5
+      - uses: dagger/dagger-for-github@v7
         with:
-          go-version-file: packages/shared-go/go.mod
-          cache: false
-
-      - name: Install splitsh-lite
-        run: |
-          mkdir -p /tmp/splitsh
-          curl -fsSL https://github.com/splitsh/lite/releases/download/v1.0.1/lite_linux_amd64.tar.gz -o /tmp/splitsh.tar.gz
-          tar -xzf /tmp/splitsh.tar.gz -C /tmp/splitsh
-          sudo mv /tmp/splitsh/splitsh-lite /usr/local/bin/
-
-      - name: Split and rewrite
-        run: |
-          # Split the subtree
-          SPLIT_SHA=$(splitsh-lite --prefix=services/forum)
-
-          # Create a working branch from the split
-          git checkout -b split-result "$SPLIT_SHA"
-
-          # Get the latest shared-go version
-          SHARED_TAG=$(git tag -l 'shared-go/v*' --sort=-version:refname | head -1)
-          if [ -z "$SHARED_TAG" ]; then
-            echo "No shared-go tag found — skipping split"
-            exit 0
-          fi
-          SHARED_VERSION=${SHARED_TAG#shared-go/}
-
-          # Rewrite go.mod: use the real module path and published shared-go version
-          sed -i 's|module github.com/forumline/forum-server|module github.com/forumline/forum-server|' go.mod
-          sed -i "s|github.com/forumline/forumline/shared-go v0.0.0-00010101000000-000000000000|github.com/forumline/forumline/shared-go $SHARED_VERSION|" go.mod
-          sed -i '/^replace github.com\/forumline\/forumline\/shared-go/d' go.mod
-          # Remove trailing blank lines left by sed
-          sed -i -e :a -e '/^\n*$/{$d;N;ba;}' go.mod
-
-          # Update go.sum to match
-          go mod tidy
-
-          # Strip production secrets — .env.enc stays in the monorepo only.
-          # The deploy workflow fetches it at deploy time.
-          git rm -f deploy/.env.enc deploy/.sops.yaml 2>/dev/null || true
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add go.mod go.sum
-          git commit --amend --no-edit
-
-      - name: Push to read-only repo
-        run: |
-          # Clear the credential helper set by actions/checkout so our token takes priority
-          git config --unset-all http.https://github.com/.extraheader || true
-          git push "https://x-access-token:${{ secrets.SPLIT_REPO_TOKEN }}@github.com/forumline/forum-server.git" HEAD:main --force
+          module: ci
+          verb: call
+          args: >-
+            split-repos
+            --source .
+            --split-repo-token env:SPLIT_REPO_TOKEN
+          version: "0.20.1"
+        env:
+          SPLIT_REPO_TOKEN: ${{ secrets.SPLIT_REPO_TOKEN }}

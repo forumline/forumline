@@ -5,17 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: dagger/dagger-for-github@v7
         with:
-          go-version: '1.26'
-          cache-dependency-path: |
-            services/forumline-api/go.sum
-            services/hosted/go.sum
-            services/forum/go.sum
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - run: pnpm install
-      - run: npx lefthook run pre-commit --all-files --no-tty
+          module: ci
+          verb: call
+          args: lint --source .
+          version: "0.20.1"

@@ -14,36 +14,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: dagger/dagger-for-github@v7
         with:
-          node-version: 20
-          registry-url: https://npm.pkg.github.com
-          cache: pnpm
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+          module: ci
+          verb: call
+          args: >-
+            publish-packages
+            --source .
+            --github-token env:GITHUB_TOKEN
+          version: "0.20.1"
         env:
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and publish all packages
-        run: |
-          for pkg in protocol server-sdk; do
-            echo "=== Building and publishing $pkg ==="
-            cd "packages/$pkg"
-            pnpm run build
-            OUTPUT=$(pnpm publish --no-git-checks 2>&1) && echo "$OUTPUT" || {
-              if echo "$OUTPUT" | grep -qi "cannot publish over"; then
-                echo "Version already published, skipping"
-              else
-                echo "$OUTPUT"
-                exit 1
-              fi
-            }
-            cd ../..
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,47 +19,23 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install sops and age
-        run: |
-          curl -fsSL "https://dl.filippo.io/age/v1.2.0?for=linux/amd64" -o /tmp/age.tar.gz
-          tar -xzf /tmp/age.tar.gz -C /tmp && sudo mv /tmp/age/age /usr/local/bin/
-          curl -fsSL "https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64" -o /tmp/sops
-          chmod +x /tmp/sops && sudo mv /tmp/sops /usr/local/bin/sops
-
-      - name: Decrypt secrets
+      - uses: dagger/dagger-for-github@v7
+        with:
+          module: ci
+          verb: call
+          args: >-
+            deploy
+            --source .
+            --service forumline
+            --ssh-key env:FORUM_SSH_KEY
+            --cf-access-client-id env:CF_ACCESS_CLIENT_ID
+            --cf-access-client-secret env:CF_ACCESS_CLIENT_SECRET
+            --sops-age-key env:SOPS_AGE_KEY
+          version: "0.20.1"
         env:
+          FORUM_SSH_KEY: ${{ secrets.FORUM_SSH_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
-        run: sops -d --input-type dotenv --output-type dotenv deploy/compose/forumline/.env.enc > /tmp/forumline.env
-
-      - name: Install cloudflared
-        run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
-          sudo dpkg -i /tmp/cloudflared.deb
-
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.FORUM_SSH_KEY }}" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          cat >> ~/.ssh/config <<EOF
-          Host forumline-prod
-            HostName app-ssh.forumline.net
-            User root
-            IdentityFile ~/.ssh/id_deploy
-            StrictHostKeyChecking no
-            ProxyCommand cloudflared access ssh --hostname %h --id $CF_ACCESS_CLIENT_ID --secret $CF_ACCESS_CLIENT_SECRET
-          EOF
-
-      - name: Deploy
-        run: |
-          scp /tmp/forumline.env forumline-prod:/opt/forumline/.env
-          scp deploy/compose/forumline/docker-compose.yml forumline-prod:/opt/forumline/docker-compose.yml
-          ssh forumline-prod "cd /opt/forumline/repo && git fetch origin main && git reset --hard origin/main"
-          ssh forumline-prod 'cd /opt/forumline && for f in repo/services/forumline-api/migrations/*.sql; do echo "Applying migration: $f" && docker compose exec -T postgres psql -U postgres -d postgres < "$f"; done'
-          ssh forumline-prod "cd /opt/forumline && docker compose up -d --build forumline && docker compose ps"
