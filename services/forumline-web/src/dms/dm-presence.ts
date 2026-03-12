@@ -36,16 +36,22 @@ async function pollPresence() {
   if (!client || trackedUserIds.size === 0) return
   try {
     const status = await client.getPresenceStatus([...trackedUserIds])
-    onlineUsers.val = status
+    // Only update if something actually changed to avoid unnecessary re-renders
+    const prev = onlineUsers.val
+    const changed = Object.keys(status).some(id => status[id] !== prev[id]) ||
+                    Object.keys(prev).some(id => !(id in status))
+    if (changed) onlineUsers.val = status
   } catch {
     // Silently ignore poll failures
   }
 }
 
-/** Update the set of user IDs to track presence for */
+/** Update the set of user IDs to track presence for (only polls if set changed) */
 function setTrackedUsers(userIds: string[]) {
-  trackedUserIds = new Set(userIds)
-  // Immediately poll when tracked users change
+  const newSet = new Set(userIds)
+  // Only re-poll if the tracked set actually changed
+  if (newSet.size === trackedUserIds.size && userIds.every(id => trackedUserIds.has(id))) return
+  trackedUserIds = newSet
   void pollPresence()
 }
 
