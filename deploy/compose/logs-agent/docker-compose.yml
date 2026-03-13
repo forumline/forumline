@@ -1,0 +1,9 @@
+services:
+  alloy:
+    image: grafana/alloy:v1.14.0
+    restart: unless-stopped
+    volumes:
+      - /opt/logs-agent/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    network_mode: host

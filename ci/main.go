@@ -48,11 +48,11 @@ func (m *Forumline) Lint(ctx context.Context, source *dagger.Directory) (string,
 }
 
 // Deploy deploys a service to production via SSH through Cloudflare Tunnel.
-// Service must be one of: forumline, hosted, website.
+// Service must be one of: forumline, hosted, website, logs.
 func (m *Forumline) Deploy(
 	ctx context.Context,
 	source *dagger.Directory,
-	// Service to deploy (forumline, hosted, or website)
+	// Service to deploy (forumline, hosted, website, or logs)
 	service string,
 	// SSH private key for remote access
 	sshKey *dagger.Secret,
@@ -76,11 +76,12 @@ func (m *Forumline) Deploy(
 		"forumline": {"forumline-prod", "app-ssh.forumline.net", "/opt/forumline", "deploy/compose/forumline/docker-compose.yml", true},
 		"hosted":    {"hosted-prod", "hosted-ssh.forumline.net", "/opt/hosted", "deploy/compose/hosted/docker-compose.yml", true},
 		"website":   {"website-prod", "www-ssh.forumline.net", "/opt/website", "deploy/compose/website/docker-compose.yml", false},
+		"logs":      {"logs-prod", "logs-ssh.forumline.net", "/opt/logs", "deploy/compose/logs/docker-compose.yml", false},
 	}
 
 	cfg, ok := configs[service]
 	if !ok {
-		return "", fmt.Errorf("unknown service: %s (must be forumline, hosted, or website)", service)
+		return "", fmt.Errorf("unknown service: %s (must be forumline, hosted, website, or logs)", service)
 	}
 
 	if cfg.hasEnv && sopsAgeKey == nil {
@@ -111,9 +112,18 @@ SSHEOF`, cfg.host, cfg.sshHost)})
 	// Upload docker-compose.yml
 	ctr = ctr.WithExec([]string{"scp", cfg.compose, fmt.Sprintf("%s:%s/docker-compose.yml", cfg.host, cfg.remotePath)})
 
-	// Pull latest code
-	ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
-		"cd %s/repo && git fetch origin main && git reset --hard origin/main", cfg.remotePath)})
+	// Upload extra config files for logs service
+	if service == "logs" {
+		ctr = ctr.
+			WithExec([]string{"scp", "deploy/compose/logs/loki-config.yml", fmt.Sprintf("%s:%s/loki-config.yml", cfg.host, cfg.remotePath)}).
+			WithExec([]string{"scp", "deploy/compose/logs/users.yml", fmt.Sprintf("%s:%s/users.yml", cfg.host, cfg.remotePath)})
+	}
+
+	// Pull latest code (skip for logs — no repo on that LXC)
+	if service != "logs" {
+		ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
+			"cd %s/repo && git fetch origin main && git reset --hard origin/main", cfg.remotePath)})
+	}
 
 	// Run migrations for forumline
 	if service == "forumline" {
@@ -123,8 +133,80 @@ SSHEOF`, cfg.host, cfg.sshHost)})
 	}
 
 	// Rebuild and restart
-	ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
-		"cd %s && docker compose up -d --build %s && docker compose ps", cfg.remotePath, service)})
+	if service == "logs" {
+		// Logs uses pre-built images — pull latest and restart all services
+		ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
+			"cd %s && docker compose pull && docker compose up -d && docker compose ps", cfg.remotePath)})
+	} else {
+		ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
+			"cd %s && docker compose up -d --build %s && docker compose ps", cfg.remotePath, service)})
+	}
+
+	return ctr.Stdout(ctx)
+}
+
+// DeployLogsAgents deploys Alloy + Dozzle agents to all service LXCs.
+// Syncs compose files and alloy config (with per-host label), then restarts.
+func (m *Forumline) DeployLogsAgents(
+	ctx context.Context,
+	source *dagger.Directory,
+	// SSH private key for remote access
+	sshKey *dagger.Secret,
+	// Cloudflare Access client ID
+	cfAccessClientId *dagger.Secret,
+	// Cloudflare Access client secret
+	cfAccessClientSecret *dagger.Secret,
+) (string, error) {
+	type agentHost struct {
+		name    string
+		sshHost string
+		label   string
+	}
+
+	hosts := []agentHost{
+		{"forum-prod", "ssh.forumline.net", "forum-prod"},
+		{"forumline-prod", "app-ssh.forumline.net", "forumline-prod"},
+		{"website-prod", "www-ssh.forumline.net", "website-prod"},
+		{"hosted-prod", "hosted-ssh.forumline.net", "hosted-prod"},
+	}
+
+	ctr := m.sshContainer(source, sshKey, cfAccessClientId, cfAccessClientSecret)
+
+	// Configure SSH for all hosts
+	for _, h := range hosts {
+		ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(`cat >> /root/.ssh/config <<'SSHEOF'
+Host %s
+  HostName %s
+  User root
+  IdentityFile /root/.ssh/id_deploy
+  StrictHostKeyChecking no
+  ProxyCommand cloudflared access ssh --hostname %%h --id $CF_ACCESS_CLIENT_ID --secret $CF_ACCESS_CLIENT_SECRET
+SSHEOF`, h.name, h.sshHost)})
+	}
+
+	// Deploy to each host
+	for _, h := range hosts {
+		remotePath := "/opt/logs-agent"
+
+		// Generate host-specific alloy config
+		ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(
+			`sed 's/${LOGS_HOST_LABEL}/%s/' deploy/compose/logs-agent/alloy-config.alloy > /tmp/alloy-config-%s.alloy`,
+			h.label, h.label)})
+
+		// Ensure remote directory exists
+		ctr = ctr.WithExec([]string{"ssh", h.name, fmt.Sprintf("mkdir -p %s", remotePath)})
+
+		// Upload compose files and config
+		ctr = ctr.
+			WithExec([]string{"scp", "deploy/compose/logs-agent/docker-compose.yml", fmt.Sprintf("%s:%s/docker-compose.yml", h.name, remotePath)}).
+			WithExec([]string{"scp", "deploy/compose/logs-agent/docker-compose.dozzle.yml", fmt.Sprintf("%s:%s/docker-compose.dozzle.yml", h.name, remotePath)}).
+			WithExec([]string{"scp", fmt.Sprintf("/tmp/alloy-config-%s.alloy", h.label), fmt.Sprintf("%s:%s/alloy-config.alloy", h.name, remotePath)})
+
+		// Pull and restart
+		ctr = ctr.WithExec([]string{"ssh", h.name, fmt.Sprintf(
+			"cd %s && docker compose pull && docker compose up -d && docker compose -f docker-compose.dozzle.yml pull && docker compose -f docker-compose.dozzle.yml up -d",
+			remotePath)})
+	}
 
 	return ctr.Stdout(ctx)
 }

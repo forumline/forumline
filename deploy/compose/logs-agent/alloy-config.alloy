@@ -1,0 +1,39 @@
+// Discover Docker containers
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Relabel to extract useful metadata
+discovery.relabel "docker" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+// Collect logs from discovered containers
+loki.source.docker "local" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker.output
+  forward_to = [loki.process.add_host.receiver]
+}
+
+// Add hostname label — replaced by deploy-logs.sh per host
+loki.process "add_host" {
+  stage.static_labels {
+    values = {
+      host = "${LOGS_HOST_LABEL}",
+    }
+  }
+  forward_to = [loki.write.loki.receiver]
+}
+
+// Ship to central Loki
+loki.write "loki" {
+  endpoint {
+    url = "http://192.168.1.108:3100/loki/api/v1/push"
+  }
+}

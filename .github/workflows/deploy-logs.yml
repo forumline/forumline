@@ -1,0 +1,30 @@
+name: Deploy Logs (Central)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/compose/logs/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dagger/dagger-for-github@v7
+        with:
+          module: ci
+          verb: call
+          args: >-
+            deploy
+            --source .
+            --service logs
+            --ssh-key env:FORUM_SSH_KEY
+            --cf-access-client-id env:CF_ACCESS_CLIENT_ID
+            --cf-access-client-secret env:CF_ACCESS_CLIENT_SECRET
+          version: "0.20.1"
+        env:
+          FORUM_SSH_KEY: ${{ secrets.FORUM_SSH_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

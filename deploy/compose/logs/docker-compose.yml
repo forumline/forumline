@@ -1,0 +1,34 @@
+services:
+  loki:
+    image: grafana/loki:3.6.0
+    restart: unless-stopped
+    volumes:
+      - /opt/logs/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dozzle:
+    image: amir20/dozzle:v10.1.1
+    restart: unless-stopped
+    volumes:
+      - /opt/logs/users.yml:/data/users.yml:ro
+    environment:
+      DOZZLE_AUTH_PROVIDER: simple
+      DOZZLE_REMOTE_AGENT: "192.168.1.23:7007,192.168.1.99:7007,192.168.1.106:7007,192.168.1.107:7007"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  loki-data:
