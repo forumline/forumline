@@ -59,10 +59,11 @@ export const ForumRegistrationAPI = {
     } catch (e) { return []; }
   },
 
-  async deleteForum(forumId, accessToken) {
-    var r = await fetch('/api/forums/' + forumId, {
+  async deleteForum(forumDomain, accessToken) {
+    var r = await fetch('/api/forums', {
       method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + accessToken },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+      body: JSON.stringify({ forum_domain: forumDomain }),
     });
     if (!r.ok) throw new Error('Delete failed: ' + r.status);
   },

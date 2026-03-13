@@ -79,8 +79,9 @@ export function initCreateForum(deps) {
       // Try real API registration if authenticated
       if (ForumlineAPI.isAuthenticated()) {
         try {
+          const domain = subdomain + '.forumline.net';
           const result = await ForumRegistrationAPI.registerForum(
-            { name, subdomain, description: desc },
+            { name, domain, api_base: 'https://' + domain, web_base: 'https://' + domain, description: desc },
             ForumlineAPI.getToken()
           );
           // Also sync memberships to pick up the new forum

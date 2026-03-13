@@ -147,7 +147,7 @@ export const ForumStore = {
     iframe.style.cssText = 'width:100%;height:100%;border:none;';
     container.appendChild(iframe); this._webviewIframe = iframe;
 
-    this._webviewState = { loading: true, loggingIn: false, hasCalledAuthed: false, loginAttempted: false, authUrl: this._accessToken ? '/api/auth/forum-login/' + encodeURIComponent(forum.domain) : null };
+    this._webviewState = { loading: true, loggingIn: false, hasCalledAuthed: false, loginAttempted: false, authUrl: this._accessToken ? forum.web_base + '/api/forumline/auth?forumline_token=' + encodeURIComponent(this._accessToken) : null };
     const forumOrigin = new URL(forum.web_base).origin;
     iframe.addEventListener('load', () => {
       if (spinner) spinner.classList.add('hidden');
