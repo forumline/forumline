@@ -159,35 +159,25 @@ func (cs *CallService) End(ctx context.Context, userID, callID string) (*EndResu
 	return &EndResult{Status: newStatus}, nil
 }
 
-// SignalInput represents a WebRTC signaling message.
+// SignalInput represents a voice signal message (WebRTC or any type).
 type SignalInput struct {
 	TargetUserID string
 	CallID       string
-	Type         string // "offer", "answer", or "ice-candidate"
+	Type         string
 	Payload      json.RawMessage
 }
 
-// Signal forwards a WebRTC signaling message between call participants.
+// Signal forwards a voice signal to the target user via pg_notify.
 func (cs *CallService) Signal(ctx context.Context, senderID string, input SignalInput) error {
-	if input.TargetUserID == "" || input.CallID == "" || input.Payload == nil {
-		return &ValidationError{Msg: "target_user_id, call_id, and payload are required"}
-	}
-	if input.Type != "offer" && input.Type != "answer" && input.Type != "ice-candidate" {
-		return &ValidationError{Msg: "type must be offer, answer, or ice-candidate"}
-	}
-
-	valid, _ := cs.Store.VerifyCallParticipants(ctx, input.CallID, senderID, input.TargetUserID)
-	if !valid {
-		return &ForbiddenError{Msg: "Not a participant of this call"}
+	if input.TargetUserID == "" || input.Type == "" {
+		return &ValidationError{Msg: "target_user_id and type are required"}
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
 		"type":           input.Type,
 		"target_user_id": input.TargetUserID,
 		"sender_user_id": senderID,
-		"payload": map[string]interface{}{
-			"call_id": input.CallID, "data": input.Payload,
-		},
+		"payload":        input.Payload,
 	})
 	_ = cs.Store.NotifyCallSignal(ctx, string(signalData))
 

@@ -1,6 +1,6 @@
 // ========== CALL MANAGER (Voice Calls) ==========
-// Call lifecycle, ringtone, call overlay UI, native bridge.
-// WebRTC handled by @forumline/shared-voice.
+// Call lifecycle via REST, WebRTC via @forumline/shared-voice,
+// ringtone, call overlay UI, native bridge.
 
 import { ForumlineAPI } from './client.js';
 import { NativeBridge } from './native-bridge.js';
@@ -30,55 +30,64 @@ function setCallState(newState, info) {
   notifyCallStateChange();
 }
 
-function getOrCreateSession() {
+// --- Session management ---
+// The VoiceSession handles WebRTC only. Call lifecycle (ringing, accept, decline)
+// is managed via REST endpoints. The server sends lifecycle signals (incoming_call,
+// call_accepted, etc.) through the same voice_signal channel, which we listen for
+// via session.onSignal().
+
+function ensureSession() {
   if (session) return session;
   session = new VoiceSession({
     mode: 'p2p-only',
-    invitation: { timeoutMs: 30000 },
     getAuthToken: () => ForumlineAPI.getToken(),
   });
 
-  let prevSessionStatus = null;
-  session.onStateChange((state) => {
-    const prev = prevSessionStatus;
-    prevSessionStatus = state.status;
+  // Listen for server-generated call lifecycle signals
+  session.onSignal('incoming_call', (signal) => {
+    if (callState.state !== 'idle') return;
+    const p = signal.payload;
+    setCallState('ringing-incoming', {
+      callId: p.call_id,
+      conversationId: p.conversation_id,
+      remoteUserId: signal.senderUserId,
+      remoteDisplayName: p.caller_display_name || p.caller_username || 'Unknown',
+      remoteAvatarUrl: p.caller_avatar_url || null,
+    });
+    NativeBridge.sendCallEvent('incoming', callState.callInfo);
+    callTimer = setTimeout(() => { if (callState.state === 'ringing-incoming') callCleanup(); }, 30000);
+  });
 
-    if (state.status === 'invited' && state.invitation) {
-      const meta = state.invitation.metadata;
-      setCallState('ringing-incoming', {
-        callId: meta.call_id,
-        conversationId: meta.conversation_id,
-        remoteUserId: state.invitation.remoteUserId,
-        remoteDisplayName: meta.caller_display_name || meta.caller_username || 'Unknown',
-        remoteAvatarUrl: meta.caller_avatar_url || null,
-      });
-      NativeBridge.sendCallEvent('incoming', callState.callInfo);
-    } else if (state.status === 'inviting') {
-      // Already handled in initiateCall
-    } else if (state.status === 'active') {
-      if (callState.state !== 'active') {
-        setCallState('active');
-        NativeBridge.sendCallEvent('accepted', callState.callInfo);
-        startDurationTimer();
-      }
-    } else if (state.status === 'connected' && (prev === 'inviting' || prev === 'invited')) {
-      // Invitation was declined/cancelled/timed out — went back to connected
-      NativeBridge.sendCallEvent('ended', callState.callInfo);
-      callCleanup();
-    } else if (state.status === 'disconnected' && callState.state !== 'idle') {
-      NativeBridge.sendCallEvent('ended', callState.callInfo);
-      callCleanup();
+  session.onSignal('call_accepted', () => {
+    if (callState.state !== 'ringing-outgoing') return;
+    setCallState('active');
+    NativeBridge.sendCallEvent('accepted', callState.callInfo);
+    // We're the caller — start WebRTC as initiator
+    if (callState.callInfo) {
+      session.addPeer(callState.callInfo.remoteUserId, { initiator: true });
     }
+    startDurationTimer();
+  });
+
+  session.onSignal('call_declined', () => {
+    NativeBridge.sendCallEvent('ended', callState.callInfo);
+    callCleanup();
+  });
+
+  session.onSignal('call_ended', () => {
+    NativeBridge.sendCallEvent('ended', callState.callInfo);
+    callCleanup();
   });
 
   return session;
 }
 
-// --- Call lifecycle ---
+let callTimer = null;
+
+// --- Call lifecycle (REST endpoints) ---
 async function initiateCall(conversationId, remoteUserId, remoteDisplayName, remoteAvatarUrl) {
   if (callState.state !== 'idle' || !ForumlineAPI.isAuthenticated()) return;
 
-  // Create call record on server
   let result;
   try {
     result = await ForumlineAPI.apiFetch('/api/calls', {
@@ -94,18 +103,13 @@ async function initiateCall(conversationId, remoteUserId, remoteDisplayName, rem
     remoteDisplayName, remoteAvatarUrl: remoteAvatarUrl || null,
   });
   NativeBridge.sendCallEvent('outgoing', callState.callInfo);
+  callTimer = setTimeout(() => { if (callState.state === 'ringing-outgoing') endCall(); }, 30000);
 
-  // Connect session and send invitation
-  const s = getOrCreateSession();
+  // Connect session for WebRTC (signal stream is needed to receive call_accepted)
+  const s = ensureSession();
   const userId = ForumlineAPI.getUserId();
-
   try {
-    await s.connect(userId, remoteDisplayName, conversationId);
-    await s.invite(remoteUserId, {
-      call_id: result.id,
-      conversation_id: conversationId,
-      caller_display_name: remoteDisplayName,
-    });
+    await s.connect(userId, userId);
   } catch {
     callCleanup();
   }
@@ -113,28 +117,32 @@ async function initiateCall(conversationId, remoteUserId, remoteDisplayName, rem
 
 async function acceptCall() {
   if (callState.state !== 'ringing-incoming' || !callState.callInfo) return;
+  if (callTimer) { clearTimeout(callTimer); callTimer = null; }
 
-  // Tell server we accepted
   try {
     await ForumlineAPI.apiFetch('/api/calls/' + callState.callInfo.callId + '/respond', {
       method: 'POST', body: JSON.stringify({ action: 'accept' }),
     });
   } catch { callCleanup(); return; }
 
-  // Accept the voice session invitation (starts WebRTC)
-  if (session) await session.accept();
+  setCallState('active');
+  NativeBridge.sendCallEvent('accepted', callState.callInfo);
+  startDurationTimer();
+
+  // We're the callee — wait for initiator's offer (addPeer with initiator: false)
+  if (session && callState.callInfo) {
+    session.addPeer(callState.callInfo.remoteUserId, { initiator: false });
+  }
 }
 
 async function declineCall() {
   if (callState.state !== 'ringing-incoming' || !callState.callInfo) return;
-
+  if (callTimer) { clearTimeout(callTimer); callTimer = null; }
   try {
     await ForumlineAPI.apiFetch('/api/calls/' + callState.callInfo.callId + '/respond', {
       method: 'POST', body: JSON.stringify({ action: 'decline' }),
     });
   } catch {}
-
-  if (session) await session.decline();
   NativeBridge.sendCallEvent('ended', callState.callInfo);
   callCleanup();
 }
@@ -165,6 +173,7 @@ let cleaningUp = false;
 function callCleanup() {
   if (cleaningUp) return;
   cleaningUp = true;
+  if (callTimer) { clearTimeout(callTimer); callTimer = null; }
   if (durationInterval) { clearInterval(durationInterval); durationInterval = null; }
   if (session) { session.destroy(); session = null; }
   setCallState('idle', null);
@@ -313,9 +322,10 @@ onCallStateChange(() => {
 function init() {
   warmAudioContext();
   if (ForumlineAPI.isAuthenticated()) {
+    // Connect session eagerly to listen for incoming call signals
     const userId = ForumlineAPI.getUserId();
     if (userId) {
-      const s = getOrCreateSession();
+      const s = ensureSession();
       s.connect(userId, userId).catch(() => {});
     }
   }
@@ -326,7 +336,7 @@ function reconnectCallSSE() {
   if (ForumlineAPI.isAuthenticated()) {
     const userId = ForumlineAPI.getUserId();
     if (userId) {
-      const s = getOrCreateSession();
+      const s = ensureSession();
       s.connect(userId, userId).catch(() => {});
     }
   }
