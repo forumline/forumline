@@ -19,6 +19,7 @@ jobs:
           scp deploy/compose/logs/vmauth.yml logs-prod:/opt/logs/vmauth.yml
 
       - name: Set password and restart
+        env:
+          VMAUTH_PASSWORD: ${{ secrets.VMAUTH_PASSWORD }}
         run: |
-          VMAUTH_PASSWORD=$(security find-generic-password -a admin -s logs-forumline -w)
           ssh logs-prod "cd /opt/logs && echo 'VMAUTH_PASSWORD=$VMAUTH_PASSWORD' > .env && docker compose pull && docker compose up -d --remove-orphans && docker compose ps"
