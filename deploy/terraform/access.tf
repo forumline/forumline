@@ -4,6 +4,17 @@
 # GitHub Actions authenticates via service token.
 # Developer access goes through WireGuard VPN — no Cloudflare SSH needed.
 
+# State migration: old for_each resources → single resources
+moved {
+  from = cloudflare_zero_trust_access_application.ssh["ssh"]
+  to   = cloudflare_zero_trust_access_application.ssh_bastion
+}
+
+moved {
+  from = cloudflare_zero_trust_access_policy.ssh_service_auth["ssh"]
+  to   = cloudflare_zero_trust_access_policy.ssh_service_auth
+}
+
 # ---------------------------------------------------------------------------
 # Service token for GitHub Actions deploys
 # ---------------------------------------------------------------------------
