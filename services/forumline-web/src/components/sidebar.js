@@ -6,6 +6,7 @@ import { DmStore } from '../api/dm-store.js';
 import { PresenceTracker } from '../api/presence.js';
 import { ForumStore } from '../api/forum-store.js';
 import { pushState } from '../router.js';
+import { showToast } from './toast.js';
 
 // ========== BOOKMARKS ==========
 let bookmarks = [];
@@ -364,10 +365,81 @@ function initNewDmModal() {
   });
 }
 
+// ========== ADD FORUM MODAL ==========
+function openAddForumModal() {
+  const modal = $('addForumModal');
+  const input = $('addForumUrlInput');
+  const error = $('addForumError');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  if (error) error.classList.add('hidden');
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+}
+
+function closeAddForumModal() {
+  const modal = $('addForumModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function initAddForumModal() {
+  const btn = $('addForumBtn');
+  const modal = $('addForumModal');
+  const input = $('addForumUrlInput');
+  const error = $('addForumError');
+  const submitBtn = $('addForumSubmit');
+  const cancelBtn = $('addForumCancel');
+
+  if (!btn || !modal) return;
+
+  btn.addEventListener('click', openAddForumModal);
+
+  cancelBtn?.addEventListener('click', closeAddForumModal);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeAddForumModal();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeAddForumModal();
+    }
+  });
+
+  const doSubmit = async () => {
+    const url = input?.value.trim();
+    if (!url) {
+      if (error) { error.textContent = 'Please enter a forum URL'; error.classList.remove('hidden'); }
+      return;
+    }
+
+    if (error) error.classList.add('hidden');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Adding...'; }
+
+    try {
+      await ForumStore.addForum(url);
+      renderForumList();
+      closeAddForumModal();
+      showToast('Forum added successfully!');
+    } catch (err) {
+      if (error) { error.textContent = err.message || 'Failed to add forum'; error.classList.remove('hidden'); }
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Add Forum'; }
+    }
+  };
+
+  submitBtn?.addEventListener('click', doSubmit);
+
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSubmit(); }
+  });
+}
+
 // ========== INIT ==========
 let _deps = { showForum: () => {}, showDm: () => {}, showThread: () => {} };
 
 export function initSidebar(deps) {
   _deps = deps;
   initNewDmModal();
+  initAddForumModal();
 }

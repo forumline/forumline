@@ -53,12 +53,31 @@ export const ForumStore = {
   },
 
   async addForum(url) {
-    const manifest = await this.fetchManifest(url);
-    if (this._forums.some(f => f.domain === manifest.domain)) throw new Error('Already joined');
-    if (this._accessToken) {
-      try { await fetch('/api/memberships/join', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this._accessToken }, body: JSON.stringify({ forum_domain: manifest.domain }) }); } catch (e) {}
+    // Extract domain from URL input (strip protocol, path, trailing slash)
+    let domain = url.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!domain) throw new Error('Please enter a forum URL or domain');
+    if (this._forums.some(f => f.domain === domain)) throw new Error('Already joined this forum');
+    if (!this._accessToken) throw new Error('You must be signed in to add a forum');
+
+    // Use the server-side join endpoint which fetches the manifest internally (no CORS issues)
+    const res = await fetch('/api/memberships/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this._accessToken },
+      body: JSON.stringify({ forum_domain: domain }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to add forum (HTTP ' + res.status + ')');
     }
-    const mem = { domain: manifest.domain, name: manifest.name, icon_url: manifest.icon_url || '', web_base: manifest.web_base, api_base: manifest.api_base, capabilities: manifest.capabilities || [], added_at: new Date().toISOString(), id: 'real_' + manifest.domain.replace(/[^a-z0-9]/g, '_'), seed: manifest.domain, members: 0, unread: 0, threads: 0, isReal: true };
+    const info = await res.json();
+    const mem = {
+      domain: info.domain, name: info.name, icon_url: info.icon_url || '',
+      web_base: info.web_base, api_base: info.api_base,
+      capabilities: info.capabilities || [],
+      added_at: info.joined_at || new Date().toISOString(),
+      id: 'real_' + info.domain.replace(/[^a-z0-9]/g, '_'), seed: info.domain,
+      members: info.member_count || 1, unread: 0, threads: 0, isReal: true,
+    };
     this._forums.push(mem);
     try { localStorage.setItem('forumline-memberships', JSON.stringify(this._forums)); } catch (e) {}
     this._notify(); return mem;

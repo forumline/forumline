@@ -90,13 +90,15 @@ func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID, userID st
 	var iconURL *string
 	var capabilities []string
 	var joinedAt time.Time
+	var memberCount int
 
 	err := s.Pool.QueryRow(ctx,
-		`SELECT f.domain, f.name, f.icon_url, f.api_base, f.web_base, f.capabilities, m.joined_at
+		`SELECT f.domain, f.name, f.icon_url, f.api_base, f.web_base, f.capabilities, m.joined_at,
+		        (SELECT COUNT(*) FROM forumline_memberships WHERE forum_id = f.id)
 		 FROM forumline_forums f
 		 JOIN forumline_memberships m ON m.forum_id = f.id
 		 WHERE f.id = $1 AND m.user_id = $2`, forumID, userID,
-	).Scan(&domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &joinedAt)
+	).Scan(&domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &joinedAt, &memberCount)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +106,7 @@ func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID, userID st
 	return map[string]interface{}{
 		"domain": domain, "name": name, "icon_url": iconURL,
 		"api_base": apiBase, "web_base": webBase, "capabilities": capabilities,
-		"joined_at": joinedAt.Format(time.RFC3339),
+		"joined_at": joinedAt.Format(time.RFC3339), "member_count": memberCount,
 	}, nil
 }
 
