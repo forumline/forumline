@@ -25,14 +25,14 @@ async function loginAndSave(
   });
 }
 
-loginAndSave(
+void loginAndSave(
   setup,
   "testcaller@example.com",
   process.env.TESTCALLER_PASSWORD!,
   "auth/testcaller.json",
 );
 
-loginAndSave(
+void loginAndSave(
   setup,
   "testavatar2@example.com",
   process.env.TESTUSER_DEBUG_PASSWORD!,

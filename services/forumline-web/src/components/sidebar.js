@@ -284,9 +284,114 @@ export function initDragAndDrop() {
   });
 }
 
+// ========== NEW DM MODAL ==========
+let _newDmDebounce = null;
+
+function openNewDmModal() {
+  const modal = $('newDmModal');
+  const input = $('newDmSearchInput');
+  const results = $('newDmResults');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  results.innerHTML = '<div class="search-modal-hint">Search by username to start a conversation...</div>';
+  input.value = '';
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeNewDmModal() {
+  const modal = $('newDmModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function initNewDmModal() {
+  const input = $('newDmSearchInput');
+  const results = $('newDmResults');
+  const backdrop = $('newDmModalBackdrop');
+  const escBtn = $('newDmEscBtn');
+  const btn = $('newDmBtn');
+
+  if (!input || !results) return;
+
+  btn?.addEventListener('click', () => {
+    if (!ForumlineAPI.isAuthenticated()) return;
+    openNewDmModal();
+  });
+
+  backdrop?.addEventListener('click', closeNewDmModal);
+  escBtn?.addEventListener('click', closeNewDmModal);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('newDmModal').classList.contains('hidden')) {
+      closeNewDmModal();
+    }
+  });
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim();
+    if (query.length < 2) {
+      results.innerHTML = '<div class="search-modal-hint">Search by username to start a conversation...</div>';
+      return;
+    }
+
+    clearTimeout(_newDmDebounce);
+    _newDmDebounce = setTimeout(async () => {
+      results.innerHTML = '<div class="search-modal-hint">Searching...</div>';
+      try {
+        const profiles = await ForumlineAPI.searchProfiles(query);
+        const myId = ForumlineAPI.getUserId();
+        const filtered = (profiles || []).filter(p => p.id !== myId);
+
+        if (filtered.length === 0) {
+          results.innerHTML = '<div class="search-modal-hint">No users found</div>';
+          return;
+        }
+
+        results.innerHTML = filtered.map(p => {
+          const name = escapeHtml(p.display_name || p.username);
+          const username = escapeHtml(p.username);
+          const avatarUrl = p.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.username)}`;
+          return `
+            <div class="search-modal-result" data-user-id="${p.id}" role="option" tabindex="0" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;">
+              <img src="${avatarUrl}" alt="" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'">
+              <div>
+                <div style="font-weight:600;">${name}</div>
+                ${name !== username ? `<div style="font-size:12px;color:#888;">@${username}</div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        results.querySelectorAll('.search-modal-result').forEach(el => {
+          const handler = async () => {
+            const userId = el.dataset.userId;
+            closeNewDmModal();
+            try {
+              const convo = await ForumlineAPI.getOrCreateDM(userId);
+              await DmStore.fetchConversations();
+              renderDmList();
+              _deps.showDm(convo.id);
+            } catch (err) {
+              console.error('[NewDM] Failed to create conversation:', err);
+            }
+          };
+          el.addEventListener('click', handler);
+          el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); }
+          });
+        });
+      } catch (err) {
+        console.error('[NewDM] Search failed:', err);
+        results.innerHTML = '<div class="search-modal-hint">Search failed</div>';
+      }
+    }, 300);
+  });
+}
+
 // ========== INIT ==========
 let _deps = { showForum: () => {}, showDm: () => {}, showThread: () => {} };
 
 export function initSidebar(deps) {
   _deps = deps;
+  initNewDmModal();
 }

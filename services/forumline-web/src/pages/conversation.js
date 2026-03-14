@@ -1,5 +1,5 @@
 import { $ } from '../lib/utils.js';
-import { escapeHtml } from '../lib/markdown.js';
+import { escapeHtml, renderMarkdown } from '../lib/markdown.js';
 import store from '../state/store.js';
 import * as data from '../state/data.js';
 import { ForumlineAPI } from '../api/client.js';
@@ -171,7 +171,7 @@ export function renderMessages(dmId) {
   el.innerHTML = dmMessages.map(m => `
     <div class="message-item ${m.from === 'me' ? 'sent' : ''}">
       ${m.from !== 'me' ? `<img class="avatar-sm" src="https://api.dicebear.com/7.x/avataaars/svg?seed=${dm?.seed}" alt="">` : ''}
-      <div class="message-bubble">${escapeHtml(m.content)}</div>
+      <div class="message-bubble">${renderMarkdown(m.content)}</div>
       <span class="message-time">${m.time}</span>
     </div>
   `).join('');
@@ -242,7 +242,7 @@ async function _fetchAndRenderMessages(dmId, el, isInitial) {
           ${!isMe ? `<img class="avatar-sm" src="${senderMember?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(senderSeed)}" alt="" onerror="this.style.display='none'">` : ''}
           <div>
             ${senderLabel}
-            <div class="message-bubble">${escapeHtml(m.content)}</div>
+            <div class="message-bubble">${renderMarkdown(m.content)}</div>
           </div>
           <span class="message-time">${timeStr}</span>
         </div>
@@ -284,7 +284,7 @@ async function _loadOlderMessages(dmId) {
       return `
         <div class="message-item ${isMe ? 'sent' : ''}">
           ${!isMe ? `<img class="avatar-sm" src="${senderMember?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(senderSeed)}" alt="" onerror="this.style.display='none'">` : ''}
-          <div class="message-bubble">${escapeHtml(m.content)}</div>
+          <div class="message-bubble">${renderMarkdown(m.content)}</div>
           <span class="message-time">${timeStr}</span>
         </div>
       `;
@@ -328,7 +328,7 @@ export function initConversation(deps) {
       newMsg.className = 'message-item sent';
       newMsg.id = optimisticId;
       newMsg.innerHTML = `
-        <div class="message-bubble">${escapeHtml(content)}</div>
+        <div class="message-bubble">${renderMarkdown(content)}</div>
         <div class="message-meta">
           <span class="message-time">now</span>
           <span class="receipt-checks delivered">
@@ -374,7 +374,7 @@ export function initConversation(deps) {
     const newMsg = document.createElement('div');
     newMsg.className = 'message-item sent';
     newMsg.innerHTML = `
-      <div class="message-bubble">${escapeHtml(content)}</div>
+      <div class="message-bubble">${renderMarkdown(content)}</div>
       <div class="message-meta">
         <span class="message-time">now</span>
         <span class="receipt-checks delivered">

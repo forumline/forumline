@@ -1,4 +1,4 @@
-import { test as base, type BrowserContext, type Page } from "@playwright/test";
+import { test as base, type Page } from "@playwright/test";
 
 type TestFixtures = {
   testcallerPage: Page;

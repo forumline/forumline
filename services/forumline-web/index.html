@@ -793,6 +793,21 @@
     </div>
   </div>
 
+  <!-- New DM modal -->
+  <div class="search-modal hidden" id="newDmModal" role="dialog" aria-modal="true" aria-label="New direct message">
+    <div class="search-modal-backdrop" id="newDmModalBackdrop"></div>
+    <div class="search-modal-panel">
+      <div class="search-modal-input-row">
+        <span class="search-modal-icon" aria-hidden="true">&#x2709;</span>
+        <input type="text" class="search-modal-input" id="newDmSearchInput" placeholder="Search for a user..." autofocus role="combobox" aria-expanded="true" aria-controls="newDmResults" aria-autocomplete="list" aria-label="Search for a user">
+        <kbd class="search-kbd" id="newDmEscBtn" aria-hidden="true" role="button" style="cursor:pointer">ESC</kbd>
+      </div>
+      <div class="search-modal-results" id="newDmResults" role="listbox">
+        <div class="search-modal-hint">Search by username to start a conversation...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Member list panel -->
   <div class="member-panel hidden" id="memberPanel" role="complementary" aria-label="Member list">
     <div class="member-panel-header">

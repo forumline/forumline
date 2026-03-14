@@ -10,7 +10,7 @@
     "lint:go": "cd services/forumline-api && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./...",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'tests/**'",
     "test:e2e": "playwright test --config tests/playwright.config.ts",
     "test:e2e:ui": "playwright test --config tests/playwright.config.ts --ui",
     "test:e2e:smoke": "playwright test --config tests/playwright.config.ts --project=smoke",
