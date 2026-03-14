@@ -15,7 +15,7 @@ source = '''
 [sinks.victorialogs]
 type = "loki"
 inputs = ["add_host"]
-endpoint = "http://192.168.1.108:9428/insert/loki"
+endpoint = "http://192.168.1.108:9428/insert"
 encoding.codec = "text"
 
 [sinks.victorialogs.labels]
