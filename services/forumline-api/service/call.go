@@ -71,14 +71,10 @@ func (cs *CallService) Initiate(ctx context.Context, callerID, conversationID st
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
-		"type":           "incoming_call",
+		"type": "incoming_call", "call_id": call.ID, "conversation_id": call.ConversationID,
+		"caller_id": callerID, "caller_username": callerUsername,
+		"caller_display_name": displayName, "caller_avatar_url": callerAvatarURL,
 		"target_user_id": calleeID,
-		"sender_user_id": callerID,
-		"payload": map[string]interface{}{
-			"call_id": call.ID, "conversation_id": call.ConversationID,
-			"caller_username": callerUsername, "caller_display_name": displayName,
-			"caller_avatar_url": callerAvatarURL,
-		},
 	})
 	_ = cs.Store.NotifyCallSignal(ctx, string(signalData))
 
@@ -122,12 +118,7 @@ func (cs *CallService) Respond(ctx context.Context, userID, callID, action strin
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
-		"type":           signalType,
-		"target_user_id": callerID,
-		"sender_user_id": userID,
-		"payload": map[string]interface{}{
-			"call_id": callID,
-		},
+		"type": signalType, "call_id": callID, "target_user_id": callerID,
 	})
 	_ = cs.Store.NotifyCallSignal(ctx, string(signalData))
 
@@ -147,37 +138,38 @@ func (cs *CallService) End(ctx context.Context, userID, callID string) (*EndResu
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
-		"type":           "call_ended",
-		"target_user_id": otherUserID,
-		"sender_user_id": userID,
-		"payload": map[string]interface{}{
-			"call_id": callID,
-		},
+		"type": "call_ended", "call_id": callID, "ended_by": userID, "target_user_id": otherUserID,
 	})
 	_ = cs.Store.NotifyCallSignal(ctx, string(signalData))
 
 	return &EndResult{Status: newStatus}, nil
 }
 
-// SignalInput represents a voice signal message (WebRTC or any type).
+// SignalInput represents a WebRTC signaling message.
 type SignalInput struct {
 	TargetUserID string
 	CallID       string
-	Type         string
+	Type         string // "offer", "answer", or "ice-candidate"
 	Payload      json.RawMessage
 }
 
-// Signal forwards a voice signal to the target user via pg_notify.
+// Signal forwards a WebRTC signaling message between call participants.
 func (cs *CallService) Signal(ctx context.Context, senderID string, input SignalInput) error {
-	if input.TargetUserID == "" || input.Type == "" {
-		return &ValidationError{Msg: "target_user_id and type are required"}
+	if input.TargetUserID == "" || input.CallID == "" || input.Payload == nil {
+		return &ValidationError{Msg: "target_user_id, call_id, and payload are required"}
+	}
+	if input.Type != "offer" && input.Type != "answer" && input.Type != "ice-candidate" {
+		return &ValidationError{Msg: "type must be offer, answer, or ice-candidate"}
+	}
+
+	valid, _ := cs.Store.VerifyCallParticipants(ctx, input.CallID, senderID, input.TargetUserID)
+	if !valid {
+		return &ForbiddenError{Msg: "Not a participant of this call"}
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
-		"type":           input.Type,
-		"target_user_id": input.TargetUserID,
-		"sender_user_id": senderID,
-		"payload":        input.Payload,
+		"type": input.Type, "call_id": input.CallID, "sender_id": senderID,
+		"target_user_id": input.TargetUserID, "payload": input.Payload,
 	})
 	_ = cs.Store.NotifyCallSignal(ctx, string(signalData))
 

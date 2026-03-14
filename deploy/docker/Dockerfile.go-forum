@@ -17,12 +17,8 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-# Build shared-voice package (forum uses file: reference)
-COPY packages/shared-voice/ /packages/shared-voice/
-RUN cd /packages/shared-voice && pnpm install --ignore-scripts && pnpm run build
-
 COPY services/forum/package.json services/forum/pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install --ignore-workspace
+RUN pnpm install --frozen-lockfile || pnpm install
 
 COPY services/forum/index.html services/forum/vite.config.js services/forum/eslint.config.mjs ./
 COPY services/forum/src/ src/
