@@ -105,14 +105,8 @@ async function initiateCall(conversationId, remoteUserId, remoteDisplayName, rem
   NativeBridge.sendCallEvent('outgoing', callState.callInfo);
   callTimer = setTimeout(() => { if (callState.state === 'ringing-outgoing') endCall(); }, 30000);
 
-  // Connect session for WebRTC (signal stream is needed to receive call_accepted)
-  const s = ensureSession();
-  const userId = ForumlineAPI.getUserId();
-  try {
-    await s.connect(userId, userId);
-  } catch {
-    callCleanup();
-  }
+  // Session is already connected from init() — just ensure it exists
+  ensureSession();
 }
 
 async function acceptCall() {
