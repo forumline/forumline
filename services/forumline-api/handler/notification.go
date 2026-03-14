@@ -141,7 +141,7 @@ func (h *NotificationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 
 	payload, _ := json.Marshal(map[string]string{"id": body.ID})
-	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+"/api/forumline/notifications/read", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+"/notifications/read", bytes.NewReader(payload))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create request"})
 		return
@@ -203,7 +203,7 @@ func (h *NotificationHandler) HandleMarkAllRead(w http.ResponseWriter, r *http.R
 }
 
 func fetchForumNotifications(ctx context.Context, apiBase, token string) ([]aggregatedNotification, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/api/forumline/notifications", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiBase+"/notifications", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +228,7 @@ func fetchForumNotifications(ctx context.Context, apiBase, token string) ([]aggr
 
 func markForumNotificationRead(ctx context.Context, apiBase, token, notifID string) {
 	payload, _ := json.Marshal(map[string]string{"id": notifID})
-	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+"/api/forumline/notifications/read", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+"/notifications/read", bytes.NewReader(payload))
 	if err != nil {
 		return
 	}
