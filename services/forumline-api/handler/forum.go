@@ -371,11 +371,8 @@ func (h *ForumHandler) HandleEnsureOAuth(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	hasOAuth, _ := h.Store.OAuthClientExistsByForumID(ctx, forumID)
-	if hasOAuth {
-		writeJSON(w, http.StatusOK, map[string]string{"message": "OAuth credentials already exist"})
-		return
-	}
+	// Delete existing OAuth client if present (allows re-provisioning)
+	_ = h.Store.DeleteOAuthClientByForumID(ctx, forumID)
 
 	cidBytes := make([]byte, 16)
 	csBytes := make([]byte, 32)

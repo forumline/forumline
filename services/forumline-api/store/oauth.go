@@ -86,6 +86,11 @@ func (s *Store) OAuthClientExistsByForumID(ctx context.Context, forumID string) 
 	return exists, err
 }
 
+func (s *Store) DeleteOAuthClientByForumID(ctx context.Context, forumID string) error {
+	_, err := s.Pool.Exec(ctx, `DELETE FROM forumline_oauth_clients WHERE forum_id = $1`, forumID)
+	return err
+}
+
 func (s *Store) OAuthClientExistsBySecretHash(ctx context.Context, secretHash string) (bool, error) {
 	var exists bool
 	err := s.Pool.QueryRow(ctx,
