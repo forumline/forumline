@@ -1,62 +1,107 @@
 import { $ } from '../lib/utils.js';
-import * as data from '../state/data.js';
+import { ForumlineAPI } from '../api/client.js';
+import { ForumStore } from '../api/forum-store.js';
 
-let _deps = {
-  showThread: () => {},
-  showForum: () => {},
-};
+let _notifications = [];
+let _loading = false;
 
-const notifTargets = {
-  'n1': { type: 'thread', id: 't2' },
-  'n2': { type: 'thread', id: 't1' },
-  'n3': { type: 'forum', id: '3' },
-  'n4': { type: 'thread', id: 't6' },
-  'n5': { type: 'thread', id: 't1' },
-};
+function timeAgo(timestamp) {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const seconds = Math.floor((now - then) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks}w ago`;
+}
+
+function updateBadge() {
+  const unreadCount = _notifications.filter(n => !n.read).length;
+  const badge = $('notifBell')?.querySelector('.notif-badge');
+  if (!badge) return;
+  if (unreadCount > 0) {
+    badge.textContent = unreadCount;
+    badge.style.display = '';
+    $('notifBell').setAttribute('aria-label', `Notifications (${unreadCount} unread)`);
+  } else {
+    badge.style.display = 'none';
+    $('notifBell').setAttribute('aria-label', 'Notifications');
+  }
+}
 
 export function renderNotifications() {
-  const notifications = data.notifications;
+  const list = $('notifList');
+  if (!list) return;
 
-  $('notifList').innerHTML = notifications.map(n => `
-    <div class="notif-item ${n.unread ? 'unread' : ''}" role="listitem">
-      <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${n.seed}" alt="" onerror="this.style.display='none'">
+  if (_loading) {
+    list.innerHTML = '<div class="notif-loading">Loading...</div>';
+    return;
+  }
+
+  if (_notifications.length === 0) {
+    list.innerHTML = '<div class="notif-empty" role="listitem">No notifications yet</div>';
+    return;
+  }
+
+  list.innerHTML = _notifications.map(n => {
+    const seed = n.title.replace(/<[^>]*>/g, '').split(' ')[0] || 'unknown';
+    return `
+    <div class="notif-item ${!n.read ? 'unread' : ''}" role="listitem"
+         data-id="${n.id}" data-domain="${n.forum_domain}" data-link="${n.link || '/'}">
+      <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}" alt="" onerror="this.style.display='none'">
       <div>
-        <div class="notif-item-text">${n.text}</div>
-        <div class="notif-item-time">${n.time}</div>
+        <div class="notif-item-text">${n.title}${n.forum_name ? ' <span class="notif-forum">in ' + n.forum_name + '</span>' : ''}</div>
+        <div class="notif-item-time">${timeAgo(n.timestamp)}</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
-  // Bind click-to-navigate on each notification item
-  $('notifList').querySelectorAll('.notif-item').forEach((item, idx) => {
+  list.querySelectorAll('.notif-item').forEach(item => {
     item.addEventListener('click', () => {
-      const notif = notifications[idx];
-      if (notif) {
-        notif.unread = false;
-        const target = notifTargets[notif.id];
-        $('notifDropdown').classList.add('hidden');
+      const id = item.dataset.id;
+      const domain = item.dataset.domain;
+      const link = item.dataset.link;
 
-        const unreadCount = notifications.filter(n => n.unread).length;
-        const badge = $('notifBell').querySelector('.notif-badge');
-        if (unreadCount > 0) {
-          badge.textContent = unreadCount;
-          badge.style.display = '';
-        } else {
-          badge.style.display = 'none';
-        }
+      // Mark as read
+      const notif = _notifications.find(n => n.id === id);
+      if (notif && !notif.read) {
+        notif.read = true;
+        updateBadge();
+        ForumlineAPI.markNotificationRead(id, domain).catch(() => {});
+      }
 
-        if (target) {
-          if (target.type === 'thread') _deps.showThread(target.id);
-          else if (target.type === 'forum') _deps.showForum(target.id);
-        }
+      $('notifDropdown').classList.add('hidden');
+
+      // Navigate to the forum thread
+      if (domain) {
+        ForumStore.switchForum(domain, link || '');
       }
     });
   });
 }
 
-export function initNotifications(deps) {
-  _deps = { ..._deps, ...deps };
+async function fetchNotifications() {
+  if (!ForumlineAPI.isAuthenticated()) return;
+  _loading = true;
+  renderNotifications();
+  try {
+    _notifications = await ForumlineAPI.getNotifications();
+    updateBadge();
+  } catch (e) {
+    console.warn('[Notifications] fetch failed:', e.message);
+    _notifications = [];
+  }
+  _loading = false;
+  renderNotifications();
+}
 
+export function initNotifications() {
   // Notification bell click handler
   $('notifBell')?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -64,16 +109,23 @@ export function initNotifications(deps) {
     const dd = $('notifDropdown');
     dd.classList.toggle('hidden');
     if (!dd.classList.contains('hidden')) {
-      renderNotifications();
+      fetchNotifications();
     }
   });
 
   // Mark all read handler
-  $('markAllRead')?.addEventListener('click', () => {
-    const notifications = data.notifications;
-    notifications.forEach(n => n.unread = false);
-    $('notifBell').querySelector('.notif-badge').style.display = 'none';
-    $('notifBell').setAttribute('aria-label', 'Notifications');
+  $('markAllRead')?.addEventListener('click', async () => {
+    _notifications.forEach(n => n.read = true);
+    updateBadge();
     renderNotifications();
+    ForumlineAPI.markAllNotificationsRead().catch(() => {});
   });
+
+  // Initial badge fetch (don't render dropdown, just update count)
+  if (ForumlineAPI.isAuthenticated()) {
+    ForumlineAPI.getNotifications().then(notifs => {
+      _notifications = notifs;
+      updateBadge();
+    }).catch(() => {});
+  }
 }

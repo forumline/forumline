@@ -92,6 +92,18 @@ function searchIdentity(query) {
 
 function getActivity() { return apiFetch('/api/activity'); }
 
+function getNotifications() { return apiFetch('/api/notifications'); }
+
+function markNotificationRead(id, forumDomain) {
+  return apiFetch('/api/notifications/read', {
+    method: 'POST', body: JSON.stringify({ id, forum_domain: forumDomain }),
+  });
+}
+
+function markAllNotificationsRead() {
+  return apiFetch('/api/notifications/read-all', { method: 'POST' });
+}
+
 function presenceHeartbeat() {
   return apiFetch('/api/presence/heartbeat', { method: 'POST', silent: true });
 }
@@ -106,4 +118,5 @@ export const ForumlineAPI = {
   getConversations, getConversation, getMessages, sendMessage, markRead,
   getOrCreateDM, createGroupConversation, updateConversation, leaveConversation,
   searchProfiles, searchIdentity, getActivity, presenceHeartbeat, getPresenceStatus,
+  getNotifications, markNotificationRead, markAllNotificationsRead,
 };

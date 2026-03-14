@@ -6,6 +6,7 @@ import { ForumlineAPI } from '../api/client.js';
 import { DmSSE } from '../api/dm-sse.js';
 import { DmStore } from '../api/dm-store.js';
 import { PresenceTracker } from '../api/presence.js';
+import { CallManager } from '../api/calls.js';
 
 let _showView, _renderForumList, _renderDmList, _showToast;
 
@@ -75,10 +76,15 @@ export function showDm(dmId) {
       // Use PresenceTracker to set online indicator for 1:1 conversations
       const otherForPresence = !cached.isGroup && others.length === 1 ? others[0].id : null;
       $('dmOnline').style.display = otherForPresence && PresenceTracker.isOnline(otherForPresence) ? 'block' : 'none';
+      // Show call button for 1:1 conversations only
+      const callBtn = $('dmCallBtn');
+      if (callBtn) callBtn.classList.toggle('hidden', !otherForPresence);
     } else {
       $('dmName').textContent = 'Loading...';
       $('dmAvatar').src = '';
       $('dmOnline').style.display = 'none';
+      const callBtnLoading = $('dmCallBtn');
+      if (callBtnLoading) callBtnLoading.classList.add('hidden');
     }
 
     // Also fetch fresh metadata from API
@@ -100,6 +106,9 @@ export function showDm(dmId) {
       const otherPresence = !convo.isGroup && others.length === 1 ? others[0].id : null;
       const onlineEl = $('dmOnline');
       if (onlineEl) onlineEl.style.display = otherPresence && PresenceTracker.isOnline(otherPresence) ? 'block' : 'none';
+      // Show call button for 1:1 conversations
+      const callBtnFresh = $('dmCallBtn');
+      if (callBtnFresh) callBtnFresh.classList.toggle('hidden', !otherPresence);
     }).catch(err => console.error('[DM] Failed to fetch conversation:', err));
 
     // Subscribe to SSE for this conversation
@@ -304,6 +313,17 @@ export function initConversation(deps) {
   _renderForumList = deps.renderForumList;
   _renderDmList = deps.renderDmList;
   _showToast = deps.showToast;
+
+  // Call button handler
+  $('dmCallBtn')?.addEventListener('click', () => {
+    if (!store.currentDm || !_currentConvoMeta || !ForumlineAPI.isAuthenticated()) return;
+    const myId = ForumlineAPI.getUserId();
+    const others = (_currentConvoMeta.members || []).filter(m => m.id !== myId);
+    if (others.length !== 1) return; // only 1:1 calls
+    const remote = others[0];
+    const avatarUrl = remote.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(remote.username || remote.id)}`;
+    CallManager.initiateCall(store.currentDm, remote.id, remote.displayName || remote.username, avatarUrl);
+  });
 
   // DM send button handler (with real API optimistic sends + mock fallback)
   const dmSendBtn = $('dmSendBtn');

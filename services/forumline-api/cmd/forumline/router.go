@@ -40,6 +40,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	callH := handler.NewCallHandler(s, sseHub, pushSvc)
 	pushH := handler.NewPushHandler(s, pushSvc)
 	activityH := handler.NewActivityHandler(s)
+	notifH := handler.NewNotificationHandler(s)
 	presenceH := handler.NewPresenceHandler(s, presence.NewTracker(90*time.Second))
 
 	// Middleware
@@ -105,6 +106,11 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 
 	// Activity feed
 	mux.Handle("GET /api/activity", use(activityH.HandleActivity, auth))
+
+	// Notifications (aggregated from forums)
+	mux.Handle("GET /api/notifications", use(notifH.HandleNotifications, auth))
+	mux.Handle("POST /api/notifications/read", use(notifH.HandleMarkRead, auth))
+	mux.Handle("POST /api/notifications/read-all", use(notifH.HandleMarkAllRead, auth))
 
 	// Presence
 	mux.Handle("POST /api/presence/heartbeat", use(presenceH.HandleHeartbeat, auth))

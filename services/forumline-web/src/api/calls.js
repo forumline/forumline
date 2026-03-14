@@ -147,7 +147,7 @@ async function initiateCall(conversationId, remoteUserId, remoteDisplayName, rem
   if (callState.state !== 'idle' || !ForumlineAPI.isAuthenticated()) return;
   try { localStream = await acquireMic(); } catch { return; }
   try {
-    const result = await ForumlineAPI.apiFetch('/api/calls/initiate', {
+    const result = await ForumlineAPI.apiFetch('/api/calls', {
       method: 'POST', body: JSON.stringify({ conversation_id: conversationId, callee_id: remoteUserId }),
     });
     setCallState('ringing-outgoing', {
@@ -253,7 +253,7 @@ async function startWebRTC(isInitiator) {
 async function sendWebRTCSignal(type, payload) {
   if (!callState.callInfo) return;
   try {
-    await ForumlineAPI.apiFetch('/api/calls/' + callState.callInfo.callId + '/signal', {
+    await ForumlineAPI.apiFetch('/api/calls/signal', {
       method: 'POST', silent: true,
       body: JSON.stringify({ call_id: callState.callInfo.callId, target_user_id: callState.callInfo.remoteUserId, type, payload }),
     });
@@ -366,19 +366,19 @@ function renderCallUI() {
     if (!el) {
       el = document.createElement('div');
       el.id = 'incomingCallOverlay';
-      el.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;display:flex;background:rgba(0,0,0,0.85);flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;';
+      el.style.cssText = 'position:fixed;top:16px;right:16px;z-index:10000;display:flex;background:rgba(30,30,30,0.95);flex-direction:column;align-items:center;padding:1.25rem 1.5rem;gap:0.75rem;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:220px;backdrop-filter:blur(12px);';
       document.body.appendChild(el);
     }
     el.classList.remove('hidden');
     const avatarUrl = info.remoteAvatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(info.remoteDisplayName);
     const isIncoming = s === 'ringing-incoming';
     el.innerHTML =
-      '<img src="' + avatarUrl + '" alt="" style="width:96px;height:96px;border-radius:50%;" onerror="this.style.display=\'none\'">' +
-      '<div style="font-size:1.25rem;font-weight:600;color:white;">' + escapeHtml(info.remoteDisplayName) + '</div>' +
-      '<div style="font-size:0.875rem;color:rgba(255,255,255,0.6);">' + (isIncoming ? 'Incoming call' : 'Calling...') + '</div>' +
-      '<div style="display:flex;gap:2rem;margin-top:1rem;">' +
-        '<button id="callDeclineBtn" style="width:56px;height:56px;border-radius:50%;border:none;background:#ef4444;cursor:pointer;color:white;font-size:20px;">&#x2716;</button>' +
-        (isIncoming ? '<button id="callAcceptBtn" style="width:56px;height:56px;border-radius:50%;border:none;background:#22c55e;cursor:pointer;color:white;font-size:20px;">&#x260E;</button>' : '') +
+      '<img src="' + avatarUrl + '" alt="" style="width:56px;height:56px;border-radius:50%;" onerror="this.style.display=\'none\'">' +
+      '<div style="font-size:0.95rem;font-weight:600;color:white;">' + escapeHtml(info.remoteDisplayName) + '</div>' +
+      '<div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">' + (isIncoming ? 'Incoming call' : 'Calling...') + '</div>' +
+      '<div style="display:flex;gap:1rem;margin-top:0.5rem;">' +
+        '<button id="callDeclineBtn" style="width:40px;height:40px;border-radius:50%;border:none;background:#ef4444;cursor:pointer;color:white;font-size:16px;">&#x2716;</button>' +
+        (isIncoming ? '<button id="callAcceptBtn" style="width:40px;height:40px;border-radius:50%;border:none;background:#22c55e;cursor:pointer;color:white;font-size:16px;">&#x260E;</button>' : '') +
       '</div>';
     el.querySelector('#callDeclineBtn').addEventListener('click', () => isIncoming ? declineCall() : endCall());
     if (isIncoming) el.querySelector('#callAcceptBtn').addEventListener('click', () => acceptCall());

@@ -298,10 +298,7 @@ initSearch({
   hideHoverCard,
 });
 
-initNotifications({
-  showThread: wrappedShowThread,
-  showForum: wrappedShowForum,
-});
+initNotifications();
 
 initMemberPanel({
   showProfile: wrappedShowProfile,

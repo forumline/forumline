@@ -17,6 +17,14 @@ func TenantFromContext(ctx context.Context) *Tenant {
 	return nil
 }
 
+// noDBPaths are request paths that don't query the database and can skip
+// connection acquisition. This avoids holding a pool connection for
+// endpoints that only return in-memory config.
+var noDBPaths = map[string]bool{
+	"/api/config": true,
+	"/health":     true,
+}
+
 // TenantMiddleware resolves the tenant from the Host header, sets the
 // database search_path to the tenant's schema, and stores the tenant
 // in the request context.
@@ -34,6 +42,13 @@ func TenantMiddleware(store *TenantStore, tp *TenantPool) func(http.Handler) htt
 			tenant := store.ByDomain(host)
 			if tenant == nil {
 				http.Error(w, `{"error":"unknown forum"}`, http.StatusNotFound)
+				return
+			}
+
+			// Skip DB connection for paths that don't need it
+			if noDBPaths[r.URL.Path] {
+				ctx := context.WithValue(r.Context(), tenantKey{}, tenant)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 

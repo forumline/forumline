@@ -128,13 +128,7 @@ export const activities = [
   { user: 'bean_queen', seed: 'bean-queen', text: '<strong>bean_queen</strong> posted "New spot on Main St is incredible" in <span class="activity-forum">Local Coffee Shops</span>', time: '1 day ago' },
 ];
 
-export const notifications = [
-  { id: 'n1', user: 'testuser_debug', seed: 'testuser_debug', text: '<strong>testuser_debug</strong> replied to your post in "How do voice rooms work?"', time: '2 hours ago', unread: true },
-  { id: 'n2', user: 'alice_dev', seed: 'alice-dev', text: '<strong>alice_dev</strong> mentioned you in "Welcome to the Demo Forum!"', time: '5 hours ago', unread: true },
-  { id: 'n3', user: 'vinyl_joe', seed: 'vinyl-joe', text: '<strong>vinyl_joe</strong> invited you to voice in Vinyl Collectors', time: '1 day ago', unread: true },
-  { id: 'n4', user: 'pixel_pete', seed: 'pixel-pete', text: '<strong>pixel_pete</strong> liked your reply in "My first Godot game"', time: '2 days ago', unread: false },
-  { id: 'n5', user: 'admin', seed: 'admin', text: '<strong>admin</strong> pinned "Welcome to the Demo Forum!"', time: '3 days ago', unread: false },
-];
+// Notifications are now fetched from the API (see components/notifications.js)
 
 export const profiles = {
   'testcaller': { name: 'testcaller', seed: 'testcaller', bio: 'Exploring the forumline network. Voice room enthusiast.', forums: 4, threads: 12, replies: 156, joined: 'Jan 2026' },

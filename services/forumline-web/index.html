@@ -27,11 +27,11 @@
           <kbd class="search-hint-kbd">&#x2318;K</kbd>
         </div>
         <div class="user-area">
-          <button class="notification-bell" id="notifBell" aria-label="Notifications (3 unread)" aria-haspopup="true">
+          <button class="notification-bell" id="notifBell" aria-label="Notifications" aria-haspopup="true">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
               <path d="M10 18c1.1 0 2-.9 2-2H8c0 1.1.9 2 2 2zm6-4V9c0-3.07-1.63-5.64-4.5-6.32V2c0-.83-.67-1.5-1.5-1.5S8.5 1.17 8.5 2v.68C5.64 3.36 4 5.92 4 9v5l-2 2v1h16v-1l-2-2z" fill="#555"/>
             </svg>
-            <span class="notif-badge" aria-hidden="true">3</span>
+            <span class="notif-badge" aria-hidden="true" style="display:none"></span>
           </button>
           <button class="avatar-pill" id="userMenu" aria-label="User menu" aria-haspopup="true">
             <img src="" alt="" class="avatar-sm">
@@ -285,6 +285,7 @@
               <img id="dmAvatar" class="avatar-md" src="" alt="User avatar">
               <h1 id="dmName"></h1>
               <span class="online-dot" id="dmOnline" role="status" aria-label="Online"></span>
+              <button class="aqua-btn dm-call-btn hidden" id="dmCallBtn" aria-label="Start voice call" title="Voice Call" style="margin-left:auto;font-size:0.9rem;padding:4px 12px;">&#x1F4DE; Call</button>
               <button class="aqua-btn group-info-btn hidden" id="groupInfoBtn" aria-label="Group info" title="Group Info" style="margin-left:8px;font-size:0.8rem;padding:4px 10px;">&#x2699; Info</button>
             </div>
           </div>

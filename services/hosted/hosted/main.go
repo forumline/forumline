@@ -116,6 +116,13 @@ func main() {
 	// Forum routes are served with tenant middleware (Host-based routing).
 	r := chi.NewRouter()
 
+	// Health check (no tenant context, no DB — keeps Cloudflare Tunnel warm)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	// Platform API endpoints (no tenant context needed)
 	r.Post("/api/platform/forums", platformHandlers.HandleProvision)
 	r.Get("/api/platform/forums", platformHandlers.HandleListForums)
@@ -326,7 +333,7 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore, cache *plat.Si
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") || strings.HasPrefix(r.URL.Path, "/.well-known/") {
+		if r.URL.Path == "/health" || strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") || strings.HasPrefix(r.URL.Path, "/.well-known/") {
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
