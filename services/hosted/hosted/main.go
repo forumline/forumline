@@ -79,8 +79,17 @@ func main() {
 	sseHub.Listen(ctx, "voice_signal_changes")
 	sseHub.StartListening(ctx)
 
+	// Router cache clear function — called after OAuth fix to force router rebuild
+	var routerMu sync.RWMutex
+	routerCache := make(map[string]http.Handler) // domain -> cached router
+	clearRouterCache := func() {
+		routerMu.Lock()
+		routerCache = make(map[string]http.Handler)
+		routerMu.Unlock()
+	}
+
 	// Fix tenants missing OAuth credentials (best-effort, runs in background)
-	go fixMissingOAuth(ctx, pool, store)
+	go fixMissingOAuth(ctx, pool, store, clearRouterCache)
 
 	// Site cache for custom frontends (256MB, 5-minute TTL)
 	siteCache := plat.NewSiteCache(256, 5*time.Minute)
@@ -125,9 +134,6 @@ func main() {
 	// The tenant middleware resolves Host -> schema and sets search_path.
 	// Forum config and router are built once per tenant and cached.
 	tenantMw := plat.TenantMiddleware(store, tp)
-
-	var routerMu sync.RWMutex
-	routerCache := make(map[string]http.Handler) // domain -> cached router
 
 	getForumRouter := func(tenant *plat.Tenant) http.Handler {
 		routerMu.RLock()
@@ -223,7 +229,7 @@ func main() {
 // fixMissingOAuth registers OAuth credentials for tenants that don't have them.
 // This handles the case where provisioning succeeded but OAuth registration failed.
 // Uses the service-level /api/forums/ensure-oauth endpoint on the Forumline API.
-func fixMissingOAuth(ctx context.Context, pool *pgxpool.Pool, store *plat.TenantStore) {
+func fixMissingOAuth(ctx context.Context, pool *pgxpool.Pool, store *plat.TenantStore, clearRouterCache func()) {
 	// Wait a moment for the Forumline API to be ready after deploy
 	time.Sleep(5 * time.Second)
 
@@ -286,10 +292,12 @@ func fixMissingOAuth(ctx context.Context, pool *pgxpool.Pool, store *plat.Tenant
 		log.Printf("OAuth credentials registered for %s: client_id=%s", tenant.Slug, result.ClientID)
 	}
 
-	// Refresh tenant store to pick up new credentials
+	// Refresh tenant store and clear router cache to pick up new credentials
 	if err := store.Refresh(ctx); err != nil {
 		log.Printf("tenant store refresh after OAuth fix failed: %v", err)
 	}
+	clearRouterCache()
+	log.Println("router cache cleared after OAuth fix")
 }
 
 // spaHandler serves static files for tenant domains.
