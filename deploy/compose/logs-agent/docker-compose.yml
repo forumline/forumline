@@ -1,9 +1,9 @@
 services:
-  alloy:
-    image: grafana/alloy:v1.14.0
+  vector:
+    image: timberio/vector:0.45.0-alpine
     restart: unless-stopped
     volumes:
-      - /opt/logs-agent/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /opt/logs-agent/vector.toml:/etc/vector/vector.toml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    command: ["--config", "/etc/vector/vector.toml"]
     network_mode: host

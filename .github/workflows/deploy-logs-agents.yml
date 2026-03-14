@@ -18,9 +18,9 @@ jobs:
           for host in forum-prod forumline-prod website-prod hosted-prod; do
             echo "=== Deploying to $host ==="
             ssh "$host" "mkdir -p /opt/logs-agent"
-            sed "s/\${LOGS_HOST_LABEL}/$host/" deploy/compose/logs-agent/alloy-config.alloy > "/tmp/alloy-config-$host.alloy"
+            sed "s/\${LOGS_HOST_LABEL}/$host/" deploy/compose/logs-agent/vector.toml > "/tmp/vector-$host.toml"
             scp deploy/compose/logs-agent/docker-compose.yml "$host:/opt/logs-agent/docker-compose.yml"
-            scp "/tmp/alloy-config-$host.alloy" "$host:/opt/logs-agent/alloy-config.alloy"
-            ssh "$host" "cd /opt/logs-agent && docker compose -f docker-compose.dozzle.yml down 2>/dev/null; docker compose pull && docker compose up -d --force-recreate --remove-orphans"
-            rm -f "/tmp/alloy-config-$host.alloy"
+            scp "/tmp/vector-$host.toml" "$host:/opt/logs-agent/vector.toml"
+            ssh "$host" "cd /opt/logs-agent && docker compose pull && docker compose up -d --force-recreate --remove-orphans"
+            rm -f "/tmp/vector-$host.toml"
           done

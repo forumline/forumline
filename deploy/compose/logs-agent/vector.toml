@@ -1,0 +1,23 @@
+# Collect logs from all Docker containers
+[sources.docker]
+type = "docker_logs"
+
+# Add host label — replaced by deploy script per host
+[transforms.add_host]
+type = "remap"
+inputs = ["docker"]
+source = '''
+.host = "${LOGS_HOST_LABEL}"
+.container = replace(string!(.container_name), "/", "")
+'''
+
+# Ship to VictoriaLogs (Loki-compatible endpoint)
+[sinks.victorialogs]
+type = "loki"
+inputs = ["add_host"]
+endpoint = "http://192.168.1.108:9428/insert/loki"
+encoding.codec = "text"
+
+[sinks.victorialogs.labels]
+host = "{{ host }}"
+container = "{{ container }}"
