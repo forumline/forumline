@@ -27,13 +27,13 @@ pre-commit:
       glob: "**/*.go"
       run: >
         cd packages/shared-go &&
-        go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./... &&
+        golangci-lint run ./... &&
         cd ../../services/forumline-api &&
-        go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./... &&
+        golangci-lint run ./... &&
         cd ../forum &&
-        go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./... &&
+        golangci-lint run ./... &&
         cd ../hosted &&
-        go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.2 run ./...
+        golangci-lint run ./...
 
     go-test-shared:
       glob: "packages/shared-go/**/*.go"
