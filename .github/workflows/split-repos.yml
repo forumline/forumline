@@ -22,9 +22,11 @@ jobs:
       - name: Install splitsh-lite
         run: |
           if ! command -v splitsh-lite &>/dev/null; then
+            mkdir -p "$HOME/.local/bin"
             curl -fsSL https://github.com/splitsh/lite/releases/download/v1.0.1/lite_linux_amd64.tar.gz -o /tmp/splitsh.tar.gz
-            sudo tar -xzf /tmp/splitsh.tar.gz -C /usr/local/bin
+            tar -xzf /tmp/splitsh.tar.gz -C "$HOME/.local/bin"
             rm /tmp/splitsh.tar.gz
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Split and push
