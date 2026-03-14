@@ -158,6 +158,7 @@ func main() {
 			Domain:                 tenant.Domain,
 			ForumName:              tenant.Name,
 			ForumlineURL:           os.Getenv("FORUMLINE_APP_URL"),
+			ForumlineWebhookURL:    os.Getenv("FORUMLINE_WEBHOOK_URL"),
 			ForumlineClientID:      tenant.ForumlineClientID,
 			ForumlineClientSecret:  tenant.ForumlineClientSecret,
 			ForumlineJWTSecret:     os.Getenv("FORUMLINE_JWT_SECRET"),
