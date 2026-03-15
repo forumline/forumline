@@ -45,8 +45,8 @@ scp "deploy/compose/$SERVICE/docker-compose.yml" "$HOST:$REMOTE/docker-compose.y
 
 # Upload extra config files for logs service
 if [ "$SERVICE" = "logs" ]; then
-  scp deploy/compose/logs/loki-config.yml "$HOST:$REMOTE/loki-config.yml"
-  scp deploy/compose/logs/users.yml "$HOST:$REMOTE/users.yml"
+  [ -f deploy/compose/logs/loki-config.yml ] && scp deploy/compose/logs/loki-config.yml "$HOST:$REMOTE/loki-config.yml"
+  [ -f deploy/compose/logs/users.yml ] && scp deploy/compose/logs/users.yml "$HOST:$REMOTE/users.yml"
 fi
 
 # Pull latest code (skip for logs and auth — no repo on those LXCs)

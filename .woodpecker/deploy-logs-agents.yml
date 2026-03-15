@@ -17,7 +17,7 @@ steps:
           REMOTE="/opt/logs-agent"
 
           # Generate host-specific vector config
-          sed "s/\${LOGS_HOST_LABEL}/$HOST/" deploy/compose/logs-agent/vector.toml > /tmp/vector-$HOST.toml
+          sed "s/\$${LOGS_HOST_LABEL}/$HOST/" deploy/compose/logs-agent/vector.toml > /tmp/vector-$HOST.toml
 
           ssh $HOST "mkdir -p $REMOTE"
           scp deploy/compose/logs-agent/docker-compose.yml "$HOST:$REMOTE/docker-compose.yml"
