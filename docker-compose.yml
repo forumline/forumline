@@ -1,15 +1,4 @@
 services:
-  forum:
-    build:
-      context: .
-      dockerfile: deploy/docker/Dockerfile.go-forum
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env.local
-    environment:
-      - PORT=3000
-
   forumline:
     build:
       context: .

@@ -3,11 +3,13 @@ module github.com/forumline/forumline/services/hosted
 go 1.26.1
 
 require (
-	github.com/forumline/forum-server v0.0.0-00010101000000-000000000000
 	github.com/forumline/forumline/shared-go v0.0.0-00010101000000-000000000000
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/livekit/protocol v1.45.0
+	github.com/livekit/server-sdk-go/v2 v2.15.0
 	github.com/minio/minio-go/v7 v7.0.99
+	github.com/zitadel/oidc/v3 v3.45.1
 )
 
 require (
@@ -47,12 +49,11 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.2.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
 	github.com/livekit/mediatransportutil v0.0.0-20251128105421-19c7a7b81c22 // indirect
-	github.com/livekit/protocol v1.45.0 // indirect
 	github.com/livekit/psrpc v0.7.1 // indirect
-	github.com/livekit/server-sdk-go/v2 v2.15.0 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
+	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/muhlemmer/httpforwarded v0.1.0 // indirect
 	github.com/nats-io/nats.go v1.48.0 // indirect
@@ -85,7 +86,6 @@ require (
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	github.com/zitadel/logging v0.6.2 // indirect
-	github.com/zitadel/oidc/v3 v3.45.1 // indirect
 	github.com/zitadel/schema v1.3.1 // indirect
 	github.com/zitadel/zitadel-go/v3 v3.26.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -114,5 +114,3 @@ require (
 )
 
 replace github.com/forumline/forumline/shared-go => ../../packages/shared-go
-
-replace github.com/forumline/forum-server => ../forum

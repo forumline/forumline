@@ -7,8 +7,8 @@ Run any pipeline locally: `dagger call <function> --source .`
 ## Production URLs
 
 - **Website**: https://forumline.net
-- **Forum Demo**: https://demo.forumline.net
 - **Forumline App**: https://app.forumline.net
+- **Hosted Forums**: https://hosted.forumline.net (*.forumline.net)
 - **Auth (Zitadel)**: https://auth.forumline.net
 
 ## Architecture
@@ -27,13 +27,12 @@ Pipelines are defined in `.woodpecker/` as YAML files. The Woodpecker agent runs
 |----------|---------|-------------|
 | `lint` | push, PR | Run lefthook checks (Go lint, tests, ESLint, gitleaks) |
 | `deploy-forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
-| `deploy-hosted` | `services/hosted/**`, `services/forum/**` | Deploy hosted forum platform |
+| `deploy-hosted` | `services/hosted/**`, `packages/shared-go/**` | Deploy hosted forum platform |
 | `deploy-website` | `services/website/**` | Deploy static website |
 | `deploy-logs` | `deploy/compose/logs/**` | Deploy central VictoriaLogs |
 | `deploy-auth` | `deploy/compose/auth/**` | Deploy Zitadel auth |
 | `deploy-logs-agents` | `deploy/compose/logs-agent/**` | Deploy Vector agents to all LXCs |
 | `publish-packages` | `packages/**` | Publish TS packages to GitHub Packages |
-| `split-repos` | `packages/shared-go/**`, `services/forum/**` | Split forum subtree to read-only repo |
 | `terraform-plan` | PR touching `deploy/terraform/` | Run OpenTofu plan |
 | `terraform-apply` | manual | Run OpenTofu apply |
 
@@ -45,7 +44,6 @@ Add these in the Woodpecker UI (repo settings > secrets):
 
 - `sops_age_key` — age key for decrypting .env.enc files
 - `github_packages_token` — GitHub token with packages:write scope
-- `split_repo_token` — GitHub token for forum-server read-only repo
 - `tf_state_r2_access_key_id` — R2 access key for OpenTofu state backend
 - `tf_state_r2_secret_access_key` — R2 secret key for OpenTofu state backend
 - `tf_cloudflare_api_token` — Cloudflare API token for tunnel/access management
@@ -69,7 +67,7 @@ Single LXC runs both the Woodpecker server (Docker) and agent (local backend).
 
 ## Cloudflare Tunnel (Terraform)
 
-Tunnel ingress and Zero Trust Access policies managed via OpenTofu in `deploy/terraform/`. Config lives in Cloudflare (remotely-managed). `cloudflared` runs with `--token` on `forum-prod` (CT 100) — no local config file.
+Tunnel ingress and Zero Trust Access policies managed via OpenTofu in `deploy/terraform/`. Config lives in Cloudflare (remotely-managed). `cloudflared` runs with `--token` on the Proxmox host — no local config file.
 
 **Managed resources:** tunnel ingress rules, Access applications for SSH endpoints, short-lived SSH CA certificates, service token for GitHub Actions deploys, developer email allow policies.
 
@@ -116,7 +114,7 @@ Each service runs on a Proxmox LXC with Docker, SSH access via Cloudflare Tunnel
    cd /opt/website && docker compose up -d --build website
    ```
 
-### Forum / Forumline LXCs
+### Forumline / Hosted LXCs
 
 Same pattern — see existing LXC configs. Each uses `/opt/<service>/repo` and `/opt/<service>/docker-compose.yml`.
 
@@ -125,9 +123,7 @@ Same pattern — see existing LXC configs. Each uses `/opt/<service>/repo` and `
 ```bash
 pnpm install                                          # from root — sets up workspaces
 cd services/zitadel && docker compose up -d           # start local Zitadel + Postgres
-cd services/forum && go run .                         # start forum backend
-cd services/forum && pnpm dev                         # start forum frontend
 cd services/forumline-web && VITE_BACKEND=local pnpm dev  # start forumline frontend
 ```
 
-Create `services/forum/.env.local` and `services/forumline-api/.env.local` with the required env vars.
+Create `services/forumline-api/.env.local` with the required env vars.

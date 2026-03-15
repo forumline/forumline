@@ -243,17 +243,4 @@ CREATE TRIGGER trg_forumline_notification_insert
 -- Seed Data
 -- ============================================================================
 
--- Seed forum (demo.forumline.net)
-INSERT INTO forumline_forums (id, domain, name, api_base, web_base, capabilities, description, approved)
-VALUES (
-  '1c529bf0-e59c-419d-9589-c38eae9512df',
-  'demo.forumline.net',
-  'Forumline Demo',
-  'https://demo.forumline.net/api/forumline',
-  'https://demo.forumline.net',
-  '{"threads", "voice", "notifications"}',
-  'Reference Forumline forum with real-time chat and voice rooms',
-  true
-) ON CONFLICT (id) DO NOTHING;
-
-SELECT 'Init complete: tables created, seed data inserted.' AS status;
+SELECT 'Init complete: tables created.' AS status;

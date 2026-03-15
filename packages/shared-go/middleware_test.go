@@ -9,7 +9,7 @@ import (
 )
 
 func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
-	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.forumline.net,https://demo.forumline.net")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.forumline.net,https://hosted.forumline.net")
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -96,13 +96,13 @@ func TestCORSMiddleware_DefaultOrigin(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req.Header.Set("Origin", "https://demo.forumline.net")
+	req.Header.Set("Origin", "https://app.forumline.net")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://demo.forumline.net" {
-		t.Errorf("Allow-Origin = %q, want %q", got, "https://demo.forumline.net")
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.forumline.net" {
+		t.Errorf("Allow-Origin = %q, want %q", got, "https://app.forumline.net")
 	}
 }
 

@@ -2,7 +2,6 @@ import { defineConfig, devices } from "@playwright/test";
 
 const BASE_URLS = {
   app: "https://app.forumline.net",
-  forum: "https://demo.forumline.net",
   hosted: "https://hosted.forumline.net",
   website: "https://forumline.net",
 };
@@ -48,16 +47,6 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         baseURL: BASE_URLS.app,
         storageState: "auth/testcaller.json",
-      },
-    },
-
-    // --- E2E: Forum ---
-    {
-      name: "forum",
-      testMatch: "e2e/forum/**/*.spec.ts",
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: BASE_URLS.forum,
       },
     },
 

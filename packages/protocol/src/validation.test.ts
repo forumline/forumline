@@ -89,7 +89,7 @@ describe('messageContentSchema', () => {
 
 describe('forumUrlSchema', () => {
   it('accepts HTTPS URLs', () => {
-    expect(forumUrlSchema.safeParse('https://demo.forumline.net').success).toBe(true)
+    expect(forumUrlSchema.safeParse('https://hosted.forumline.net').success).toBe(true)
     expect(forumUrlSchema.safeParse('https://example.com/forum').success).toBe(true)
   })
 

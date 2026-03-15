@@ -29,7 +29,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/forumline/forum-server/forum"
+	"github.com/forumline/forumline/services/hosted/forum"
 	plat "github.com/forumline/forumline/services/hosted/platform"
 	shared "github.com/forumline/forumline/shared-go"
 	"github.com/minio/minio-go/v7"

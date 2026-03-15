@@ -19,7 +19,7 @@ pre-commit:
       run: pnpm lint
 
     eslint-forum:
-      root: "services/forum/"
+      root: "services/hosted/"
       glob: "src/**/*.js"
       run: pnpm lint
 
@@ -29,8 +29,6 @@ pre-commit:
         cd packages/shared-go &&
         golangci-lint run ./... &&
         cd ../../services/forumline-api &&
-        golangci-lint run ./... &&
-        cd ../forum &&
         golangci-lint run ./... &&
         cd ../hosted &&
         golangci-lint run ./...
@@ -45,13 +43,8 @@ pre-commit:
       root: "services/forumline-api/"
       run: go test ./...
 
-    go-test-forum:
-      glob: "{services/forum,packages/shared-go}/**/*.go"
-      root: "services/forum/"
-      run: go test ./...
-
-    go-test-forum-variants:
-      glob: "{services/hosted,packages/shared-go,services/forum}/**/*.go"
+    go-test-hosted:
+      glob: "{services/hosted,packages/shared-go}/**/*.go"
       root: "services/hosted/"
       run: go test ./...
 

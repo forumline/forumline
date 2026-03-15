@@ -16,12 +16,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "forumline" {
       service  = "http://192.168.1.106:3000"
     }
 
-    # Demo Forum — demo.forumline.net (localhost because cloudflared runs on this LXC)
-    ingress_rule {
-      hostname = "demo.forumline.net"
-      service  = "http://localhost:3000"
-    }
-
     # Zitadel Auth — auth.forumline.net
     # HTTP/2 origin required for gRPC; Traefik proxies to Zitadel API + Login UI
     ingress_rule {

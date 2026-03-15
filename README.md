@@ -2,8 +2,8 @@
 
 A modern community platform combining threaded forums, real-time chat, and voice rooms — with cross-forum federation via a central identity service.
 
-**Live demo**: [demo.forumline.net](https://demo.forumline.net)
 **Forumline App**: [app.forumline.net](https://app.forumline.net)
+**Hosted Forums**: [hosted.forumline.net](https://hosted.forumline.net)
 
 ## Why
 
@@ -26,10 +26,9 @@ Traditional forums lack real-time interaction. Chat apps lack structure. Forumli
 | `packages/protocol/` | Federation types (zero-dependency) |
 | `packages/server-sdk/` | Protocol endpoint handler factories |
 | `packages/shared-go/` | Shared Go infrastructure (db, auth, SSE, middleware) |
-| `services/forum/` | Forum server — Go backend + vanilla JS frontend |
 | `services/forumline-api/` | Forumline Go API server (`cmd/forumline/`) |
 | `services/forumline-web/` | Forumline app — identity & federation registry (Vite + vanilla TS) |
-| `services/hosted/` | Multi-tenant hosted forum platform |
+| `services/hosted/` | Multi-tenant hosted forum platform (Go backend + vanilla JS frontend) |
 | `services/website/` | Static website (forumline.net) |
 | `deploy/` | Dockerfiles, compose configs, Terraform |
 | `tools/` | Cloudflare status worker |
@@ -42,12 +41,6 @@ pnpm install
 
 # Start local Postgres + Zitadel
 cd services/zitadel && docker compose up -d
-
-# Run the forum backend
-cd services/forum && go run .
-
-# Run the forum frontend
-cd services/forum && pnpm dev
 
 # Run the forumline backend
 cd services/forumline-api && go run ./cmd/forumline/

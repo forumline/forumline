@@ -31,7 +31,7 @@ graph TB
     Resend["Resend SMTP<br/>smtp.resend.com:465<br/>noreply@forumline.net"]
 
     %% GitHub (each independently swappable)
-    GitHubRepos["GitHub Repos<br/>forumline monorepo<br/>+ forum-server split"]
+    GitHubRepos["GitHub Repos<br/>forumline monorepo"]
     GitHubActions["GitHub Actions<br/>Package publishing"]
     GitHubPackages["GitHub Packages<br/>npm registry<br/>@forumline scope"]
 
@@ -54,14 +54,6 @@ graph TB
             FL_SPA["Forumline Web SPA<br/>Vanilla TS · Vite"]
             FL_PG[("Postgres 17<br/>forumline_* tables<br/>LISTEN/NOTIFY")]
             FL_Vector["Vector 0.45.0"]
-        end
-
-        subgraph CT100["CT 100 · forum-prod · 192.168.1.23"]
-            Forum_API["Forum Server<br/>Go · Chi v5<br/>:3000"]
-            Forum_FE["Forum Frontend<br/>Vanilla JS · Vite · Tailwind"]
-            Forum_PG[("Postgres 17<br/>threads, posts, chat<br/>LISTEN/NOTIFY")]
-            Forum_Vector["Vector 0.45.0"]
-            Forum_Health["Health Check<br/>cron · every 5min<br/>Resend alert on failure"]
         end
 
         subgraph CT104["CT 104 · hosted-prod · 192.168.1.107"]
@@ -105,7 +97,6 @@ graph TB
     DNS -->|"*.forumline.net CNAME"| Tunnel
     Tunnel --> Cloudflared
     Cloudflared -->|"app.forumline.net"| FL_API
-    Cloudflared -->|"demo.forumline.net"| Forum_API
     Cloudflared -->|"*.forumline.net"| Hosted_API
     Cloudflared -->|"auth.forumline.net"| Zitadel
     Cloudflared -->|"forumline.net"| Website_Nginx
@@ -123,8 +114,6 @@ graph TB
     %% ═══════════════════════════════════════════════
     FL_API --> FL_PG
     FL_SPA -.->|"served by"| FL_API
-    Forum_API --> Forum_PG
-    Forum_FE -.->|"served by"| Forum_API
     Hosted_API --> Hosted_Citus
     Hosted_FE -.->|"served by"| Hosted_API
     Zitadel --> Zitadel_PG
@@ -134,25 +123,20 @@ graph TB
     %% CONNECTIONS — Internal: service → service
     %% ═══════════════════════════════════════════════
     FL_API -->|"OIDC · JWKS"| Zitadel
-    Forum_API -->|"OIDC client"| Zitadel
     Hosted_API -->|"OIDC · provision apps"| Zitadel
-    Forum_API -->|"webhook notifications"| FL_API
 
     %% ═══════════════════════════════════════════════
     %% CONNECTIONS — Services → External
     %% ═══════════════════════════════════════════════
     FL_API --> R2
-    Forum_API --> R2
     Hosted_API --> R2
 
-    Forum_API --> LiveKit
     Hosted_API --> LiveKit
 
     FL_API --> Resend
-    Forum_Health -->|"alert on failure"| Resend
 
     FL_SPA --> DiceBear
-    Forum_FE --> DiceBear
+    Hosted_FE --> DiceBear
 
     %% ═══════════════════════════════════════════════
     %% CONNECTIONS — WebRTC
@@ -169,7 +153,6 @@ graph TB
     %% CONNECTIONS — Log shipping
     %% ═══════════════════════════════════════════════
     FL_Vector -->|"Loki push"| VLogs
-    Forum_Vector -->|"Loki push"| VLogs
     Hosted_Vector -->|"Loki push"| VLogs
     Auth_Vector -->|"Loki push"| VLogs
     Web_Vector -->|"Loki push"| VLogs
@@ -181,7 +164,6 @@ graph TB
     GitHubRepos -->|"push webhook"| Woodpecker
     Woodpecker --> Dagger
     Dagger -->|"SSH deploy"| CT101
-    Dagger -->|"SSH deploy"| CT100
     Dagger -->|"SSH deploy"| CT104
     Dagger -->|"SSH deploy"| CT106
     Dagger -->|"SSH deploy"| CT103
@@ -202,7 +184,6 @@ graph TB
     %% ═══════════════════════════════════════════════
     style Proxmox fill:#1a1a2e,color:#e0e0e0,stroke:#4a4a8a
     style CT101 fill:#16213e,color:#e0e0e0,stroke:#0f3460
-    style CT100 fill:#16213e,color:#e0e0e0,stroke:#0f3460
     style CT104 fill:#16213e,color:#e0e0e0,stroke:#0f3460
     style CT106 fill:#16213e,color:#e0e0e0,stroke:#0f3460
     style CT103 fill:#16213e,color:#e0e0e0,stroke:#0f3460
@@ -215,7 +196,6 @@ graph TB
 | Domain | Routes To | LXC | IP | Container |
 |--------|-----------|-----|-----|-----------|
 | `app.forumline.net` | Forumline API + SPA | CT 101 | 192.168.1.99 | Go + Vite |
-| `demo.forumline.net` | Demo Forum | CT 100 | 192.168.1.23 | Go + Vite |
 | `*.forumline.net` | Hosted Multi-Tenant | CT 104 | 192.168.1.107 | Go + Citus |
 | `auth.forumline.net` | Zitadel OIDC | CT 106 | 192.168.1.110 | Zitadel |
 | `forumline.net` | Static Website | CT 103 | 192.168.1.106 | Nginx |

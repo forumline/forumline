@@ -3,7 +3,7 @@ package platform
 import (
 	"context"
 
-	"github.com/forumline/forum-server/forum"
+	"github.com/forumline/forumline/services/hosted/forum"
 	shared "github.com/forumline/forumline/shared-go"
 )
 

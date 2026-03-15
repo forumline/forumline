@@ -4,29 +4,27 @@ FROM golang:1.26-alpine AS go-build
 WORKDIR /app
 COPY services/hosted/go.mod services/hosted/go.sum ./
 COPY packages/shared-go/ /packages/shared-go/
-COPY services/forum/forum/ /forum/forum/
-COPY services/forum/go.mod /forum/go.mod
 RUN go mod download
 
+COPY services/hosted/forum/ forum/
 COPY services/hosted/platform/ platform/
 COPY services/hosted/hosted/main.go hosted/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/hosted ./hosted/
 
 # ---- Frontend build stage ----
-# Hosted forums use forum-server's frontend as the default template.
 FROM node:20-slim AS frontend-build
 
 RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-COPY services/forum/package.json services/forum/pnpm-lock.yaml* ./
+COPY services/hosted/package.json services/hosted/pnpm-lock.yaml* ./
 
 RUN pnpm install --frozen-lockfile || pnpm install
 
-COPY services/forum/index.html services/forum/vite.config.js services/forum/eslint.config.mjs ./
-COPY services/forum/src/ src/
-COPY services/forum/public/ public/
+COPY services/hosted/index.html services/hosted/vite.config.js services/hosted/eslint.config.mjs ./
+COPY services/hosted/src/ src/
+COPY services/hosted/public/ public/
 RUN pnpm run build
 
 # ---- Production stage ----

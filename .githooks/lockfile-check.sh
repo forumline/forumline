@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_LOCK="pnpm-lock.yaml"
-STANDALONE_DIRS=("example-forum-instances-and-shared-forum-server/forum-a")
+STANDALONE_DIRS=()
 
 missing=()
 

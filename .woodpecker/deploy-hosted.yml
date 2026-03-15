@@ -4,7 +4,6 @@ when:
     path:
       include:
         - "services/hosted/**"
-        - "services/forum/**"
         - "packages/shared-go/**"
         - "deploy/docker/Dockerfile.go-hosted"
         - "deploy/compose/hosted/**"

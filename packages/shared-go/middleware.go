@@ -16,7 +16,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS") // comma-separated
 		if allowedOrigins == "" {
-			allowedOrigins = "https://demo.forumline.net"
+			allowedOrigins = "https://app.forumline.net"
 		}
 
 		allowed := false
