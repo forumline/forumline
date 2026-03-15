@@ -47,12 +47,12 @@ func (m *Forumline) Lint(ctx context.Context, source *dagger.Directory) (string,
 	return ctr.Stdout(ctx)
 }
 
-// Deploy deploys a service to production via SSH through Cloudflare Tunnel.
-// Service must be one of: forumline, hosted, website, logs.
+// Deploy deploys a service to production via SSH.
+// Uses Cloudflare Tunnel for public hosts, direct LAN SSH for auth.
 func (m *Forumline) Deploy(
 	ctx context.Context,
 	source *dagger.Directory,
-	// Service to deploy (forumline, hosted, website, or logs)
+	// Service to deploy (forumline, hosted, website, logs, or auth)
 	service string,
 	// SSH private key for remote access
 	sshKey *dagger.Secret,
@@ -82,7 +82,7 @@ func (m *Forumline) Deploy(
 
 	cfg, ok := configs[service]
 	if !ok {
-		return "", fmt.Errorf("unknown service: %s (must be forumline, hosted, website, or logs)", service)
+		return "", fmt.Errorf("unknown service: %s (must be forumline, hosted, website, logs, or auth)", service)
 	}
 
 	if cfg.hasEnv && sopsAgeKey == nil {
@@ -145,9 +145,9 @@ SSHEOF`, cfg.host, cfg.sshHost)})
 
 	// Rebuild and restart
 	if service == "auth" || service == "logs" {
-		// Logs uses pre-built images — pull latest and restart all services
+		// Pre-built images — pull latest and restart
 		ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
-			"cd %s && docker compose pull && docker compose up -d && docker compose ps", cfg.remotePath)})
+			"cd %s && docker compose pull && docker compose up -d --wait && docker compose ps", cfg.remotePath)})
 	} else {
 		ctr = ctr.WithExec([]string{"ssh", cfg.host, fmt.Sprintf(
 			"cd %s && docker compose up -d --build %s && docker compose ps", cfg.remotePath, service)})
@@ -156,8 +156,8 @@ SSHEOF`, cfg.host, cfg.sshHost)})
 	return ctr.Stdout(ctx)
 }
 
-// DeployLogsAgents deploys Alloy + Dozzle agents to all service LXCs.
-// Syncs compose files and alloy config (with per-host label), then restarts.
+// DeployLogsAgents deploys Vector log-shipping agents to all service LXCs.
+// Generates per-host vector.toml (with host label), uploads compose + config, restarts.
 func (m *Forumline) DeployLogsAgents(
 	ctx context.Context,
 	source *dagger.Directory,
@@ -179,13 +179,23 @@ func (m *Forumline) DeployLogsAgents(
 		{"forumline-prod", "app-ssh.forumline.net", "forumline-prod"},
 		{"website-prod", "www-ssh.forumline.net", "website-prod"},
 		{"hosted-prod", "hosted-ssh.forumline.net", "hosted-prod"},
+		{"auth-prod", "192.168.1.110", "auth-prod"},
 	}
 
 	ctr := m.sshContainer(source, sshKey, cfAccessClientId, cfAccessClientSecret)
 
 	// Configure SSH for all hosts
 	for _, h := range hosts {
-		ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(`cat >> /root/.ssh/config <<'SSHEOF'
+		if h.sshHost[0] >= '0' && h.sshHost[0] <= '9' {
+			ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(`cat >> /root/.ssh/config <<'SSHEOF'
+Host %s
+  HostName %s
+  User root
+  IdentityFile /root/.ssh/id_deploy
+  StrictHostKeyChecking no
+SSHEOF`, h.name, h.sshHost)})
+		} else {
+			ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(`cat >> /root/.ssh/config <<'SSHEOF'
 Host %s
   HostName %s
   User root
@@ -193,29 +203,29 @@ Host %s
   StrictHostKeyChecking no
   ProxyCommand cloudflared access ssh --hostname %%h --id $CF_ACCESS_CLIENT_ID --secret $CF_ACCESS_CLIENT_SECRET
 SSHEOF`, h.name, h.sshHost)})
+		}
 	}
 
 	// Deploy to each host
 	for _, h := range hosts {
 		remotePath := "/opt/logs-agent"
 
-		// Generate host-specific alloy config
+		// Generate host-specific vector config
 		ctr = ctr.WithExec([]string{"bash", "-c", fmt.Sprintf(
-			`sed 's/${LOGS_HOST_LABEL}/%s/' deploy/compose/logs-agent/alloy-config.alloy > /tmp/alloy-config-%s.alloy`,
+			`sed 's/${LOGS_HOST_LABEL}/%s/' deploy/compose/logs-agent/vector.toml > /tmp/vector-%s.toml`,
 			h.label, h.label)})
 
 		// Ensure remote directory exists
 		ctr = ctr.WithExec([]string{"ssh", h.name, fmt.Sprintf("mkdir -p %s", remotePath)})
 
-		// Upload compose files and config
+		// Upload compose file and config
 		ctr = ctr.
 			WithExec([]string{"scp", "deploy/compose/logs-agent/docker-compose.yml", fmt.Sprintf("%s:%s/docker-compose.yml", h.name, remotePath)}).
-			WithExec([]string{"scp", "deploy/compose/logs-agent/docker-compose.dozzle.yml", fmt.Sprintf("%s:%s/docker-compose.dozzle.yml", h.name, remotePath)}).
-			WithExec([]string{"scp", fmt.Sprintf("/tmp/alloy-config-%s.alloy", h.label), fmt.Sprintf("%s:%s/alloy-config.alloy", h.name, remotePath)})
+			WithExec([]string{"scp", fmt.Sprintf("/tmp/vector-%s.toml", h.label), fmt.Sprintf("%s:%s/vector.toml", h.name, remotePath)})
 
 		// Pull and restart
 		ctr = ctr.WithExec([]string{"ssh", h.name, fmt.Sprintf(
-			"cd %s && docker compose pull && docker compose up -d && docker compose -f docker-compose.dozzle.yml pull && docker compose -f docker-compose.dozzle.yml up -d",
+			"cd %s && docker compose pull && docker compose up -d --force-recreate --remove-orphans",
 			remotePath)})
 	}
 
@@ -286,6 +296,33 @@ func (m *Forumline) TerraformPlan(
 		WithWorkdir("/src/deploy/terraform").
 		WithExec([]string{"tofu", "init"}).
 		WithExec([]string{"tofu", "plan", "-var-file=prod.tfvars", "-no-color"})
+
+	return ctr.Stdout(ctx)
+}
+
+// TerraformApply runs an OpenTofu apply with auto-approve
+func (m *Forumline) TerraformApply(
+	ctx context.Context,
+	source *dagger.Directory,
+	// R2 state backend access key
+	r2AccessKeyId *dagger.Secret,
+	// R2 state backend secret key
+	r2SecretAccessKey *dagger.Secret,
+	// Cloudflare API token for provider
+	cloudflareApiToken *dagger.Secret,
+	// Passphrase for state encryption
+	stateEncryptionPassphrase *dagger.Secret,
+) (string, error) {
+	ctr := dag.Container().
+		From("ghcr.io/opentofu/opentofu:1.11.5").
+		WithSecretVariable("AWS_ACCESS_KEY_ID", r2AccessKeyId).
+		WithSecretVariable("AWS_SECRET_ACCESS_KEY", r2SecretAccessKey).
+		WithSecretVariable("TF_VAR_cloudflare_api_token", cloudflareApiToken).
+		WithSecretVariable("TF_VAR_state_encryption_passphrase", stateEncryptionPassphrase).
+		WithMountedDirectory("/src", source).
+		WithWorkdir("/src/deploy/terraform").
+		WithExec([]string{"tofu", "init"}).
+		WithExec([]string{"tofu", "apply", "-var-file=prod.tfvars", "-auto-approve", "-no-color"})
 
 	return ctr.Stdout(ctx)
 }

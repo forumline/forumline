@@ -1,23 +1,45 @@
 # Deployment Guide
 
-Both apps deploy via **GitHub Actions** on push to `main` → **self-hosted Proxmox LXCs** via SSH through Cloudflare Tunnel.
+All CI/CD pipelines are defined in **Dagger** (`ci/main.go`). GitHub Actions workflows are thin wrappers that trigger on push to `main` and pass secrets to Dagger.
+
+Run any pipeline locally: `dagger call <function> --source .`
 
 ## Production URLs
 
 - **Website**: https://forumline.net
 - **Forum Demo**: https://demo.forumline.net
 - **Forumline App**: https://app.forumline.net
+- **Auth (Zitadel)**: https://auth.forumline.net
 
-## CI/CD
+## Architecture
 
-All deploy via GitHub Actions workflows:
+```
+GitHub Actions (triggers + secrets)
+  └─ dagger call <function> --source . --secret env:SECRET
+       └─ Dagger Engine (runs on CI Docker LXC)
+            └─ SSH to service LXCs (via cloudflared or direct LAN)
+```
 
-- `.github/workflows/deploy-website.yml` — triggers on `services/website/` changes
-- `.github/workflows/deploy-forum.yml` — triggers on `services/forum/` changes
-- `.github/workflows/deploy-forumline.yml` — triggers on `services/forumline-api/`, `services/forumline-web/`, or `packages/` changes
+## CI/CD Pipelines (Dagger)
 
-Required GitHub secrets:
-- `FORUM_SSH_KEY` — SSH key for production servers
+| Function | Trigger | Description |
+|----------|---------|-------------|
+| `deploy --service forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
+| `deploy --service hosted` | `services/hosted/**`, `services/forum/**` | Deploy hosted forum platform |
+| `deploy --service website` | `services/website/**` | Deploy static website |
+| `deploy --service logs` | `deploy/compose/logs/**` | Deploy central VictoriaLogs |
+| `deploy --service auth` | `deploy/compose/auth/**` | Deploy Zitadel auth |
+| `deploy-logs-agents` | `deploy/compose/logs-agent/**` | Deploy Vector agents to all LXCs |
+| `lint` | push, PR | Run lefthook checks (Go lint, tests, ESLint, gitleaks) |
+| `publish-packages` | `packages/**` | Publish TS packages to GitHub Packages |
+| `split-repos` | `packages/shared-go/**`, `services/forum/**` | Split forum subtree to read-only repo |
+| `terraform-plan` | PR touching `deploy/terraform/` | Run OpenTofu plan |
+| `terraform-apply` | manual | Run OpenTofu apply |
+| `update-screenshots` | daily cron + manual | Capture forum screenshots, upload to R2 |
+
+## Required GitHub Secrets
+
+- `SSH_DEPLOY_KEY` — SSH private key for all production LXCs
 - `SOPS_AGE_KEY` — age key for decrypting .env.enc files
 - `CF_ACCESS_CLIENT_ID` — Cloudflare Access service token client ID
 - `CF_ACCESS_CLIENT_SECRET` — Cloudflare Access service token client secret
@@ -25,11 +47,23 @@ Required GitHub secrets:
 - `TF_STATE_R2_SECRET_ACCESS_KEY` — R2 secret key for OpenTofu state backend
 - `TF_CLOUDFLARE_API_TOKEN` — Cloudflare API token for tunnel/access management
 - `TF_STATE_ENCRYPTION_PASSPHRASE` — passphrase for OpenTofu state encryption
-- `GITHUB_PACKAGES_TOKEN` (automatically provided)
+- `SPLIT_REPO_TOKEN` — GitHub token for forum-server read-only repo
 
-`.github/workflows/terraform-plan.yml` runs `tofu plan` on PRs that touch `deploy/terraform/`.
+## CI Docker LXC Setup
 
-**Do NOT deploy manually.**
+Dagger needs a container runtime. A dedicated LXC hosts the Docker daemon:
+
+1. Create a Proxmox LXC (Debian 12, 2 cores, 4GB RAM, 32GB disk)
+2. Run the setup script: `bash deploy/compose/ci-docker/setup.sh`
+3. On the Proxmox host (self-hosted runner):
+   ```bash
+   # Install Dagger CLI
+   curl -fsSL https://dl.dagger.io/dagger/install.sh | sh
+
+   # Point Dagger at the CI Docker LXC
+   echo 'DOCKER_HOST=tcp://<ci-docker-ip>:2375' >> /etc/environment
+   ```
+4. Add `SSH_DEPLOY_KEY` to GitHub Actions secrets (the SSH private key whose public key is in all LXCs' `/root/.ssh/authorized_keys`)
 
 ## Cloudflare Tunnel (Terraform)
 
@@ -54,14 +88,6 @@ tofu apply -var-file=prod.tfvars   # apply — takes effect immediately, no rest
 **Rule ordering**: specific hostnames MUST come before `*.forumline.net` wildcard, or SSH routes break.
 
 **Do NOT run `tofu destroy`** — `prevent_destroy` blocks it, but don't try to work around it.
-
-## Short-Lived SSH Certificates
-
-Developer SSH uses Cloudflare Access short-lived certificates — no long-lived SSH keys needed. After browser-based Access login, `cloudflared access ssh-gen` fetches an ephemeral cert (~4 min validity) signed by Cloudflare's CA. The `~/.ssh/config` `Match exec` directive handles this automatically.
-
-Each LXC has the CA public key in `/etc/ssh/ca.pub` and trusts it via `TrustedUserCAKeys` in sshd_config. An `AuthorizedPrincipalsCommand` maps the cert principal (`johnvondrashek`, from the email prefix) to `root`.
-
-**GitHub Actions still uses `FORUM_SSH_KEY`** — `cloudflared access ssh-gen` doesn't support service tokens, so CI/CD continues with traditional SSH key auth through the Access tunnel.
 
 ## LXC Setup
 
@@ -95,10 +121,11 @@ Same pattern — see existing LXC configs. Each uses `/opt/<service>/repo` and `
 ## Local Development
 
 ```bash
-pnpm install                            # from root — sets up workspaces
-cd services/forumline-api && docker compose up -d  # start Postgres + GoTrue
-cd services/forum && go run .           # start forum backend
-cd services/forum && pnpm dev           # start forum frontend
+pnpm install                                          # from root — sets up workspaces
+cd services/zitadel && docker compose up -d           # start local Zitadel + Postgres
+cd services/forum && go run .                         # start forum backend
+cd services/forum && pnpm dev                         # start forum frontend
+cd services/forumline-web && VITE_BACKEND=local pnpm dev  # start forumline frontend
 ```
 
 Create `services/forum/.env.local` and `services/forumline-api/.env.local` with the required env vars.

@@ -18,21 +18,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Decrypt and upload env
-        run: |
-          SOPS_AGE_KEY="${{ secrets.SOPS_AGE_KEY }}" sops -d --input-type dotenv --output-type dotenv deploy/compose/forumline/.env.enc > /tmp/forumline.env
-          scp /tmp/forumline.env forumline-prod:/opt/forumline/.env
-          rm -f /tmp/forumline.env
-
-      - name: Upload compose file
-        run: scp deploy/compose/forumline/docker-compose.yml forumline-prod:/opt/forumline/docker-compose.yml
-
-      - name: Pull latest code
-        run: ssh forumline-prod "cd /opt/forumline/repo && git fetch origin main && git reset --hard origin/main"
-
-      - name: Run migrations
-        run: |
-          ssh forumline-prod 'cd /opt/forumline && for f in repo/services/forumline-api/migrations/*.sql; do echo "Applying migration: $f" && docker compose exec -T postgres psql -U postgres -d postgres < "$f"; done'
-
-      - name: Rebuild and restart
-        run: ssh forumline-prod "cd /opt/forumline && docker compose up -d --build forumline && docker compose ps"
+      - name: Deploy via Dagger
+        run: >-
+          dagger call deploy --source .
+          --service forumline
+          --ssh-key env:SSH_DEPLOY_KEY
+          --cf-access-client-id env:CF_ACCESS_CLIENT_ID
+          --cf-access-client-secret env:CF_ACCESS_CLIENT_SECRET
+          --sops-age-key env:SOPS_AGE_KEY
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}

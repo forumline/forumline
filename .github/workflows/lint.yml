@@ -5,5 +5,4 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - run: pnpm install --frozen-lockfile
-      - run: npx lefthook run pre-commit --all-files --no-tty
+      - run: dagger call lint --source .

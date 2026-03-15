@@ -13,14 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to all hosts
-        run: |
-          for host in forum-prod forumline-prod website-prod hosted-prod auth-prod; do
-            echo "=== Deploying to $host ==="
-            ssh "$host" "mkdir -p /opt/logs-agent"
-            sed "s/\${LOGS_HOST_LABEL}/$host/" deploy/compose/logs-agent/vector.toml > "/tmp/vector-$host.toml"
-            scp deploy/compose/logs-agent/docker-compose.yml "$host:/opt/logs-agent/docker-compose.yml"
-            scp "/tmp/vector-$host.toml" "$host:/opt/logs-agent/vector.toml"
-            ssh "$host" "cd /opt/logs-agent && docker compose pull && docker compose up -d --force-recreate --remove-orphans"
-            rm -f "/tmp/vector-$host.toml"
-          done
+      - name: Deploy via Dagger
+        run: >-
+          dagger call deploy-logs-agents --source .
+          --ssh-key env:SSH_DEPLOY_KEY
+          --cf-access-client-id env:CF_ACCESS_CLIENT_ID
+          --cf-access-client-secret env:CF_ACCESS_CLIENT_SECRET
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

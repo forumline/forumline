@@ -13,9 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload compose file
-        run: scp deploy/compose/logs/docker-compose.yml logs-prod:/opt/logs/docker-compose.yml
-
-      - name: Restart
-        run: |
-          ssh logs-prod "cd /opt/logs && docker compose pull && docker compose up -d --remove-orphans && docker compose ps"
+      - name: Deploy via Dagger
+        run: >-
+          dagger call deploy --source .
+          --service logs
+          --ssh-key env:SSH_DEPLOY_KEY
+          --cf-access-client-id env:CF_ACCESS_CLIENT_ID
+          --cf-access-client-secret env:CF_ACCESS_CLIENT_SECRET
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
