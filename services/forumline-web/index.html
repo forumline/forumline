@@ -656,80 +656,10 @@
                 <p>Join a network of communities</p>
               </div>
               <div class="login-body">
-                <div class="login-tabs" role="tablist" aria-label="Authentication">
-                  <button class="login-tab active" data-ltab="signin" role="tab" aria-selected="true" aria-controls="signinForm">Sign In</button>
-                  <button class="login-tab" data-ltab="signup" role="tab" aria-selected="false" aria-controls="signupForm">Sign Up</button>
+                <div class="login-form" id="signinForm">
+                  <button type="button" class="aqua-btn login-submit-btn" id="signinSubmitBtn" style="width: 100%;">Sign In</button>
+                  <button type="button" class="aqua-btn login-submit-btn" id="signupSubmitBtn" style="width: 100%; margin-top: 12px; background: var(--bg-secondary, #f5f5f5); color: var(--text-primary, #333);">Create Account</button>
                 </div>
-                <form class="login-form" id="signinForm">
-                  <div class="login-field">
-                    <label for="loginEmail">Email</label>
-                    <input type="email" class="settings-input" placeholder="you@example.com" id="loginEmail" required>
-                  </div>
-                  <div class="login-field">
-                    <label for="loginPassword">Password</label>
-                    <input type="password" class="settings-input" placeholder="Enter your password" id="loginPassword" required>
-                  </div>
-                  <button type="submit" class="aqua-btn login-submit-btn" id="signinSubmitBtn">Sign In</button>
-                  <a href="#" class="forgot-link" id="forgotPasswordLink">Forgot password?</a>
-                </form>
-                <form class="login-form hidden" id="signupForm">
-                  <div class="login-field">
-                    <label for="signupUsername">Username</label>
-                    <input type="text" class="settings-input" placeholder="Choose a username" id="signupUsername" required>
-                  </div>
-                  <div class="login-field">
-                    <label for="signupEmail">Email</label>
-                    <input type="email" class="settings-input" placeholder="you@example.com" id="signupEmail" required>
-                  </div>
-                  <div class="login-field">
-                    <label for="signupPassword">Password</label>
-                    <input type="password" class="settings-input" placeholder="At least 6 characters" id="signupPassword" required minlength="6">
-                  </div>
-                  <button type="submit" class="aqua-btn login-submit-btn" id="signupSubmitBtn">Create Account</button>
-                </form>
-                <!-- Forgot password form -->
-                <form class="login-form hidden" id="forgotForm">
-                  <p style="color: var(--text-secondary, #666); font-size: 14px; margin-bottom: 16px;">Enter your email and we'll send you a reset link.</p>
-                  <div class="login-field">
-                    <label for="forgotEmail">Email</label>
-                    <input type="email" class="settings-input" placeholder="you@example.com" id="forgotEmail" required>
-                  </div>
-                  <button type="submit" class="aqua-btn login-submit-btn" id="forgotSubmitBtn">Send Reset Link</button>
-                  <a href="#" class="forgot-link" id="backToSignin">Back to Sign In</a>
-                </form>
-                <!-- Forgot password success -->
-                <div class="login-form hidden" id="forgotSuccess">
-                  <div style="text-align: center; padding: 20px 0;">
-                    <div style="font-size: 48px; margin-bottom: 12px;">&#x2709;</div>
-                    <p style="font-weight: 600; margin-bottom: 8px;">Check your email</p>
-                    <p id="forgotSuccessEmail" style="color: var(--text-secondary, #666); font-size: 14px; margin-bottom: 16px;">We've sent a password reset link.</p>
-                    <a href="#" class="forgot-link" id="forgotTryAgain">Didn't receive it? Try again</a>
-                  </div>
-                  <button type="button" class="aqua-btn login-submit-btn" id="forgotBackBtn" style="margin-top: 12px;">Back to Sign In</button>
-                </div>
-                <!-- Reset password form (shown after clicking recovery link) -->
-                <div class="login-form hidden" id="resetPasswordForm">
-                  <p style="color: var(--text-secondary, #666); font-size: 14px; margin-bottom: 16px;">Enter your new password below.</p>
-                  <div class="login-field">
-                    <label for="resetNewPassword">New Password</label>
-                    <input type="password" class="settings-input" placeholder="At least 6 characters" id="resetNewPassword" required minlength="6">
-                  </div>
-                  <div class="login-field">
-                    <label for="resetConfirmPassword">Confirm Password</label>
-                    <input type="password" class="settings-input" placeholder="Confirm your new password" id="resetConfirmPassword" required minlength="6">
-                  </div>
-                  <button type="button" class="aqua-btn login-submit-btn" id="resetPasswordBtn">Update Password</button>
-                </div>
-                <!-- Reset password success -->
-                <div class="login-form hidden" id="resetPasswordSuccess">
-                  <div style="text-align: center; padding: 20px 0;">
-                    <div style="font-size: 48px; margin-bottom: 12px;">&#x2705;</div>
-                    <p style="font-weight: 600; margin-bottom: 8px;">Password Updated</p>
-                    <p style="color: var(--text-secondary, #666); font-size: 14px;">Your password has been successfully reset. Redirecting...</p>
-                  </div>
-                </div>
-                <!-- Login error message -->
-                <div class="hidden" id="loginError" style="color: #d32f2f; font-size: 13px; padding: 8px 12px; margin-top: 8px; background: rgba(211,47,47,0.08); border-radius: 6px; text-align: center;"></div>
               </div>
             </div>
           </div>

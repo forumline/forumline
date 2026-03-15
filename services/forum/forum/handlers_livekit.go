@@ -34,12 +34,7 @@ func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticate
-	userID, err := h.authenticateFromHeader(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Missing authorization token"})
-		return
-	}
+	userID := shared.UserIDFromContext(r.Context())
 
 	apiKey := h.Config.LiveKitAPIKey
 	apiSecret := h.Config.LiveKitAPISecret

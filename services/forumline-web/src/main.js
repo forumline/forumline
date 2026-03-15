@@ -180,10 +180,7 @@ function _stopDmStore() {
 ForumlineAuth.restoreSessionFromUrl();
 
 ForumlineAuth.onAuthStateChange((event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
-    showLogin();
-    _authHasRendered = true;
-  } else if (event === 'TOKEN_REFRESHED') {
+  if (event === 'TOKEN_REFRESHED') {
     if (session) ForumlineAPI.configure({ accessToken: session.access_token, userId: session.user.id });
     if (!_authHasRendered && session) {
       hideLogin();

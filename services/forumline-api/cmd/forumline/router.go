@@ -2,9 +2,6 @@ package main
 
 import (
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"os"
 	"time"
 
 	"github.com/forumline/forumline/services/forumline-api/handler"
@@ -34,7 +31,6 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 
 	// Handlers
 	authH := handler.NewAuthHandler(s)
-	oauthH := handler.NewOAuthHandler(s)
 	identityH := handler.NewIdentityHandler(s)
 	membershipH := handler.NewMembershipHandler(s, forumSvc)
 	forumH := handler.NewForumHandler(s, forumSvc)
@@ -49,21 +45,11 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	auth := shared.AuthMiddleware
 
 	// Rate limiters
-	authRL := shared.RateLimitMiddleware(shared.NewRateLimiter(10, time.Minute))
-	signupRL := shared.RateLimitMiddleware(shared.NewRateLimiter(5, time.Minute))
-	tokenRL := shared.RateLimitMiddleware(shared.NewRateLimiter(10, time.Minute))
 	dmRL := shared.RateLimitMiddleware(shared.NewRateLimiter(30, time.Minute))
 
-	// Auth routes
-	mux.Handle("POST /api/auth/login", use(authH.HandleLogin, authRL))
-	mux.Handle("POST /api/auth/signup", use(authH.HandleSignup, signupRL))
+	// Auth routes (Zitadel handles login/signup, we just need session + logout)
+	mux.Handle("GET /api/auth/session", use(authH.HandleSession, auth))
 	mux.HandleFunc("POST /api/auth/logout", authH.HandleLogout)
-	mux.HandleFunc("GET /api/auth/session", authH.HandleSession)
-
-	// OAuth routes
-	mux.HandleFunc("GET /api/oauth/authorize", oauthH.HandleAuthorize)
-	mux.HandleFunc("POST /api/oauth/authorize", oauthH.HandleAuthorize)
-	mux.Handle("POST /api/oauth/token", use(oauthH.HandleToken, tokenRL))
 
 	// Memberships
 	mux.Handle("GET /api/memberships", use(membershipH.HandleGetMemberships, auth))
@@ -73,7 +59,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("DELETE /api/memberships", use(membershipH.HandleLeave, auth))
 
 	// Conversations / DMs
-	mux.HandleFunc("GET /api/conversations/stream", convoH.HandleStream)
+	mux.Handle("GET /api/conversations/stream", use(convoH.HandleStream, auth))
 	mux.Handle("GET /api/conversations", use(convoH.HandleList, auth))
 	mux.Handle("POST /api/conversations", use(convoH.HandleCreateGroup, auth))
 	mux.Handle("POST /api/conversations/dm", use(convoH.HandleGetOrCreateDM, auth))
@@ -89,7 +75,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("GET /api/dms/{userId}", use(convoH.HandleLegacyGetMessages, auth))
 	mux.Handle("POST /api/dms/{userId}", use(convoH.HandleLegacySendMessage, auth, dmRL))
 	mux.Handle("POST /api/dms/{userId}/read", use(convoH.HandleLegacyMarkRead, auth))
-	mux.HandleFunc("GET /api/dms/{userId}/stream", convoH.HandleStream)
+	mux.Handle("GET /api/dms/{userId}/stream", use(convoH.HandleStream, auth))
 
 	// Forums
 	mux.HandleFunc("GET /api/forums", forumH.HandleListForums)
@@ -110,7 +96,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("GET /api/activity", use(activityH.HandleActivity, auth))
 
 	// Notifications (local DB, pushed from forums)
-	mux.HandleFunc("GET /api/notifications/stream", notifH.HandleStream)
+	mux.Handle("GET /api/notifications/stream", use(notifH.HandleStream, auth))
 	mux.Handle("GET /api/notifications", use(notifH.HandleNotifications, auth))
 	mux.Handle("GET /api/notifications/unread", use(notifH.HandleUnreadCount, auth))
 	mux.Handle("POST /api/notifications/read", use(notifH.HandleMarkRead, auth))
@@ -135,26 +121,14 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("GET /api/profiles/search", use(identityH.HandleSearchProfiles, auth))
 
 	// Calls
-	mux.HandleFunc("GET /api/calls/stream", callH.HandleStream)
+	mux.Handle("GET /api/calls/stream", use(callH.HandleStream, auth))
 	mux.Handle("POST /api/calls", use(callH.HandleInitiate, auth))
 	mux.Handle("POST /api/calls/{callId}/respond", use(callH.HandleRespond, auth))
 	mux.Handle("POST /api/calls/{callId}/end", use(callH.HandleEnd, auth))
 	mux.Handle("POST /api/calls/signal", use(callH.HandleSignal, auth))
 
 	// Push notifications
-	mux.HandleFunc("POST /api/push", pushH.Handle)
-
-	// GoTrue reverse proxy
-	gotrueURL := os.Getenv("GOTRUE_URL")
-	if gotrueURL != "" {
-		target, _ := url.Parse(gotrueURL)
-		proxy := httputil.NewSingleHostReverseProxy(target) // #nosec G704 -- URL from trusted GOTRUE_URL env var
-		mux.HandleFunc("/auth/v1/", func(w http.ResponseWriter, r *http.Request) {
-			r.URL.Path = r.URL.Path[len("/auth/v1"):]
-			r.Host = target.Host
-			proxy.ServeHTTP(w, r)
-		})
-	}
+	mux.Handle("POST /api/push", use(pushH.Handle, auth))
 
 	return mux
 }

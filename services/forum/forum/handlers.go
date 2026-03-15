@@ -31,9 +31,9 @@ type Config struct {
 	ForumName                string
 	IconURL                  string
 	ForumlineURL             string
-	ForumlineClientID        string
-	ForumlineClientSecret    string
-	ForumlineJWTSecret       string
+	ZitadelURL               string
+	ZitadelClientID          string
+	ZitadelClientSecret      string
 	LiveKitURL               string
 	LiveKitAPIKey            string
 	LiveKitAPISecret         string

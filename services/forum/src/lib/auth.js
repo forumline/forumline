@@ -1,8 +1,8 @@
 /*
  * User Authentication
  *
- * Manages the user authentication lifecycle via Forumline identity.
- * All authentication goes through Forumline OAuth — no local email/password.
+ * Manages the user authentication lifecycle via Zitadel OIDC.
+ * All authentication goes through Zitadel — no local email/password.
  *
  * It must:
  * - Persist sessions in localStorage
@@ -35,8 +35,6 @@ function saveSession(session) {
     scheduleExpiryCheck(session)
   } else {
     localStorage.removeItem(STORAGE_KEY)
-    // Also clear legacy storage key
-    localStorage.removeItem('gotrue-session')
     if (expiryTimer) {
       clearTimeout(expiryTimer)
       expiryTimer = null
@@ -153,23 +151,17 @@ async function restoreSessionFromUrl() {
 // --- Init ---
 
 export async function initAuth() {
-  // Restore from localStorage (check both new and legacy keys)
-  const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('gotrue-session')
+  // Restore from localStorage
+  const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
     try {
-      const session = JSON.parse(stored)
-      // Migrate legacy sessions: if it has a refresh_token (GoTrue), discard it
-      if (session.refresh_token) {
-        localStorage.removeItem('gotrue-session')
-        localStorage.removeItem(STORAGE_KEY)
-      } else {
-        currentSession = session
-      }
+      currentSession = JSON.parse(stored)
     } catch {
       localStorage.removeItem(STORAGE_KEY)
-      localStorage.removeItem('gotrue-session')
     }
   }
+  // Clean up legacy storage keys
+  localStorage.removeItem('gotrue-session')
   if (currentSession) scheduleExpiryCheck(currentSession)
 
   // Check URL hash for OAuth tokens

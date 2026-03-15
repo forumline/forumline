@@ -2,49 +2,32 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net/url"
 
 	"github.com/forumline/forumline/services/forumline-api/store"
-	"golang.org/x/crypto/bcrypt"
 )
 
-// OAuthCredentials holds generated OAuth client credentials.
+// OAuthCredentials holds Zitadel OIDC client credentials.
 type OAuthCredentials struct {
 	ClientID     string
 	ClientSecret string
 }
 
-// GenerateOAuthCredentials creates a new OAuth client_id and client_secret pair,
-// hashes the secret, and stores the client in the database.
-func GenerateOAuthCredentials(ctx context.Context, s *store.Store, forumID string, redirectURIs []string) (*OAuthCredentials, error) {
-	cidBytes := make([]byte, 16)
-	csBytes := make([]byte, 32)
-	if _, err := rand.Read(cidBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate client_id: %w", err)
-	}
-	if _, err := rand.Read(csBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate client_secret: %w", err)
-	}
-	clientID := hex.EncodeToString(cidBytes)
-	clientSecret := hex.EncodeToString(csBytes)
-	hash, err := bcrypt.GenerateFromPassword([]byte(clientSecret), bcrypt.DefaultCost)
+// CreateZitadelOIDCApp creates a Zitadel OIDC application for a forum via the Management API.
+func CreateZitadelOIDCApp(ctx context.Context, s *store.Store, forumID string, domain string) (*OAuthCredentials, error) {
+	z, err := GetZitadelClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash client_secret: %w", err)
+		return nil, fmt.Errorf("zitadel client: %w", err)
 	}
 
-	if err := s.CreateOAuthClient(ctx, forumID, clientID, string(hash), redirectURIs); err != nil {
-		return nil, fmt.Errorf("failed to create OAuth client: %w", err)
+	redirectURIs := []string{"https://" + domain + "/api/forumline/auth/callback"}
+	clientID, clientSecret, err := z.CreateOIDCApp(ctx, "Forum: "+domain, redirectURIs)
+	if err != nil {
+		return nil, fmt.Errorf("create OIDC app for %s: %w", domain, err)
 	}
 
 	return &OAuthCredentials{ClientID: clientID, ClientSecret: clientSecret}, nil
-}
-
-// defaultRedirectURIs returns the default redirect URI for a forum's web base.
-func defaultRedirectURIs(webBase string) []string {
-	return []string{webBase + "/api/forumline/auth/callback"}
 }
 
 // RegisterForumInput contains validated input for forum registration.
@@ -69,7 +52,7 @@ type RegisterForumResult struct {
 }
 
 // RegisterForum handles the full forum registration flow: validation, quota check,
-// domain conflict resolution (with OAuth provisioning), and new forum creation.
+// domain conflict resolution, and new forum creation.
 func (fs *ForumService) RegisterForum(ctx context.Context, userID string, input RegisterForumInput) (*RegisterForumResult, error) {
 	if input.Domain == "" || input.Name == "" || input.APIBase == "" || input.WebBase == "" {
 		return nil, &ValidationError{Msg: "domain, name, api_base, and web_base are required"}
@@ -93,7 +76,7 @@ func (fs *ForumService) RegisterForum(ctx context.Context, userID string, input 
 
 	exists, _ := fs.Store.DomainExists(ctx, input.Domain)
 	if exists {
-		return fs.handleExistingDomain(ctx, input)
+		return nil, &ConflictError{Msg: "Forum with this domain is already registered"}
 	}
 
 	tags := NormalizeTags(input.Tags)
@@ -103,14 +86,15 @@ func (fs *ForumService) RegisterForum(ctx context.Context, userID string, input 
 		return nil, fmt.Errorf("failed to register forum: %w", err)
 	}
 
-	redirectURIs := input.RedirectURIs
-	if len(redirectURIs) == 0 {
-		redirectURIs = defaultRedirectURIs(input.WebBase)
-	}
-	creds, err := GenerateOAuthCredentials(ctx, fs.Store, forumID, redirectURIs)
+	// Create Zitadel OIDC application for this forum
+	creds, err := CreateZitadelOIDCApp(ctx, fs.Store, forumID, input.Domain)
 	if err != nil {
-		_ = fs.Store.DeleteForumByID(ctx, forumID)
-		return nil, err
+		// Registration succeeds but without OIDC credentials — admin can create them later
+		return &RegisterForumResult{
+			ForumID:  forumID,
+			Approved: false,
+			Message:  "Forum registered. OIDC credentials must be created in Zitadel Console.",
+		}, nil
 	}
 
 	return &RegisterForumResult{
@@ -118,43 +102,12 @@ func (fs *ForumService) RegisterForum(ctx context.Context, userID string, input 
 		ClientID:     creds.ClientID,
 		ClientSecret: creds.ClientSecret,
 		Approved:     false,
-		Message:      "Forum registered. OAuth credentials generated. Forum requires approval before appearing in public listings.",
+		Message:      "Forum registered with Zitadel OIDC credentials.",
 	}, nil
 }
 
-// handleExistingDomain handles the case where a domain is already registered.
-// If the forum has no OAuth credentials, it provisions them.
-func (fs *ForumService) handleExistingDomain(ctx context.Context, input RegisterForumInput) (*RegisterForumResult, error) {
-	forumID := fs.Store.GetForumIDByDomain(ctx, input.Domain)
-	if forumID == "" {
-		return nil, &ConflictError{Msg: "Forum with this domain is already registered"}
-	}
-
-	hasOAuth, _ := fs.Store.OAuthClientExistsByForumID(ctx, forumID)
-	if hasOAuth {
-		return nil, &ConflictError{Msg: "Forum with this domain is already registered"}
-	}
-
-	redirectURIs := input.RedirectURIs
-	if len(redirectURIs) == 0 {
-		redirectURIs = defaultRedirectURIs(input.WebBase)
-	}
-	creds, err := GenerateOAuthCredentials(ctx, fs.Store, forumID, redirectURIs)
-	if err != nil {
-		return nil, err
-	}
-
-	return &RegisterForumResult{
-		ForumID:      forumID,
-		ClientID:     creds.ClientID,
-		ClientSecret: creds.ClientSecret,
-		Approved:     true,
-		Message:      "OAuth credentials created for existing forum.",
-	}, nil
-}
-
-// EnsureOAuth creates (or re-creates) OAuth credentials for an existing forum.
-// Used by admin/service-key endpoints.
+// EnsureOAuth is a placeholder for the old OAuth credential provisioning.
+// With Zitadel, OIDC apps are created via the Zitadel Management API.
 func (fs *ForumService) EnsureOAuth(ctx context.Context, domain string) (*OAuthCredentials, error) {
 	if domain == "" {
 		return nil, &ValidationError{Msg: "domain is required"}
@@ -164,9 +117,5 @@ func (fs *ForumService) EnsureOAuth(ctx context.Context, domain string) (*OAuthC
 		return nil, &NotFoundError{Msg: "forum not found"}
 	}
 
-	// Delete existing OAuth client if present (allows re-provisioning)
-	_ = fs.Store.DeleteOAuthClientByForumID(ctx, forumID)
-
-	redirectURIs := []string{"https://" + domain + "/api/forumline/auth/callback"}
-	return GenerateOAuthCredentials(ctx, fs.Store, forumID, redirectURIs)
+	return CreateZitadelOIDCApp(ctx, fs.Store, forumID, domain)
 }

@@ -12,19 +12,6 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func extractTokenFromRequest(r *http.Request) string {
-	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
-	}
-	if cookie, err := r.Cookie("sb-access-token"); err == nil {
-		return cookie.Value
-	}
-	if token := r.URL.Query().Get("access_token"); token != "" {
-		return token
-	}
-	return ""
-}
-
 func trimString(s string) string {
 	return strings.TrimSpace(s)
 }

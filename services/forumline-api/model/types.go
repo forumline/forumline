@@ -141,20 +141,6 @@ type PushSubscription struct {
 	Auth     string `json:"auth"`
 }
 
-// --- GoTrue responses ---
-
-type GoTrueTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	ExpiresAt    int64  `json:"expires_at"`
-	User         struct {
-		ID           string                 `json:"id"`
-		Email        string                 `json:"email"`
-		UserMetadata map[string]interface{} `json:"user_metadata"`
-	} `json:"user"`
-}
-
 // --- Push notification payload (from NOTIFY) ---
 
 type PushDMPayload struct {

@@ -6,22 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	shared "github.com/forumline/forumline/shared-go"
 )
 
 // HandleNotifications handles GET /api/forumline/notifications.
 func (h *Handlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	userID, err := h.authenticateFromHeader(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-		return
-	}
+	userID := shared.UserIDFromContext(r.Context())
 
 	notifications, err := h.Store.ListForumlineNotifications(r.Context(), userID, 50, h.Config.Domain)
 	if err != nil {
@@ -33,16 +23,7 @@ func (h *Handlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
 
 // HandleNotificationRead handles POST /api/forumline/notifications/read.
 func (h *Handlers) HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	userID, err := h.authenticateFromHeader(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-		return
-	}
+	userID := shared.UserIDFromContext(r.Context())
 
 	var body struct {
 		ID string `json:"id"`
@@ -61,16 +42,7 @@ func (h *Handlers) HandleNotificationRead(w http.ResponseWriter, r *http.Request
 
 // HandleUnread handles GET /api/forumline/unread.
 func (h *Handlers) HandleUnread(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	userID, err := h.authenticateFromHeader(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-		return
-	}
+	userID := shared.UserIDFromContext(r.Context())
 
 	notifCount, chatMentionCount, err := h.Store.CountUnread(r.Context(), userID)
 	if err != nil {
@@ -87,16 +59,7 @@ func (h *Handlers) HandleUnread(w http.ResponseWriter, r *http.Request) {
 
 // HandleNotificationStream handles GET /api/forumline/notifications/stream (SSE).
 func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	userID, err := h.authenticateFromHeader(r)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
-		return
-	}
+	userID := shared.UserIDFromContext(r.Context())
 
 	client := &shared.SSEClient{
 		Channel: "notification_changes",
@@ -169,43 +132,4 @@ func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Reque
 			flusher.Flush()
 		}
 	}
-}
-
-// authenticateFromHeader extracts and validates the JWT from the Authorization header.
-func (h *Handlers) authenticateFromHeader(r *http.Request) (string, error) {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		token := r.URL.Query().Get("access_token")
-		if token != "" {
-			return h.validateTokenWithFallback(token)
-		}
-		return "", fmt.Errorf("missing authorization")
-	}
-	if len(auth) < 8 || auth[:7] != "Bearer " {
-		return "", fmt.Errorf("invalid authorization header")
-	}
-	token := auth[7:]
-	return h.validateTokenWithFallback(token)
-}
-
-// validateTokenWithFallback tries JWT_SECRET first, then ForumlineJWTSecret.
-func (h *Handlers) validateTokenWithFallback(token string) (string, error) {
-	claims, err := shared.ValidateJWT(token)
-	if err == nil {
-		return claims.Subject, nil
-	}
-	if h.Config.ForumlineJWTSecret != "" {
-		parsed, parseErr := jwt.ParseWithClaims(token, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return []byte(h.Config.ForumlineJWTSecret), nil
-		})
-		if parseErr == nil && parsed.Valid {
-			if rc, ok := parsed.Claims.(*jwt.RegisteredClaims); ok && rc.Subject != "" {
-				return rc.Subject, nil
-			}
-		}
-	}
-	return "", err
 }

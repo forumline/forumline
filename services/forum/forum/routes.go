@@ -16,8 +16,8 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config) *chi.Mux {
 
 	notifSvc := service.NewNotificationService(s, &service.NotificationConfig{
 		ForumlineURL:          cfg.ForumlineURL,
-		ForumlineClientID:     cfg.ForumlineClientID,
-		ForumlineClientSecret: cfg.ForumlineClientSecret,
+		ForumlineClientID:     cfg.ZitadelClientID,
+		ForumlineClientSecret: cfg.ZitadelClientSecret,
 	})
 	threadSvc := service.NewThreadService(s)
 	postSvc := service.NewPostService(s, notifSvc)
@@ -60,15 +60,21 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config) *chi.Mux {
 	r.Get("/api/forumline/auth/session", h.HandleForumlineSession)
 	r.Delete("/api/forumline/auth/session", h.HandleForumlineSession)
 
-	// Forumline notifications
-	r.Get("/api/forumline/notifications", h.HandleNotifications)
-	r.Post("/api/forumline/notifications/read", h.HandleNotificationRead)
-	r.Get("/api/forumline/unread", h.HandleUnread)
-	r.Get("/api/forumline/notifications/stream", h.HandleNotificationStream)
+	// Forumline notifications (authenticated)
+	r.Group(func(r chi.Router) {
+		r.Use(shared.AuthMiddleware)
+		r.Get("/api/forumline/notifications", h.HandleNotifications)
+		r.Post("/api/forumline/notifications/read", h.HandleNotificationRead)
+		r.Get("/api/forumline/unread", h.HandleUnread)
+		r.Get("/api/forumline/notifications/stream", h.HandleNotificationStream)
+	})
 
-	// LiveKit
-	r.Post("/api/livekit", h.HandleLiveKitToken)
-	r.Get("/api/livekit", h.HandleLiveKitParticipants)
+	// LiveKit (authenticated)
+	r.Group(func(r chi.Router) {
+		r.Use(shared.AuthMiddleware)
+		r.Post("/api/livekit", h.HandleLiveKitToken)
+		r.Get("/api/livekit", h.HandleLiveKitParticipants)
+	})
 
 	// ================================================================
 	// Data endpoints (Phase B)

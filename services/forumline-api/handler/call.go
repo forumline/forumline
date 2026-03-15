@@ -93,20 +93,7 @@ func (h *CallHandler) HandleSignal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CallHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.URL.Query().Get("access_token")
-	if tokenStr == "" {
-		tokenStr = extractTokenFromRequest(r)
-	}
-	if tokenStr == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization"})
-		return
-	}
-	claims, err := shared.ValidateJWT(tokenStr)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-		return
-	}
-	userID := claims.Subject
+	userID := shared.UserIDFromContext(r.Context())
 
 	client := &shared.SSEClient{
 		Channel: "call_signal",

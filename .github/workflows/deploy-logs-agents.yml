@@ -15,7 +15,7 @@ jobs:
 
       - name: Deploy to all hosts
         run: |
-          for host in forum-prod forumline-prod website-prod hosted-prod; do
+          for host in forum-prod forumline-prod website-prod hosted-prod auth-prod; do
             echo "=== Deploying to $host ==="
             ssh "$host" "mkdir -p /opt/logs-agent"
             sed "s/\${LOGS_HOST_LABEL}/$host/" deploy/compose/logs-agent/vector.toml > "/tmp/vector-$host.toml"

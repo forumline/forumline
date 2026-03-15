@@ -1,0 +1,26 @@
+name: Deploy Zitadel Auth
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/compose/auth/**'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decrypt and upload env
+        run: |
+          SOPS_AGE_KEY="${{ secrets.SOPS_AGE_KEY }}" sops -d --input-type dotenv --output-type dotenv deploy/compose/auth/.env.enc > /tmp/auth.env
+          scp /tmp/auth.env auth-prod:/opt/auth/.env
+          rm -f /tmp/auth.env
+
+      - name: Upload compose file
+        run: scp deploy/compose/auth/docker-compose.yml auth-prod:/opt/auth/docker-compose.yml
+
+      - name: Rebuild and restart
+        run: ssh auth-prod "cd /opt/auth && docker compose pull && docker compose up -d --wait && docker compose ps"

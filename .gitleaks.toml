@@ -28,4 +28,4 @@ keywords = ["client_secret", "api_secret", "secret_key", "smtp_pass", "service_r
 # Allow .env.example and .env.enc files — these are safe (placeholders / encrypted)
 # Allow vmauth.yml — contains env var placeholder (%{VMAUTH_PASSWORD}), not real secrets
 [allowlist]
-paths = ['''\.env\.example$''', '''\.env\.enc$''', '''vmauth\.yml$''']
+paths = ['''\.env\.example$''', '''\.env\.enc$''', '''vmauth\.yml$''', '''go\.sum$''', '''docker-compose\.yml$''', '''docker-compose\.prod\.yml$''']

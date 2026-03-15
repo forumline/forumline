@@ -3,10 +3,12 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
 	shared "github.com/forumline/forumline/shared-go"
 )
@@ -101,10 +103,21 @@ func (h *IdentityHandler) HandleUpdateIdentity(w http.ResponseWriter, r *http.Re
 
 func (h *IdentityHandler) HandleDeleteIdentity(w http.ResponseWriter, r *http.Request) {
 	userID := shared.UserIDFromContext(r.Context())
+
+	// Delete from local DB first
 	if err := h.Store.DeleteUser(r.Context(), userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to delete account"})
 		return
 	}
+
+	// Delete from Zitadel (best-effort — profile is already gone locally)
+	z, err := service.GetZitadelClient(r.Context())
+	if err == nil {
+		if err := z.DeleteUser(r.Context(), userID); err != nil {
+			log.Printf("[Identity] warning: failed to delete Zitadel user %s: %v", userID, err)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

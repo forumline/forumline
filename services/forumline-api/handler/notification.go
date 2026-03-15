@@ -106,20 +106,7 @@ func (h *NotificationHandler) HandleUnreadCount(w http.ResponseWriter, r *http.R
 // HandleStream handles GET /api/notifications/stream (SSE).
 // Pushes new notifications in real-time via pg_notify.
 func (h *NotificationHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.URL.Query().Get("access_token")
-	if tokenStr == "" {
-		tokenStr = extractTokenFromRequest(r)
-	}
-	if tokenStr == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization"})
-		return
-	}
-	claims, err := shared.ValidateJWT(tokenStr)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-		return
-	}
-	userID := claims.Subject
+	userID := shared.UserIDFromContext(r.Context())
 
 	client := &shared.SSEClient{
 		Channel: "forumline_notification_changes",

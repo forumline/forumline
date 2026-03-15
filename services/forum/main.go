@@ -19,15 +19,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Auth uses FORUMLINE_JWT_SECRET for all JWT validation.
-	// Set JWT_SECRET to match so shared.ValidateJWT works transparently.
-	if jwtSecret := os.Getenv("FORUMLINE_JWT_SECRET"); jwtSecret != "" {
-		if os.Getenv("JWT_SECRET") == "" {
-			if err := os.Setenv("JWT_SECRET", jwtSecret); err != nil {
-				log.Fatalf("failed to set JWT_SECRET: %v", err)
-			}
-		}
-	}
+	// Auth (Zitadel JWT validation via JWKS)
+	shared.MustInitAuth(ctx)
 
 	// Database
 	pool, err := shared.NewDBPool(ctx)
@@ -67,9 +60,9 @@ func main() {
 		ForumName:             os.Getenv("FORUM_NAME"),
 		IconURL:               os.Getenv("FORUM_ICON_URL"),
 		ForumlineURL:          os.Getenv("FORUMLINE_APP_URL"),
-		ForumlineClientID:     os.Getenv("FORUMLINE_CLIENT_ID"),
-		ForumlineClientSecret: os.Getenv("FORUMLINE_CLIENT_SECRET"),
-		ForumlineJWTSecret:    os.Getenv("FORUMLINE_JWT_SECRET"),
+		ZitadelURL:            os.Getenv("ZITADEL_URL"),
+		ZitadelClientID:       os.Getenv("ZITADEL_CLIENT_ID"),
+		ZitadelClientSecret:   os.Getenv("ZITADEL_CLIENT_SECRET"),
 		LiveKitURL:            os.Getenv("LIVEKIT_URL"),
 		LiveKitAPIKey:         os.Getenv("LIVEKIT_API_KEY"),
 		LiveKitAPISecret:      os.Getenv("LIVEKIT_API_SECRET"),

@@ -40,15 +40,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// In hosted mode, the auth middleware validates JWTs signed with FORUMLINE_JWT_SECRET.
-	// Set JWT_SECRET to match so shared.ValidateJWT works transparently.
-	if jwtSecret := os.Getenv("FORUMLINE_JWT_SECRET"); jwtSecret != "" {
-		if os.Getenv("JWT_SECRET") == "" {
-			if err := os.Setenv("JWT_SECRET", jwtSecret); err != nil {
-			log.Fatalf("failed to set JWT_SECRET: %v", err)
-		}
-		}
-	}
+	// Auth (Zitadel JWT validation via JWKS)
+	shared.MustInitAuth(ctx)
 
 	// Database pool (shared across all tenants)
 	pool, err := shared.NewDBPool(ctx)
@@ -155,9 +148,9 @@ func main() {
 			Domain:                 tenant.Domain,
 			ForumName:              tenant.Name,
 			ForumlineURL:           os.Getenv("FORUMLINE_APP_URL"),
-			ForumlineClientID:      tenant.ForumlineClientID,
-			ForumlineClientSecret:  tenant.ForumlineClientSecret,
-			ForumlineJWTSecret:     os.Getenv("FORUMLINE_JWT_SECRET"),
+			ZitadelURL:             os.Getenv("ZITADEL_URL"),
+			ZitadelClientID:        tenant.ZitadelClientID,
+			ZitadelClientSecret:    tenant.ZitadelClientSecret,
 			LiveKitURL:             os.Getenv("LIVEKIT_URL"),
 			LiveKitAPIKey:          os.Getenv("LIVEKIT_API_KEY"),
 			LiveKitAPISecret:       os.Getenv("LIVEKIT_API_SECRET"),
@@ -236,13 +229,13 @@ func fixMissingOAuth(ctx context.Context, pool *pgxpool.Pool, store *plat.Tenant
 	time.Sleep(5 * time.Second)
 
 	forumlineURL := os.Getenv("FORUMLINE_APP_URL")
-	serviceKey := os.Getenv("FORUMLINE_SERVICE_ROLE_KEY")
+	serviceKey := os.Getenv("ZITADEL_SERVICE_USER_PAT")
 	if forumlineURL == "" || serviceKey == "" {
 		return
 	}
 
 	for _, tenant := range store.All() {
-		if tenant.ForumlineClientID != "" {
+		if tenant.ZitadelClientID != "" {
 			continue
 		}
 

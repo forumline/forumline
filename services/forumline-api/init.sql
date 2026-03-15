@@ -1,11 +1,11 @@
 -- ============================================================================
 -- Forumline — Local Dev Seed
--- Runs AFTER GoTrue has created the auth schema and tables.
+-- Runs AFTER Zitadel has initialized.
 -- ============================================================================
 
--- Forumline user profiles (extends GoTrue auth.users)
+-- Forumline user profiles (linked to Zitadel user IDs)
 CREATE TABLE IF NOT EXISTS forumline_profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   display_name TEXT NOT NULL,
   avatar_url TEXT,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS forumline_forums (
   web_base TEXT NOT NULL,
   capabilities TEXT[] DEFAULT '{}',
   description TEXT,
-  owner_id UUID REFERENCES forumline_profiles(id),
+  owner_id TEXT REFERENCES forumline_profiles(id),
   approved BOOLEAN DEFAULT false NOT NULL,
   screenshot_url TEXT,
   tags TEXT[] DEFAULT '{}',
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS forumline_forums (
 -- User forum memberships
 CREATE TABLE IF NOT EXISTS forumline_memberships (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   forum_id UUID NOT NULL REFERENCES forumline_forums(id) ON DELETE CASCADE,
   joined_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   notifications_muted BOOLEAN DEFAULT false NOT NULL,
@@ -49,34 +49,12 @@ CREATE TABLE IF NOT EXISTS forumline_memberships (
   UNIQUE(user_id, forum_id)
 );
 
--- OAuth clients (forum credentials for OAuth flow)
-CREATE TABLE IF NOT EXISTS forumline_oauth_clients (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  forum_id UUID NOT NULL REFERENCES forumline_forums(id) ON DELETE CASCADE,
-  client_id TEXT UNIQUE NOT NULL,
-  client_secret_hash TEXT NOT NULL,
-  redirect_uris TEXT[] NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
-);
-
--- Ephemeral authorization codes (5-min TTL)
-CREATE TABLE IF NOT EXISTS forumline_auth_codes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,
-  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
-  forum_id UUID NOT NULL REFERENCES forumline_forums(id) ON DELETE CASCADE,
-  redirect_uri TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  used BOOLEAN DEFAULT false NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
-);
-
 -- Conversations (1:1 and group chats)
 CREATE TABLE IF NOT EXISTS forumline_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   is_group BOOLEAN NOT NULL DEFAULT false,
   name TEXT,
-  created_by UUID REFERENCES forumline_profiles(id),
+  created_by TEXT REFERENCES forumline_profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -84,7 +62,7 @@ CREATE TABLE IF NOT EXISTS forumline_conversations (
 -- Conversation members
 CREATE TABLE IF NOT EXISTS forumline_conversation_members (
   conversation_id UUID NOT NULL REFERENCES forumline_conversations(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_read_at TIMESTAMPTZ NOT NULL DEFAULT '1970-01-01',
   PRIMARY KEY (conversation_id, user_id)
@@ -95,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_convo_members_user ON forumline_conversation_memb
 CREATE TABLE IF NOT EXISTS forumline_direct_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES forumline_conversations(id) ON DELETE CASCADE,
-  sender_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  sender_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -136,7 +114,7 @@ CREATE TRIGGER update_forum_member_count_trigger
 -- Push subscriptions
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   endpoint TEXT NOT NULL,
   p256dh TEXT NOT NULL,
   auth TEXT NOT NULL,
@@ -168,29 +146,10 @@ CREATE TRIGGER forumline_conversations_updated_at
   BEFORE UPDATE ON forumline_conversations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- Auto-create forumline profile on signup
-CREATE OR REPLACE FUNCTION handle_new_forumline_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.forumline_profiles (id, username, display_name)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substr(NEW.id::text, 1, 8)),
-    COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'username', 'New User')
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_forumline_user();
-
 -- LISTEN/NOTIFY triggers for SSE and push notifications
 CREATE OR REPLACE FUNCTION notify_dm_changes() RETURNS TRIGGER AS $$
 DECLARE
-  member_ids UUID[];
+  member_ids TEXT[];
 BEGIN
   SELECT array_agg(user_id) INTO member_ids
   FROM forumline_conversation_members
@@ -215,7 +174,7 @@ CREATE TRIGGER dm_changes_notify
 
 CREATE OR REPLACE FUNCTION notify_new_dm() RETURNS TRIGGER AS $$
 DECLARE
-  member_ids UUID[];
+  member_ids TEXT[];
 BEGIN
   SELECT array_agg(user_id) INTO member_ids
   FROM forumline_conversation_members
@@ -239,7 +198,7 @@ CREATE TRIGGER push_dm_notify
 -- Notifications (pushed from forums)
 CREATE TABLE IF NOT EXISTS forumline_notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   forum_domain TEXT NOT NULL,
   forum_name TEXT NOT NULL,
   type TEXT NOT NULL,
@@ -296,38 +255,5 @@ VALUES (
   'Reference Forumline forum with real-time chat and voice rooms',
   true
 ) ON CONFLICT (id) DO NOTHING;
-
--- Seed OAuth client for the demo forum
-INSERT INTO forumline_oauth_clients (forum_id, client_id, client_secret_hash, redirect_uris)
-VALUES (
-  '1c529bf0-e59c-419d-9589-c38eae9512df',
-  'local-test-client-id',
-  -- SHA-256 of 'local-test-client-secret'
-  '784879ba905b499313877b01857dd63f7748aaac45c84b33971f23086d4cbe8f',
-  ARRAY['http://localhost:5173/api/forumline/auth/callback']
-) ON CONFLICT (client_id) DO NOTHING;
-
--- Platform entry for forumline.net website (needed for OAuth client registration)
-INSERT INTO forumline_forums (id, domain, name, api_base, web_base, capabilities, description, approved)
-VALUES (
-  'a0000000-0000-0000-0000-000000000001',
-  'forumline.net',
-  'Forumline Platform',
-  'https://forumline.net',
-  'https://forumline.net',
-  '{}',
-  'Forumline platform website — used for forum creation OAuth flow',
-  true
-) ON CONFLICT (id) DO NOTHING;
-
--- OAuth client for the forumline.net website (forum creation flow)
-INSERT INTO forumline_oauth_clients (forum_id, client_id, client_secret_hash, redirect_uris)
-VALUES (
-  'a0000000-0000-0000-0000-000000000001',
-  'forumline-website',
-  -- SHA-256 of 'forumline-website-secret'
-  'c382ee3932b637301c6ad0b75fadd1f59fddddd2078c83bb9b53402df06512c5',
-  ARRAY['https://forumline.net/create-callback.html', 'http://localhost:8765/create-callback.html']
-) ON CONFLICT (client_id) DO NOTHING;
 
 SELECT 'Init complete: tables created, seed data inserted.' AS status;

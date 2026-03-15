@@ -21,6 +21,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Auth (Zitadel JWT validation via JWKS)
+	shared.MustInitAuth(ctx)
+
 	// Database
 	rawPool, err := shared.NewDBPool(ctx)
 	if err != nil {
@@ -108,7 +111,7 @@ func spaHandler(apiHandler http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// API and auth proxy routes go to the router
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
 			apiHandler.ServeHTTP(w, r)
 			return
 		}

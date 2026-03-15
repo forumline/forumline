@@ -61,7 +61,7 @@ func (s *Store) UpdateProfile(ctx context.Context, id string, sets map[string]in
 }
 
 func (s *Store) DeleteUser(ctx context.Context, id string) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM auth.users WHERE id = $1`, id)
+	_, err := s.Pool.Exec(ctx, `DELETE FROM forumline_profiles WHERE id = $1`, id)
 	return err
 }
 

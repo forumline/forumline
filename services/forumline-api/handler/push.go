@@ -34,17 +34,7 @@ func (h *PushHandler) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PushHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
-	tokenStr := extractTokenFromRequest(r)
-	if tokenStr == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization"})
-		return
-	}
-	claims, err := shared.ValidateJWT(tokenStr)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
-		return
-	}
-	userID := claims.Subject
+	userID := shared.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	if r.Method == http.MethodPost {
@@ -94,18 +84,10 @@ func (h *PushHandler) handleNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := strings.TrimPrefix(authHeader, "Bearer ")
-	serviceKey := os.Getenv("FORUMLINE_SERVICE_ROLE_KEY")
+	serviceKey := os.Getenv("ZITADEL_SERVICE_USER_PAT")
 	if serviceKey == "" || token != serviceKey {
-		// Check OAuth client secret
-		clientExists, err := h.Store.OAuthClientExistsBySecretHash(r.Context(), token)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Authorization check failed"})
-			return
-		}
-		if !clientExists {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid authorization"})
-			return
-		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid authorization"})
+		return
 	}
 
 	var body struct {

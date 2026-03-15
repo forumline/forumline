@@ -24,26 +24,31 @@ graph TB
             Forum[Forum Server<br/>Go + Chi v5<br/>:3000]
             ForumFE[Forum Frontend<br/>Vanilla JS + Vite + Tailwind]
             ForumDB[(Postgres 17)]
-            Alloy1[Alloy Agent]
+            Vector1[Vector Agent]
         end
 
         subgraph CT101["CT 101 — forumline-prod (192.168.1.99)"]
             API[Forumline API<br/>Go stdlib ServeMux<br/>:3000]
             SPA[Forumline SPA<br/>Vanilla JS + Vite<br/>served from ./dist]
-            GoTrue[GoTrue v2.186.0<br/>:9999]
             AppDB[(Postgres 17)]
-            Alloy2[Alloy Agent]
+            Vector2[Vector Agent]
+        end
+
+        subgraph CT106["CT 106 — auth-prod (192.168.1.109)"]
+            Zitadel[Zitadel<br/>OIDC Provider<br/>:8080]
+            ZitadelDB[(Postgres 17<br/>Zitadel managed)]
+            Vector5[Vector Agent]
         end
 
         subgraph CT103["CT 103 — website-prod (192.168.1.106)"]
             Website[Static Website<br/>Nginx<br/>:3000]
-            Alloy3[Alloy Agent]
+            Vector3[Vector Agent]
         end
 
         subgraph CT104["CT 104 — hosted-prod (192.168.1.107)"]
             Hosted[Hosted Server<br/>Go + Chi v5<br/>:3000]
             Citus[(Citus 13.0<br/>Schema-per-tenant)]
-            Alloy4[Alloy Agent]
+            Vector4[Vector Agent]
         end
 
         subgraph CT105["CT 105 — logs-prod (192.168.1.108)"]
@@ -61,6 +66,7 @@ graph TB
     Clients --> Tunnel
     Tunnel -->|demo.forumline.net| Forum
     Tunnel -->|app.forumline.net| API
+    Tunnel -->|auth.forumline.net| Zitadel
     Tunnel -->|forumline.net| Website
     Tunnel -->|*.forumline.net| Hosted
     Tunnel -->|ssh.forumline.net<br/>CI only| Proxmox
@@ -72,16 +78,17 @@ graph TB
     Forum --> R2
     Forum --> LiveKit
     API --> AppDB
-    API --> GoTrue
     API --> R2
     API --> Resend
+    Zitadel --> ZitadelDB
     Hosted --> Citus
     Hosted --> R2
 
-    Alloy1 -->|Loki push| VLogs
-    Alloy2 -->|Loki push| VLogs
-    Alloy3 -->|Loki push| VLogs
-    Alloy4 -->|Loki push| VLogs
+    Vector1 -->|Loki push| VLogs
+    Vector2 -->|Loki push| VLogs
+    Vector3 -->|Loki push| VLogs
+    Vector4 -->|Loki push| VLogs
+    Vector5 -->|Loki push| VLogs
 
     Workers -.->|proxy when healthy<br/>redirect when down| Tunnel
     Uptimer -.->|health checks 60s| Tunnel
@@ -105,12 +112,11 @@ graph TB
             CORS[CORS]
             SecHeaders[Security Headers]
             RateLimit["Rate Limiters<br/>auth: 10/min<br/>signup: 5/min<br/>DMs: 30/min"]
-            Auth["Auth Middleware<br/>JWT from Bearer / Cookie"]
+            Auth["Auth Middleware<br/>JWT from Bearer<br/>RS256 via JWKS"]
         end
 
-        subgraph Handlers["Handlers (12 files)"]
-            AuthH[Auth Handler<br/>login, signup, logout]
-            OAuthH[OAuth Handler<br/>authorize, token]
+        subgraph Handlers["Handlers (11 files)"]
+            AuthH[Auth Handler<br/>OIDC callback, logout,<br/>session check]
             ConvH[Conversation Handler<br/>DMs, groups, stream]
             CallH[Call Handler<br/>initiate, respond, signal]
             ForumH[Forum Handler<br/>discovery, registration]
@@ -133,7 +139,6 @@ graph TB
             ConvStore[conversation.go]
             CallStore[call.go]
             ForumStore[forum.go]
-            OAuthStore[oauth.go]
             NotifStore[notification.go]
             PushStore[push.go]
         end
@@ -142,13 +147,12 @@ graph TB
         PushListener["Push Listener<br/>Background goroutine<br/>webpush-go + VAPID"]
     end
 
-    subgraph GoTrueBox["GoTrue v2.186.0"]
-        GTAuth["Email/Password Auth<br/>JWT issuance<br/>Token refresh"]
+    subgraph ZitadelBox["Zitadel (auth.forumline.net)"]
+        ZAuth["OIDC Authorization Code + PKCE<br/>Hosted Login + Registration UI<br/>JWKS endpoint (RS256)<br/>User Management API<br/>Refresh tokens"]
     end
 
     subgraph Postgres["Postgres 17"]
-        AuthSchema["auth schema<br/>(GoTrue managed)"]
-        AppTables["forumline_profiles<br/>forumline_forums<br/>forumline_memberships<br/>forumline_conversations<br/>forumline_direct_messages<br/>forumline_calls<br/>forumline_notifications<br/>forumline_oauth_clients<br/>push_subscriptions"]
+        AppTables["forumline_profiles<br/>forumline_forums<br/>forumline_memberships<br/>forumline_conversations<br/>forumline_direct_messages<br/>forumline_calls<br/>forumline_notifications<br/>push_subscriptions"]
         Triggers["DB Triggers<br/>NOTIFY dm_changes<br/>NOTIFY push_dm<br/>NOTIFY call_signal<br/>NOTIFY forumline_notification_changes"]
     end
 
@@ -161,11 +165,12 @@ graph TB
     Handlers --> Services
     Services --> Store
     Store --> Postgres
-    AuthH --> GoTrueBox
     SSEHub -->|LISTEN| Triggers
     PushListener -->|LISTEN push_dm| Triggers
 
-    GoTrueBox --> AuthSchema
+    SPA -->|OIDC redirect| ZitadelBox
+    AuthH -->|validate JWT via JWKS| ZitadelBox
+    ZitadelBox --> ZitadelDB
 ```
 
 ## 3. Application Architecture — Forum Server
@@ -180,12 +185,12 @@ graph TB
         FIFrame["iframe postMessage<br/>forumline:ready<br/>forumline:auth_state"]
     end
 
-    subgraph ForumGo["Go API (Chi v5, no GoTrue)"]
+    subgraph ForumGo["Go API (Chi v5)"]
         subgraph FHandlers["Handlers"]
             ThreadH[Threads + Posts]
             ChatH[Chat Messages]
             VoiceH[Voice Rooms + Presence]
-            ForumlineH["Forumline OAuth<br/>2 flows:<br/>server-side iframe, browser redirect"]
+            ForumlineH["Zitadel OIDC Client<br/>Authorization Code flow"]
             BookmarkH[Bookmarks]
             NotifFH[Notifications]
             AvatarH["Avatar Upload<br/>SVG→R2"]
@@ -219,7 +224,7 @@ graph TB
     FStore --> FDB
     FSSEHub -->|LISTEN| FTriggers
     FSSE --> FSSEHub
-    ForumlineH -->|OAuth code exchange| ForumlineAPI["Forumline API<br/>app.forumline.net"]
+    ForumlineH -->|OIDC code exchange| ZitadelAuth["Zitadel<br/>auth.forumline.net"]
 ```
 
 ## 4. Hosted Multi-Tenant Architecture
@@ -239,7 +244,7 @@ graph TB
         TenantPool["TenantPool<br/>Shared pgxpool.Pool<br/>SET search_path per request"]
 
         subgraph PlatformAPI["Platform API (no tenant context)"]
-            Provision["POST /api/platform/forums<br/>→ CREATE SCHEMA<br/>→ Load template tables<br/>→ Register with Forumline<br/>→ citus_schema_distribute()"]
+            Provision["POST /api/platform/forums<br/>→ CREATE SCHEMA<br/>→ Load template tables<br/>→ Create Zitadel OIDC app<br/>→ citus_schema_distribute()"]
             ListForums["GET /api/platform/forums"]
             Export["GET /api/platform/forums/{slug}/export"]
             SiteAPI["Site Management API<br/>Upload custom SPA to R2<br/>5MB/file, 50MB/tenant"]
@@ -332,37 +337,39 @@ graph LR
     style SSEHub fill:#fff3e0
 ```
 
-## 6. Federation Protocol — Forum Discovery & OAuth
+## 6. Federation Protocol — Forum Discovery & OIDC
 
 ```mermaid
 sequenceDiagram
     participant ForumOp as Forum Operator
     participant Forum as Forum Server
     participant App as Forumline App<br/>(app.forumline.net)
+    participant Zitadel as Zitadel<br/>(auth.forumline.net)
     participant User as User Browser
 
     rect rgb(240, 248, 255)
-        Note over ForumOp, App: Forum Registration
+        Note over ForumOp, Zitadel: Forum Registration
         ForumOp->>App: POST /api/forums/register<br/>{domain, name, manifest_url}
         App->>Forum: GET /.well-known/forumline-manifest.json
         Forum-->>App: {name, capabilities, api_base, web_base}
         App->>App: Validate domain, store forum record
-        App->>App: Generate OAuth client_id + client_secret
+        App->>Zitadel: Create OIDC Application<br/>(Management API)
+        Zitadel-->>App: {client_id, client_secret}
         App-->>ForumOp: {client_id, client_secret}
         ForumOp->>Forum: Store credentials in .env
     end
 
     rect rgb(240, 255, 240)
-        Note over Forum, User: User Signs In (Forumline Identity Only)
+        Note over Forum, User: User Signs In (Zitadel OIDC)
         User->>Forum: Click "Sign in with Forumline"
-        Forum->>App: Redirect to /oauth/authorize?client_id=X
-        App->>App: User authenticates (GoTrue on Forumline side)
-        App-->>Forum: Redirect to callback with auth code
-        Forum->>App: POST /api/oauth/token<br/>{code, client_id, client_secret}
-        App-->>Forum: {identity_token (JWT), forumline_access_token}
-        Forum->>Forum: Create/link local profile<br/>using forumline_id as PK
-        Forum->>Forum: Sign session JWT with<br/>FORUMLINE_JWT_SECRET
-        Forum-->>User: Redirect with access_token in hash
+        Forum->>Zitadel: Redirect to /authorize<br/>?client_id=X&code_challenge=Y
+        Zitadel->>Zitadel: User authenticates<br/>(hosted login page)
+        Zitadel-->>Forum: Redirect to callback with auth code
+        Forum->>Zitadel: POST /oauth/v2/token<br/>{code, client_id, client_secret, code_verifier}
+        Zitadel-->>Forum: {id_token, access_token, refresh_token}
+        Forum->>Forum: Create/link local profile<br/>using Zitadel sub as PK
+        Forum->>Forum: Sign session JWT
+        Forum-->>User: Redirect with session token
     end
 
     rect rgb(255, 248, 240)
@@ -641,13 +648,6 @@ erDiagram
         int duration
     }
 
-    FORUMLINE_OAUTH_CLIENTS {
-        uuid id PK
-        uuid forum_id FK
-        text client_id
-        text client_secret_hash
-    }
-
     FORUMLINE_NOTIFICATIONS {
         uuid id PK
         uuid user_id FK
@@ -669,7 +669,6 @@ erDiagram
 
     FORUMLINE_PROFILES ||--o{ FORUMLINE_MEMBERSHIPS : "joins forums"
     FORUMLINE_FORUMS ||--o{ FORUMLINE_MEMBERSHIPS : "has members"
-    FORUMLINE_FORUMS ||--o| FORUMLINE_OAUTH_CLIENTS : "has credentials"
     FORUMLINE_PROFILES ||--o{ FORUMLINE_CONVERSATION_MEMBERS : "in conversations"
     FORUMLINE_CONVERSATIONS ||--o{ FORUMLINE_CONVERSATION_MEMBERS : "has members"
     FORUMLINE_CONVERSATIONS ||--o{ FORUMLINE_DIRECT_MESSAGES : "contains"
@@ -684,22 +683,26 @@ erDiagram
 
 ```mermaid
 graph LR
-    subgraph ServiceLXCs["Service LXCs (4 hosts, 17 containers)"]
+    subgraph ServiceLXCs["Service LXCs (5 hosts)"]
         subgraph ForumProd["forum-prod"]
             FDocker["Docker containers"]
-            FA["Alloy v1.14.0<br/>host=forum-prod"]
+            FA["Vector 0.45.0<br/>host=forum-prod"]
         end
         subgraph ForumlineProd["forumline-prod"]
             FLDocker["Docker containers"]
-            FLA["Alloy v1.14.0<br/>host=forumline-prod"]
+            FLA["Vector 0.45.0<br/>host=forumline-prod"]
         end
         subgraph WebsiteProd["website-prod"]
             WDocker["Docker containers"]
-            WA["Alloy v1.14.0<br/>host=website-prod"]
+            WA["Vector 0.45.0<br/>host=website-prod"]
         end
         subgraph HostedProd["hosted-prod"]
             HDocker["Docker containers"]
-            HA["Alloy v1.14.0<br/>host=hosted-prod"]
+            HA["Vector 0.45.0<br/>host=hosted-prod"]
+        end
+        subgraph AuthProd["auth-prod"]
+            ADocker["Docker containers"]
+            AA["Vector 0.45.0<br/>host=auth-prod"]
         end
     end
 
@@ -718,11 +721,13 @@ graph LR
     FLDocker -->|Docker socket| FLA
     WDocker -->|Docker socket| WA
     HDocker -->|Docker socket| HA
+    ADocker -->|Docker socket| AA
 
     FA -->|Loki push :9428| VL
     FLA -->|Loki push :9428| VL
     WA -->|Loki push :9428| VL
     HA -->|Loki push :9428| VL
+    AA -->|Loki push :9428| VL
 
     VL --> VMUI
 
