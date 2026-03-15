@@ -17,8 +17,6 @@ Run any pipeline locally: `dagger call <function> --source .`
 GitHub push/PR → webhook → Woodpecker CI (single LXC, ~130MB idle)
                               ├── lint/test: runs directly on host (local backend)
                               └── deploy: SSH to service LXCs (direct LAN)
-
-Desktop builds (macOS/iOS/Windows) remain on GitHub Actions (platform-specific runners).
 ```
 
 ## CI/CD Pipelines (Woodpecker)

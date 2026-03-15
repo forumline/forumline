@@ -48,7 +48,7 @@ export const posts = {
   't2': [
     { author: 'testuser_debug', seed: 'testuser_debug', time: '5 hours ago', content: 'I just tried joining a voice room and the quality is amazing. How does the voice room system work technically?', reactions: {} },
     { author: 'admin', seed: 'admin', time: '4 hours ago', content: 'We use **LiveKit** for voice/video. When you join a room, the server generates a short-lived JWT token that grants access.\n\nThe flow is:\n1. Client calls `/api/voice/token`\n2. Server creates a `livekit.AccessToken` with room permissions\n3. Client connects via `Room.connect(url, token)`\n\nThe WebRTC connection is *peer-to-peer* when possible, with LiveKit\'s SFU as fallback.', reactions: { '&#x1F4A1;': { count: 3, active: false }, '&#x1F44D;': { count: 6, active: true } } },
-    { author: 'testcaller', seed: 'testcaller', time: '3 hours ago', content: 'The native integration on iOS is really nice too. It uses CallKit so you get the native phone UI.', reactions: { '&#x1F4F1;': { count: 2, active: false } } },
+    { author: 'testcaller', seed: 'testcaller', time: '3 hours ago', content: 'The browser integration is really nice too. Web Push notifications mean you never miss anything.', reactions: { '&#x1F4F1;': { count: 2, active: false } } },
   ],
   't7': [
     { author: 'engine_wars', seed: 'engine-wars', time: '3 hours ago', content: 'Let\'s settle this once and for all. Both engines have come a long way, but which one are you actually shipping games with in 2026?\n\nI\'ve been using Godot for the past year and the GDExtension ecosystem has really matured.', reactions: { '&#x1F525;': { count: 15, active: false }, '&#x1F44D;': { count: 8, active: true } } },

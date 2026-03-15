@@ -17,7 +17,6 @@ Traditional forums lack real-time interaction. Chat apps lack structure. Forumli
 - **Realtime** — SSE via Postgres LISTEN/NOTIFY
 - **Voice** — LiveKit
 - **Storage** — Cloudflare R2 (avatars/images)
-- **Native** — iOS (Swift/WKWebView), Android (Kotlin/WebView), macOS, Windows, Linux
 - **Deploy** — Self-hosted Proxmox LXCs, Docker Compose, Cloudflare Tunnel, Dagger CI/CD
 
 ## Monorepo Layout
@@ -32,7 +31,6 @@ Traditional forums lack real-time interaction. Chat apps lack structure. Forumli
 | `services/forumline-web/` | Forumline app — identity & federation registry (Vite + vanilla TS) |
 | `services/hosted/` | Multi-tenant hosted forum platform |
 | `services/website/` | Static website (forumline.net) |
-| `apps/` | Native apps (iOS, Android, macOS, Windows, Linux) |
 | `deploy/` | Dockerfiles, compose configs, Terraform |
 | `tools/` | Cloudflare status worker |
 
