@@ -1,0 +1,20 @@
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - "services/hosted/**"
+        - "services/forum/**"
+        - "packages/shared-go/**"
+        - "deploy/docker/Dockerfile.go-hosted"
+        - "deploy/compose/hosted/**"
+  - event: manual
+
+steps:
+  - name: deploy
+    image: bash
+    environment:
+      SOPS_AGE_KEY:
+        from_secret: sops_age_key
+    commands:
+      - ci/deploy.sh hosted

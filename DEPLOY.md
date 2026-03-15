@@ -14,56 +14,60 @@ Run any pipeline locally: `dagger call <function> --source .`
 ## Architecture
 
 ```
-GitHub Actions (triggers + secrets)
-  └─ dagger call <function> --source . --secret env:SECRET
-       └─ Dagger Engine (runs on CI Docker LXC)
-            └─ SSH to service LXCs (via cloudflared or direct LAN)
+GitHub push/PR → webhook → Woodpecker CI (single LXC, ~130MB idle)
+                              ├── lint/test: runs directly on host (local backend)
+                              └── deploy: SSH to service LXCs (direct LAN)
+
+Desktop builds (macOS/iOS/Windows) remain on GitHub Actions (platform-specific runners).
 ```
 
-## CI/CD Pipelines (Dagger)
+## CI/CD Pipelines (Woodpecker)
 
-| Function | Trigger | Description |
+Pipelines are defined in `.woodpecker/` as YAML files. The Woodpecker agent runs commands directly on the host (local backend — no containers).
+
+| Pipeline | Trigger | Description |
 |----------|---------|-------------|
-| `deploy --service forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
-| `deploy --service hosted` | `services/hosted/**`, `services/forum/**` | Deploy hosted forum platform |
-| `deploy --service website` | `services/website/**` | Deploy static website |
-| `deploy --service logs` | `deploy/compose/logs/**` | Deploy central VictoriaLogs |
-| `deploy --service auth` | `deploy/compose/auth/**` | Deploy Zitadel auth |
-| `deploy-logs-agents` | `deploy/compose/logs-agent/**` | Deploy Vector agents to all LXCs |
 | `lint` | push, PR | Run lefthook checks (Go lint, tests, ESLint, gitleaks) |
+| `deploy-forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
+| `deploy-hosted` | `services/hosted/**`, `services/forum/**` | Deploy hosted forum platform |
+| `deploy-website` | `services/website/**` | Deploy static website |
+| `deploy-logs` | `deploy/compose/logs/**` | Deploy central VictoriaLogs |
+| `deploy-auth` | `deploy/compose/auth/**` | Deploy Zitadel auth |
+| `deploy-logs-agents` | `deploy/compose/logs-agent/**` | Deploy Vector agents to all LXCs |
 | `publish-packages` | `packages/**` | Publish TS packages to GitHub Packages |
 | `split-repos` | `packages/shared-go/**`, `services/forum/**` | Split forum subtree to read-only repo |
 | `terraform-plan` | PR touching `deploy/terraform/` | Run OpenTofu plan |
 | `terraform-apply` | manual | Run OpenTofu apply |
-| `update-screenshots` | daily cron + manual | Capture forum screenshots, upload to R2 |
 
-## Required GitHub Secrets
+Deploy logic lives in `ci/deploy.sh` — a shared script that handles sops decrypt, scp, SSH rebuild per service.
 
-- `SSH_DEPLOY_KEY` — SSH private key for all production LXCs
-- `SOPS_AGE_KEY` — age key for decrypting .env.enc files
-- `CF_ACCESS_CLIENT_ID` — Cloudflare Access service token client ID
-- `CF_ACCESS_CLIENT_SECRET` — Cloudflare Access service token client secret
-- `TF_STATE_R2_ACCESS_KEY_ID` — R2 access key for OpenTofu state backend
-- `TF_STATE_R2_SECRET_ACCESS_KEY` — R2 secret key for OpenTofu state backend
-- `TF_CLOUDFLARE_API_TOKEN` — Cloudflare API token for tunnel/access management
-- `TF_STATE_ENCRYPTION_PASSPHRASE` — passphrase for OpenTofu state encryption
-- `SPLIT_REPO_TOKEN` — GitHub token for forum-server read-only repo
+## Required Woodpecker Secrets
 
-## CI Docker LXC Setup
+Add these in the Woodpecker UI (repo settings > secrets):
 
-Dagger needs a container runtime. A dedicated LXC hosts the Docker daemon:
+- `sops_age_key` — age key for decrypting .env.enc files
+- `github_packages_token` — GitHub token with packages:write scope
+- `split_repo_token` — GitHub token for forum-server read-only repo
+- `tf_state_r2_access_key_id` — R2 access key for OpenTofu state backend
+- `tf_state_r2_secret_access_key` — R2 secret key for OpenTofu state backend
+- `tf_cloudflare_api_token` — Cloudflare API token for tunnel/access management
+- `tf_state_encryption_passphrase` — passphrase for OpenTofu state encryption
 
-1. Create a Proxmox LXC (Debian 12, 2 cores, 4GB RAM, 32GB disk)
-2. Run the setup script: `bash deploy/compose/ci-docker/setup.sh`
-3. On the Proxmox host (self-hosted runner):
+SSH deploy key is installed directly on the Woodpecker agent host (not a CI secret).
+
+## Woodpecker CI Setup
+
+Single LXC runs both the Woodpecker server (Docker) and agent (local backend).
+
+1. Create a Proxmox LXC (Debian 12, 2 cores, 4GB RAM, 32GB disk) with nesting:
    ```bash
-   # Install Dagger CLI
-   curl -fsSL https://dl.dagger.io/dagger/install.sh | sh
-
-   # Point Dagger at the CI Docker LXC
-   echo 'DOCKER_HOST=tcp://<ci-docker-ip>:2375' >> /etc/environment
+   pct set <CTID> -features nesting=1
    ```
-4. Add `SSH_DEPLOY_KEY` to GitHub Actions secrets (the SSH private key whose public key is in all LXCs' `/root/.ssh/authorized_keys`)
+2. Run the setup script: `sudo bash ci/setup-woodpecker.sh`
+3. Create GitHub OAuth App (Homepage: `https://ci.forumline.net`, Callback: `https://ci.forumline.net/authorize`)
+4. Add Cloudflare Tunnel route: `ci.forumline.net` → `http://localhost:8000`
+5. Create `/opt/woodpecker/.env`, start server + agent (see script output)
+6. Log in, activate the repo, add secrets
 
 ## Cloudflare Tunnel (Terraform)
 

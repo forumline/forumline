@@ -1,0 +1,16 @@
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - "deploy/compose/auth/**"
+  - event: manual
+
+steps:
+  - name: deploy
+    image: bash
+    environment:
+      SOPS_AGE_KEY:
+        from_secret: sops_age_key
+    commands:
+      - ci/deploy.sh auth

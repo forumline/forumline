@@ -1,0 +1,21 @@
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - "services/forumline-api/**"
+        - "services/forumline-web/**"
+        - "packages/**"
+        - "pnpm-lock.yaml"
+        - "deploy/docker/Dockerfile.go-forumline"
+        - "deploy/compose/forumline/**"
+  - event: manual
+
+steps:
+  - name: deploy
+    image: bash
+    environment:
+      SOPS_AGE_KEY:
+        from_secret: sops_age_key
+    commands:
+      - ci/deploy.sh forumline

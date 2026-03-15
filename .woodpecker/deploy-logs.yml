@@ -1,0 +1,13 @@
+when:
+  - event: push
+    branch: main
+    path:
+      include:
+        - "deploy/compose/logs/**"
+  - event: manual
+
+steps:
+  - name: deploy
+    image: bash
+    commands:
+      - ci/deploy.sh logs
