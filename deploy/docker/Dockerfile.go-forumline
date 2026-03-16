@@ -19,8 +19,8 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-# Copy workspace config and all source (inject-workspace-packages copies
-# files at install time, so source must be present before pnpm install)
+# Copy workspace config and all source upfront (inject-workspace-packages
+# copies files at install time, so source must exist before install)
 COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY packages/client-sdk/ packages/client-sdk/
 COPY services/forumline-web/ services/forumline-web/
