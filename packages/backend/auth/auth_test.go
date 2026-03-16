@@ -1,4 +1,4 @@
-package shared
+package auth
 
 import (
 	"context"
@@ -92,9 +92,9 @@ func TestInitAuth_MissingClientID(t *testing.T) {
 	}
 }
 
-// TestAuthMiddleware_Nil tests that AuthMiddleware panics or errors gracefully
+// TestMiddleware_BeforeInit tests that Middleware panics or errors gracefully
 // if InitAuth hasn't been called. In production, MustInitAuth is called at startup.
-func TestAuthMiddleware_BeforeInit(t *testing.T) {
+func TestMiddleware_BeforeInit(t *testing.T) {
 	// Reset global state
 	old := zitadelMW
 	zitadelMW = nil
@@ -114,5 +114,5 @@ func TestAuthMiddleware_BeforeInit(t *testing.T) {
 		}
 	}()
 
-	AuthMiddleware(handler).ServeHTTP(rr, req)
+	Middleware(handler).ServeHTTP(rr, req)
 }

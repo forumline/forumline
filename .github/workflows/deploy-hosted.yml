@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - 'services/hosted/**'
-      - 'packages/shared-go/**'
+      - 'packages/backend/**'
       - 'deploy/docker/Dockerfile.go-hosted'
       - 'deploy/compose/hosted/**'
       - 'secrets.kdbx'

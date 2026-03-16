@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type ConversationHandler struct {
@@ -19,7 +19,7 @@ func NewConversationHandler(svc *service.ConversationService) *ConversationHandl
 }
 
 func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convos, err := h.Service.List(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch conversations"})
@@ -29,7 +29,7 @@ func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	c, err := h.Service.Get(r.Context(), userID, convoID)
 	if err != nil || c == nil {
@@ -40,7 +40,7 @@ func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ConversationHandler) HandleGetOrCreateDM(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	var body struct {
 		UserID string `json:"userId"`
 	}
@@ -57,7 +57,7 @@ func (h *ConversationHandler) HandleGetOrCreateDM(w http.ResponseWriter, r *http
 }
 
 func (h *ConversationHandler) HandleCreateGroup(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	var body struct {
 		MemberIDs []string `json:"memberIds"`
 		Name      string   `json:"name"`
@@ -79,7 +79,7 @@ func (h *ConversationHandler) HandleCreateGroup(w http.ResponseWriter, r *http.R
 }
 
 func (h *ConversationHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	var body struct {
 		Name          *string  `json:"name"`
@@ -103,7 +103,7 @@ func (h *ConversationHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ConversationHandler) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	msgs, err := h.Service.GetMessages(r.Context(), userID, convoID, r.URL.Query().Get("before"), r.URL.Query().Get("limit"))
 	if err != nil {
@@ -114,7 +114,7 @@ func (h *ConversationHandler) HandleGetMessages(w http.ResponseWriter, r *http.R
 }
 
 func (h *ConversationHandler) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	var body struct {
 		Content string `json:"content"`
@@ -132,7 +132,7 @@ func (h *ConversationHandler) HandleSendMessage(w http.ResponseWriter, r *http.R
 }
 
 func (h *ConversationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	if err := h.Service.MarkRead(r.Context(), userID, convoID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
@@ -142,7 +142,7 @@ func (h *ConversationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ConversationHandler) HandleLeave(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	convoID := r.PathValue("conversationId")
 	if err := h.Service.Leave(r.Context(), userID, convoID); err != nil {
 		writeServiceError(w, err)
@@ -181,7 +181,7 @@ func (h *ConversationHandler) HandleLegacyMarkRead(w http.ResponseWriter, r *htt
 }
 
 func (h *ConversationHandler) resolveConversationID(w http.ResponseWriter, r *http.Request) string {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	otherUserID := r.PathValue("userId")
 	convoID, err := h.Service.ResolveConversationID(r.Context(), userID, otherUserID)
 	if err != nil {

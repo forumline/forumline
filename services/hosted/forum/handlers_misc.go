@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
 )
 
 // HandleConfig serves /api/config for frontend discovery of forum name and mode.
@@ -43,7 +43,7 @@ func (h *Handlers) HandleManifest(w http.ResponseWriter, r *http.Request) {
 
 // HandleChannelFollows handles GET/POST/DELETE /api/channel-follows.
 func (h *Handlers) HandleChannelFollows(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	switch r.Method {
 	case http.MethodGet:
@@ -86,7 +86,7 @@ func (h *Handlers) HandleChannelFollows(w http.ResponseWriter, r *http.Request) 
 
 // HandleNotificationPreferences handles GET/PUT /api/notification-preferences.
 func (h *Handlers) HandleNotificationPreferences(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	switch r.Method {
 	case http.MethodGet:

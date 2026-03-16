@@ -1,4 +1,4 @@
-package shared
+package db
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type DB interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func NewDBPool(ctx context.Context) (*pgxpool.Pool, error) {
+func NewPool(ctx context.Context) (*pgxpool.Pool, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return nil, fmt.Errorf("DATABASE_URL is not set")

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type MembershipHandler struct {
@@ -19,7 +19,7 @@ func NewMembershipHandler(s *store.Store, fs *service.ForumService) *MembershipH
 }
 
 func (h *MembershipHandler) HandleGetMemberships(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	memberships, err := h.Store.ListMemberships(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch memberships"})
@@ -29,7 +29,7 @@ func (h *MembershipHandler) HandleGetMemberships(w http.ResponseWriter, r *http.
 }
 
 func (h *MembershipHandler) HandleUpdateAuth(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	var body struct {
@@ -58,7 +58,7 @@ func (h *MembershipHandler) HandleUpdateAuth(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *MembershipHandler) HandleToggleMute(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	var body struct {
@@ -87,7 +87,7 @@ func (h *MembershipHandler) HandleToggleMute(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *MembershipHandler) HandleJoin(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	var body struct {
@@ -118,7 +118,7 @@ func (h *MembershipHandler) HandleJoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MembershipHandler) HandleLeave(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	var body struct {

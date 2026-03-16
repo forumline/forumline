@@ -1,4 +1,4 @@
-package shared
+package httpkit
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/valkey"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -220,7 +222,7 @@ func (vrl *ValkeyRateLimiter) Check(key string) RateLimitResult {
 	}
 
 	ctx := context.Background()
-	rkey := ValkeyKey("rl", key)
+	rkey := valkey.Key("rl", key)
 
 	count, err := vrl.client.Incr(ctx, rkey).Result()
 	if err != nil {
@@ -301,13 +303,13 @@ func RateLimitMiddleware(rl Limiter) func(http.Handler) http.Handler {
 }
 
 // UserRateLimitMiddleware applies rate limiting per authenticated user ID.
-// Uses the user ID from the JWT context (set by AuthMiddleware). Falls back
+// Uses the user ID from the JWT context (set by auth.Middleware). Falls back
 // to IP-based limiting if no user ID is present.
 func UserRateLimitMiddleware(rl Limiter) func(http.Handler) http.Handler {
 	trustProxy := os.Getenv("TRUST_PROXY") == "true"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := UserIDFromContext(r.Context())
+			key := auth.UserIDFromContext(r.Context())
 			if key == "" {
 				key = requestIP(r, trustProxy)
 			}

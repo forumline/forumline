@@ -4,16 +4,19 @@ import (
 	"net/http"
 	"time"
 
+	fauth "github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/db"
+	"github.com/forumline/forumline/backend/httpkit"
+	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/services/hosted/forum/service"
 	"github.com/forumline/forumline/services/hosted/forum/store"
 	"github.com/redis/go-redis/v9"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
-func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config, valkey *redis.Client) *http.ServeMux {
+func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Client) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	auth := shared.AuthMiddleware
+	auth := fauth.Middleware
 
 	// Create layers
 	s := store.New(pool)
@@ -39,42 +42,42 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config, valkey *redis
 		ChatSvc:         chatSvc,
 		AdminSvc:        adminSvc,
 		NotificationSvc: notifSvc,
-		ProfileCache:    NewProfileCache(valkey, pool, 30*time.Second),
+		ProfileCache:    NewProfileCache(valkeyClient, pool, 30*time.Second),
 	}
 
 	// Rate limiters (per-user for authenticated, per-IP for public/auth)
-	chatRL := shared.UserRateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 60, time.Minute))   // 60 msgs/min
-	writeRL := shared.UserRateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 20, time.Minute))  // 20 creates/min
-	uploadRL := shared.UserRateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 5, time.Minute))  // 5 uploads/min
-	importRL := shared.UserRateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 3, time.Minute))  // 3 imports/min
-	authRL := shared.RateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 20, time.Minute))       // 20 auth attempts/min per IP
+	chatRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 60, time.Minute))   // 60 msgs/min
+	writeRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 20, time.Minute))  // 20 creates/min
+	uploadRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 5, time.Minute))  // 5 uploads/min
+	importRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 3, time.Minute))  // 3 imports/min
+	authRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 20, time.Minute))       // 20 auth attempts/min per IP
 
 	// Channel follows (authenticated)
-	mux.Handle("GET /api/channel-follows", shared.Use(h.HandleChannelFollows, auth))
-	mux.Handle("POST /api/channel-follows", shared.Use(h.HandleChannelFollows, auth))
-	mux.Handle("DELETE /api/channel-follows", shared.Use(h.HandleChannelFollows, auth))
+	mux.Handle("GET /api/channel-follows", httpkit.Use(h.HandleChannelFollows, auth))
+	mux.Handle("POST /api/channel-follows", httpkit.Use(h.HandleChannelFollows, auth))
+	mux.Handle("DELETE /api/channel-follows", httpkit.Use(h.HandleChannelFollows, auth))
 
 	// Notification preferences (authenticated)
-	mux.Handle("GET /api/notification-preferences", shared.Use(h.HandleNotificationPreferences, auth))
-	mux.Handle("PUT /api/notification-preferences", shared.Use(h.HandleNotificationPreferences, auth))
+	mux.Handle("GET /api/notification-preferences", httpkit.Use(h.HandleNotificationPreferences, auth))
+	mux.Handle("PUT /api/notification-preferences", httpkit.Use(h.HandleNotificationPreferences, auth))
 
 	// Forumline OAuth (IP-based rate limit on auth endpoints)
-	mux.Handle("GET /api/forumline/auth", shared.Use(h.HandleForumlineAuth, authRL))
-	mux.Handle("POST /api/forumline/auth", shared.Use(h.HandleForumlineAuth, authRL))
-	mux.Handle("GET /api/forumline/auth/callback", shared.Use(h.HandleForumlineCallback, authRL))
-	mux.Handle("GET /api/forumline/auth/forumline-token", shared.Use(h.HandleForumlineToken, authRL))
+	mux.Handle("GET /api/forumline/auth", httpkit.Use(h.HandleForumlineAuth, authRL))
+	mux.Handle("POST /api/forumline/auth", httpkit.Use(h.HandleForumlineAuth, authRL))
+	mux.Handle("GET /api/forumline/auth/callback", httpkit.Use(h.HandleForumlineCallback, authRL))
+	mux.Handle("GET /api/forumline/auth/forumline-token", httpkit.Use(h.HandleForumlineToken, authRL))
 	mux.HandleFunc("GET /api/forumline/auth/session", h.HandleForumlineSession)
 	mux.HandleFunc("DELETE /api/forumline/auth/session", h.HandleForumlineSession)
 
 	// Forumline notifications (authenticated)
-	mux.Handle("GET /api/forumline/notifications", shared.Use(h.HandleNotifications, auth))
-	mux.Handle("POST /api/forumline/notifications/read", shared.Use(h.HandleNotificationRead, auth))
-	mux.Handle("GET /api/forumline/unread", shared.Use(h.HandleUnread, auth))
-	mux.Handle("GET /api/forumline/notifications/stream", shared.Use(h.HandleNotificationStream, auth))
+	mux.Handle("GET /api/forumline/notifications", httpkit.Use(h.HandleNotifications, auth))
+	mux.Handle("POST /api/forumline/notifications/read", httpkit.Use(h.HandleNotificationRead, auth))
+	mux.Handle("GET /api/forumline/unread", httpkit.Use(h.HandleUnread, auth))
+	mux.Handle("GET /api/forumline/notifications/stream", httpkit.Use(h.HandleNotificationStream, auth))
 
 	// LiveKit (authenticated)
-	mux.Handle("POST /api/livekit", shared.Use(h.HandleLiveKitToken, auth))
-	mux.Handle("GET /api/livekit", shared.Use(h.HandleLiveKitParticipants, auth))
+	mux.Handle("POST /api/livekit", httpkit.Use(h.HandleLiveKitToken, auth))
+	mux.Handle("GET /api/livekit", httpkit.Use(h.HandleLiveKitParticipants, auth))
 
 	// ================================================================
 	// Data endpoints (Phase B)
@@ -98,7 +101,7 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config, valkey *redis
 
 	// Posts (public reads + stream)
 	mux.HandleFunc("GET /api/threads/{id}/posts", h.HandlePosts)
-	mux.Handle("GET /api/threads/{id}/stream", shared.Use(h.HandlePostStream, auth))
+	mux.Handle("GET /api/threads/{id}/stream", httpkit.Use(h.HandlePostStream, auth))
 	mux.HandleFunc("GET /api/users/{id}/posts", h.HandleUserPosts)
 	mux.HandleFunc("GET /api/search/posts", h.HandleSearchPosts)
 
@@ -114,28 +117,28 @@ func NewRouter(pool shared.DB, sseHub *shared.SSEHub, cfg *Config, valkey *redis
 	mux.HandleFunc("GET /api/voice-presence", h.HandleVoicePresence)
 
 	// Authenticated data endpoints (rate-limited writes)
-	mux.Handle("POST /api/threads", shared.Use(h.HandleCreateThread, auth, writeRL))
-	mux.Handle("PATCH /api/threads/{id}", shared.Use(h.HandleUpdateThread, auth, writeRL))
-	mux.Handle("POST /api/posts", shared.Use(h.HandleCreatePost, auth, writeRL))
-	mux.Handle("POST /api/channels/{slug}/messages", shared.Use(h.HandleSendChatMessage, auth, chatRL))
-	mux.Handle("POST /api/channels/_by-id/{id}/messages", shared.Use(h.HandleSendChatMessageByID, auth, chatRL))
-	mux.Handle("GET /api/channels/{slug}/stream", shared.Use(h.HandleChatStream, auth))
-	mux.Handle("GET /api/bookmarks", shared.Use(h.HandleBookmarks, auth))
-	mux.Handle("GET /api/bookmarks/{threadId}/status", shared.Use(h.HandleBookmarkStatus, auth))
-	mux.Handle("POST /api/bookmarks", shared.Use(h.HandleAddBookmark, auth, writeRL))
-	mux.Handle("DELETE /api/bookmarks/{threadId}", shared.Use(h.HandleRemoveBookmark, auth))
-	mux.Handle("DELETE /api/bookmarks/by-id/{id}", shared.Use(h.HandleRemoveBookmarkByID, auth))
-	mux.Handle("GET /api/notifications", shared.Use(h.HandleNotificationsData, auth))
-	mux.Handle("POST /api/notifications/read-all", shared.Use(h.HandleMarkAllNotificationsRead, auth))
-	mux.Handle("PUT /api/profiles/{id}", shared.Use(h.HandleUpsertProfile, auth, writeRL))
-	mux.Handle("DELETE /api/profiles/{id}/forumline-id", shared.Use(h.HandleClearForumlineID, auth))
-	mux.Handle("PUT /api/voice-presence", shared.Use(h.HandleSetVoicePresence, auth))
-	mux.Handle("DELETE /api/voice-presence", shared.Use(h.HandleClearVoicePresence, auth))
-	mux.Handle("GET /api/voice-presence/stream", shared.Use(h.HandleVoicePresenceStream, auth))
-	mux.Handle("POST /api/avatars/upload", shared.Use(h.HandleAvatarUpload, auth, uploadRL))
-	mux.Handle("GET /api/admin/stats", shared.Use(h.HandleAdminStats, auth))
-	mux.Handle("GET /api/admin/users", shared.Use(h.HandleAdminUsers, auth))
-	mux.Handle("POST /api/admin/import", shared.Use(h.HandleImport, auth, importRL))
+	mux.Handle("POST /api/threads", httpkit.Use(h.HandleCreateThread, auth, writeRL))
+	mux.Handle("PATCH /api/threads/{id}", httpkit.Use(h.HandleUpdateThread, auth, writeRL))
+	mux.Handle("POST /api/posts", httpkit.Use(h.HandleCreatePost, auth, writeRL))
+	mux.Handle("POST /api/channels/{slug}/messages", httpkit.Use(h.HandleSendChatMessage, auth, chatRL))
+	mux.Handle("POST /api/channels/_by-id/{id}/messages", httpkit.Use(h.HandleSendChatMessageByID, auth, chatRL))
+	mux.Handle("GET /api/channels/{slug}/stream", httpkit.Use(h.HandleChatStream, auth))
+	mux.Handle("GET /api/bookmarks", httpkit.Use(h.HandleBookmarks, auth))
+	mux.Handle("GET /api/bookmarks/{threadId}/status", httpkit.Use(h.HandleBookmarkStatus, auth))
+	mux.Handle("POST /api/bookmarks", httpkit.Use(h.HandleAddBookmark, auth, writeRL))
+	mux.Handle("DELETE /api/bookmarks/{threadId}", httpkit.Use(h.HandleRemoveBookmark, auth))
+	mux.Handle("DELETE /api/bookmarks/by-id/{id}", httpkit.Use(h.HandleRemoveBookmarkByID, auth))
+	mux.Handle("GET /api/notifications", httpkit.Use(h.HandleNotificationsData, auth))
+	mux.Handle("POST /api/notifications/read-all", httpkit.Use(h.HandleMarkAllNotificationsRead, auth))
+	mux.Handle("PUT /api/profiles/{id}", httpkit.Use(h.HandleUpsertProfile, auth, writeRL))
+	mux.Handle("DELETE /api/profiles/{id}/forumline-id", httpkit.Use(h.HandleClearForumlineID, auth))
+	mux.Handle("PUT /api/voice-presence", httpkit.Use(h.HandleSetVoicePresence, auth))
+	mux.Handle("DELETE /api/voice-presence", httpkit.Use(h.HandleClearVoicePresence, auth))
+	mux.Handle("GET /api/voice-presence/stream", httpkit.Use(h.HandleVoicePresenceStream, auth))
+	mux.Handle("POST /api/avatars/upload", httpkit.Use(h.HandleAvatarUpload, auth, uploadRL))
+	mux.Handle("GET /api/admin/stats", httpkit.Use(h.HandleAdminStats, auth))
+	mux.Handle("GET /api/admin/users", httpkit.Use(h.HandleAdminUsers, auth))
+	mux.Handle("POST /api/admin/import", httpkit.Use(h.HandleImport, auth, importRL))
 
 	// Forumline manifest (discovery)
 	mux.HandleFunc("GET /.well-known/forumline-manifest.json", h.HandleManifest)

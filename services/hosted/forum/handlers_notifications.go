@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/sse"
 )
 
 // HandleNotifications handles GET /api/forumline/notifications.
 func (h *Handlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	notifications, err := h.Store.ListForumlineNotifications(r.Context(), userID, 50, h.Config.Domain)
 	if err != nil {
@@ -23,7 +24,7 @@ func (h *Handlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
 
 // HandleNotificationRead handles POST /api/forumline/notifications/read.
 func (h *Handlers) HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		ID string `json:"id"`
@@ -42,7 +43,7 @@ func (h *Handlers) HandleNotificationRead(w http.ResponseWriter, r *http.Request
 
 // HandleUnread handles GET /api/forumline/unread.
 func (h *Handlers) HandleUnread(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	notifCount, chatMentionCount, err := h.Store.CountUnread(r.Context(), userID)
 	if err != nil {
@@ -59,9 +60,9 @@ func (h *Handlers) HandleUnread(w http.ResponseWriter, r *http.Request) {
 
 // HandleNotificationStream handles GET /api/forumline/notifications/stream (SSE).
 func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
-	client := &shared.SSEClient{
+	client := &sse.Client{
 		Channel: "notification_changes",
 		Filter:  map[string]string{"user_id": userID},
 		Send:    make(chan []byte, 32),

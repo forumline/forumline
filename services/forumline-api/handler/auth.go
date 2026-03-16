@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type AuthHandler struct {
@@ -21,7 +21,7 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) HandleSession(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"user": map[string]string{"id": userID},
 	})

@@ -4,7 +4,7 @@ export default defineWorkspace([
   {
     test: {
       name: 'protocol',
-      root: './packages/protocol',
+      root: './packages/frontend/protocol',
       include: ['src/**/*.test.ts'],
     },
   },

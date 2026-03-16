@@ -9,7 +9,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
 )
 
 func (h *Handlers) r2Client() (*minio.Client, error) {
@@ -23,7 +23,7 @@ func (h *Handlers) r2Client() (*minio.Client, error) {
 // HandleAvatarUpload accepts a multipart file upload and stores it in R2.
 // POST /api/avatars/upload
 func (h *Handlers) HandleAvatarUpload(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	// 5 MB max
 	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)

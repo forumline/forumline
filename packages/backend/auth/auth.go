@@ -1,4 +1,4 @@
-package shared
+package auth
 
 import (
 	"context"
@@ -48,9 +48,9 @@ func InitAuth(ctx context.Context) error {
 	return nil
 }
 
-// AuthMiddleware validates the JWT from the Authorization header or access_token
+// Middleware validates the JWT from the Authorization header or access_token
 // query parameter, then sets the user ID in the request context.
-func AuthMiddleware(next http.Handler) http.Handler {
+func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Promote access_token query param to Authorization header for SSE/EventSource
 		r = promoteQueryToken(r)
@@ -68,8 +68,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// OptionalAuthMiddleware extracts the JWT if present but doesn't require it.
-func OptionalAuthMiddleware(next http.Handler) http.Handler {
+// OptionalMiddleware extracts the JWT if present but doesn't require it.
+func OptionalMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = promoteQueryToken(r)
 

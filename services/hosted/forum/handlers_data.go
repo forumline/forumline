@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
 )
 
 // ============================================================================
@@ -231,7 +231,7 @@ func (h *Handlers) HandleVoicePresence(w http.ResponseWriter, r *http.Request) {
 
 // HandleBookmarks handles GET /api/bookmarks
 func (h *Handlers) HandleBookmarks(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	bookmarks, err := h.Store.ListBookmarks(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -242,7 +242,7 @@ func (h *Handlers) HandleBookmarks(w http.ResponseWriter, r *http.Request) {
 
 // HandleBookmarkStatus handles GET /api/bookmarks/{threadId}/status
 func (h *Handlers) HandleBookmarkStatus(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	threadID := r.PathValue("threadId")
 
 	id, err := h.Store.GetBookmarkStatus(r.Context(), userID, threadID)
@@ -259,7 +259,7 @@ func (h *Handlers) HandleBookmarkStatus(w http.ResponseWriter, r *http.Request) 
 
 // HandleNotificationsData handles GET /api/notifications (data provider version)
 func (h *Handlers) HandleNotificationsData(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	notifications, err := h.Store.ListNotifications(r.Context(), userID, 20)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -274,7 +274,7 @@ func (h *Handlers) HandleNotificationsData(w http.ResponseWriter, r *http.Reques
 
 // HandleAdminStats handles GET /api/admin/stats
 func (h *Handlers) HandleAdminStats(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	stats, err := h.AdminSvc.GetStats(r.Context(), userID)
 	if err != nil {
 		writeServiceError(w, err)
@@ -285,7 +285,7 @@ func (h *Handlers) HandleAdminStats(w http.ResponseWriter, r *http.Request) {
 
 // HandleAdminUsers handles GET /api/admin/users
 func (h *Handlers) HandleAdminUsers(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	profiles, err := h.AdminSvc.ListUsers(r.Context(), userID)
 	if err != nil {
 		writeServiceError(w, err)

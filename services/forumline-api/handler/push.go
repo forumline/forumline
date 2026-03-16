@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type PushHandler struct {
@@ -34,7 +34,7 @@ func (h *PushHandler) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PushHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	if r.Method == http.MethodPost {

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/presence"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type PresenceHandler struct {
@@ -19,7 +19,7 @@ func NewPresenceHandler(s *store.Store, t *presence.Tracker) *PresenceHandler {
 }
 
 func (h *PresenceHandler) HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	h.Tracker.Touch(userID)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

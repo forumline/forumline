@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forumline/forumline/backend/valkey"
 	"github.com/redis/go-redis/v9"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Tracker tracks which users are online via heartbeats.
@@ -44,7 +44,7 @@ func NewTracker(ttl time.Duration, valkey *redis.Client) *Tracker {
 func (pt *Tracker) Touch(userID string) {
 	if pt.valkey != nil {
 		ctx := context.Background()
-		key := shared.ValkeyKey("presence", userID)
+		key := valkey.Key("presence", userID)
 		if err := pt.valkey.Set(ctx, key, "1", pt.ttl).Err(); err == nil {
 			return
 		}
@@ -63,7 +63,7 @@ func (pt *Tracker) OnlineStatusBatch(userIDs []string) map[string]bool {
 		pipe := pt.valkey.Pipeline()
 		cmds := make([]*redis.IntCmd, len(userIDs))
 		for i, id := range userIDs {
-			cmds[i] = pipe.Exists(ctx, shared.ValkeyKey("presence", id))
+			cmds[i] = pipe.Exists(ctx, valkey.Key("presence", id))
 		}
 		if _, err := pipe.Exec(ctx); err == nil {
 			for i, id := range userIDs {
@@ -87,7 +87,7 @@ func (pt *Tracker) OnlineStatusBatch(userIDs []string) map[string]bool {
 func (pt *Tracker) IsOnline(userID string) bool {
 	if pt.valkey != nil {
 		ctx := context.Background()
-		key := shared.ValkeyKey("presence", userID)
+		key := valkey.Key("presence", userID)
 		n, err := pt.valkey.Exists(ctx, key).Result()
 		if err == nil {
 			return n > 0

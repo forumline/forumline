@@ -30,6 +30,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/forumline/forumline.git",
-    "directory": "packages/client-sdk"
+    "directory": "packages/frontend/client-sdk"
   }
 }

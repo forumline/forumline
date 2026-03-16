@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	fauth "github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
-	shared "github.com/forumline/forumline/shared-go"
 	"github.com/livekit/protocol/auth"
 )
 
@@ -27,7 +27,7 @@ func NewCallHandler(svc *service.CallService, lk *LiveKitConfig) *CallHandler {
 }
 
 func (h *CallHandler) HandleInitiate(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := fauth.UserIDFromContext(r.Context())
 
 	var body struct {
 		ConversationID string `json:"conversation_id"`
@@ -45,7 +45,7 @@ func (h *CallHandler) HandleInitiate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CallHandler) HandleRespond(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := fauth.UserIDFromContext(r.Context())
 	callID := r.PathValue("callId")
 
 	var body struct {
@@ -64,7 +64,7 @@ func (h *CallHandler) HandleRespond(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CallHandler) HandleEnd(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := fauth.UserIDFromContext(r.Context())
 	callID := r.PathValue("callId")
 
 	result, err := h.Service.End(r.Context(), userID, callID)
@@ -79,7 +79,7 @@ func (h *CallHandler) HandleEnd(w http.ResponseWriter, r *http.Request) {
 // Both caller and callee call this after the call is accepted to join
 // the shared LiveKit room (room name = "call-{callId}").
 func (h *CallHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := fauth.UserIDFromContext(r.Context())
 	callID := r.PathValue("callId")
 
 	if h.LiveKit == nil || h.LiveKit.APIKey == "" || h.LiveKit.APISecret == "" || h.LiveKit.URL == "" {

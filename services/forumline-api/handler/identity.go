@@ -8,9 +8,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type IdentityHandler struct {
@@ -22,7 +22,7 @@ func NewIdentityHandler(s *store.Store) *IdentityHandler {
 }
 
 func (h *IdentityHandler) HandleGetIdentity(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	p, err := h.Store.GetProfile(r.Context(), userID)
 	if err != nil || p == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Profile not found"})
@@ -45,7 +45,7 @@ func (h *IdentityHandler) HandleGetIdentity(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *IdentityHandler) HandleUpdateIdentity(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		Username         *string `json:"username"`
@@ -102,7 +102,7 @@ func (h *IdentityHandler) HandleUpdateIdentity(w http.ResponseWriter, r *http.Re
 }
 
 func (h *IdentityHandler) HandleDeleteIdentity(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	// Delete from local DB first
 	if err := h.Store.DeleteUser(r.Context(), userID); err != nil {
@@ -122,7 +122,7 @@ func (h *IdentityHandler) HandleDeleteIdentity(w http.ResponseWriter, r *http.Re
 }
 
 func (h *IdentityHandler) HandleSearchProfiles(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "q parameter is required"})

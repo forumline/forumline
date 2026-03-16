@@ -33,14 +33,14 @@ package-lock.json
 .turbo/
 
 # TypeScript build artifacts (only in TS packages: protocol, server-sdk)
-packages/protocol/src/**/*.js
-packages/protocol/src/**/*.d.ts
-packages/protocol/src/**/*.d.ts.map
-packages/protocol/src/**/*.js.map
-packages/server-sdk/src/**/*.js
-packages/server-sdk/src/**/*.d.ts
-packages/server-sdk/src/**/*.d.ts.map
-packages/server-sdk/src/**/*.js.map
+packages/frontend/protocol/src/**/*.js
+packages/frontend/protocol/src/**/*.d.ts
+packages/frontend/protocol/src/**/*.d.ts.map
+packages/frontend/protocol/src/**/*.js.map
+packages/frontend/server-sdk/src/**/*.js
+packages/frontend/server-sdk/src/**/*.d.ts
+packages/frontend/server-sdk/src/**/*.d.ts.map
+packages/frontend/server-sdk/src/**/*.js.map
 
 # Supabase CLI temp
 **/supabase/.temp/

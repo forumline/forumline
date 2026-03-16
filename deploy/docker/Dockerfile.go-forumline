@@ -3,8 +3,8 @@ FROM golang:1.26-alpine AS go-build
 
 WORKDIR /app
 
-# Copy shared-go first (local replace directive in go.mod)
-COPY packages/shared-go/ /packages/shared-go/
+# Copy backend Go packages (local replace directive in go.mod)
+COPY packages/backend/ /packages/backend/
 
 COPY services/forumline-api/go.mod services/forumline-api/go.sum ./
 RUN go mod download

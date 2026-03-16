@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	shared "github.com/forumline/forumline/shared-go"
+	fauth "github.com/forumline/forumline/backend/auth"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
@@ -34,7 +34,7 @@ func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := shared.UserIDFromContext(r.Context())
+	userID := fauth.UserIDFromContext(r.Context())
 
 	apiKey := h.Config.LiveKitAPIKey
 	apiSecret := h.Config.LiveKitAPISecret
@@ -92,7 +92,7 @@ func (h *Handlers) HandleLiveKitParticipants(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_ = shared.UserIDFromContext(r.Context()) // not required for this endpoint
+	_ = fauth.UserIDFromContext(r.Context()) // not required for this endpoint
 
 	apiKey := h.Config.LiveKitAPIKey
 	apiSecret := h.Config.LiveKitAPISecret

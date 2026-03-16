@@ -3,7 +3,7 @@ module github.com/forumline/forumline/services/hosted
 go 1.26.1
 
 require (
-	github.com/forumline/forumline/shared-go v0.0.0-00010101000000-000000000000
+	github.com/forumline/forumline/backend v0.0.0-00010101000000-000000000000
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/livekit/protocol v1.45.0
 	github.com/livekit/server-sdk-go/v2 v2.15.0
@@ -113,4 +113,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/forumline/forumline/shared-go => ../../packages/shared-go
+replace github.com/forumline/forumline/backend => ../../packages/backend

@@ -13,10 +13,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/db"
+	"github.com/forumline/forumline/backend/httpkit"
+	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/backend/valkey"
 	"github.com/forumline/forumline/services/forumline-api/realtime"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 func main() {
@@ -24,26 +28,26 @@ func main() {
 	defer cancel()
 
 	// Auth (Zitadel JWT validation via JWKS)
-	shared.MustInitAuth(ctx)
+	auth.MustInitAuth(ctx)
 
 	// Database
-	rawPool, err := shared.NewDBPool(ctx)
+	rawPool, err := db.NewPool(ctx)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer rawPool.Close()
-	pool := shared.NewObservablePool(rawPool)
+	pool := db.NewObservablePool(rawPool)
 
 	// Valkey (Redis-compatible cache) — nil if VALKEY_URL not set
-	valkeyClient := shared.NewValkeyClient(ctx)
-	defer shared.CloseValkey(valkeyClient)
+	valkeyClient := valkey.NewClient(ctx)
+	defer valkey.Close(valkeyClient)
 
 	// SSE hub for LISTEN/NOTIFY — uses direct connection (bypasses PgBouncer)
 	listenDSN := os.Getenv("DATABASE_URL_DIRECT")
 	if listenDSN == "" {
 		listenDSN = os.Getenv("DATABASE_URL")
 	}
-	sseHub := shared.NewSSEHub(listenDSN)
+	sseHub := sse.NewHub(listenDSN)
 	sseHub.Listen(ctx, "dm_changes")
 	sseHub.Listen(ctx, "push_dm")
 	sseHub.Listen(ctx, "call_signal")
@@ -73,8 +77,8 @@ func main() {
 
 	// Wrap with global middleware
 	var handler http.Handler = router
-	handler = shared.CORSMiddleware(handler)
-	handler = shared.SecurityHeaders(handler)
+	handler = httpkit.CORSMiddleware(handler)
+	handler = httpkit.SecurityHeaders(handler)
 
 	// Static file serving (SPA fallback)
 	handler = spaHandler(handler)

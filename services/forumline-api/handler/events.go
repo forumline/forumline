@@ -4,24 +4,25 @@ import (
 	"fmt"
 	"net/http"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/sse"
 )
 
 type EventsHandler struct {
-	SSEHub *shared.SSEHub
+	SSEHub *sse.Hub
 }
 
-func NewEventsHandler(hub *shared.SSEHub) *EventsHandler {
+func NewEventsHandler(hub *sse.Hub) *EventsHandler {
 	return &EventsHandler{SSEHub: hub}
 }
 
 // HandleStream serves GET /api/events/stream — a single multiplexed SSE
 // connection carrying DM, notification, and call events tagged by type.
 func (h *EventsHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
-	mc := &shared.SSEMultiClient{
-		Entries: []shared.SSEMultiEntry{
+	mc := &sse.MultiClient{
+		Entries: []sse.MultiEntry{
 			{
 				Channel:   "dm_changes",
 				EventType: "dm",
@@ -58,7 +59,7 @@ func (h *EventsHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
-		Send: make(chan shared.SSETaggedEvent, 32),
+		Send: make(chan sse.TaggedEvent, 32),
 		Done: make(chan struct{}),
 	}
 
@@ -68,5 +69,5 @@ func (h *EventsHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 		close(mc.Done)
 	}()
 
-	shared.ServeSSEMulti(w, r, mc)
+	sse.ServeMulti(w, r, mc)
 }

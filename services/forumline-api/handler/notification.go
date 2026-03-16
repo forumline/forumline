@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type NotificationHandler struct {
@@ -30,7 +30,7 @@ type notificationResponse struct {
 
 // HandleNotifications handles GET /api/notifications — reads from local DB.
 func (h *NotificationHandler) HandleNotifications(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	notifs, err := h.Store.ListNotifications(r.Context(), userID, 50)
 	if err != nil {
@@ -58,7 +58,7 @@ func (h *NotificationHandler) HandleNotifications(w http.ResponseWriter, r *http
 
 // HandleMarkRead handles POST /api/notifications/read.
 func (h *NotificationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		ID string `json:"id"`
@@ -78,7 +78,7 @@ func (h *NotificationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 
 // HandleMarkAllRead handles POST /api/notifications/read-all.
 func (h *NotificationHandler) HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	if err := h.Store.MarkAllNotificationsRead(r.Context(), userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark all read"})
@@ -90,7 +90,7 @@ func (h *NotificationHandler) HandleMarkAllRead(w http.ResponseWriter, r *http.R
 
 // HandleUnreadCount handles GET /api/notifications/unread.
 func (h *NotificationHandler) HandleUnreadCount(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	count, err := h.Store.CountUnreadNotifications(r.Context(), userID)
 	if err != nil {

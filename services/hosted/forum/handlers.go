@@ -6,14 +6,14 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/services/hosted/forum/service"
 	"github.com/forumline/forumline/services/hosted/forum/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Handlers holds dependencies for all forum API handlers.
 type Handlers struct {
-	SSEHub          *shared.SSEHub
+	SSEHub          *sse.Hub
 	Config          *Config
 	Store           *store.Store
 	ThreadSvc       *service.ThreadService

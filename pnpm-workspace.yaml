@@ -1,4 +1,4 @@
 packages:
-  - 'packages/*'
+  - 'packages/frontend/*'
   - 'services/forumline-web'
   - 'services/hosted'

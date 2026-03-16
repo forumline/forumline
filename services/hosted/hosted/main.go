@@ -27,10 +27,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/db"
+	"github.com/forumline/forumline/backend/httpkit"
+	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/backend/valkey"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/forumline/forumline/services/hosted/forum"
 	plat "github.com/forumline/forumline/services/hosted/platform"
-	shared "github.com/forumline/forumline/shared-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -40,18 +44,18 @@ func main() {
 	defer cancel()
 
 	// Auth (Zitadel JWT validation via JWKS)
-	shared.MustInitAuth(ctx)
+	auth.MustInitAuth(ctx)
 
 	// Database pool (shared across all tenants)
-	pool, err := shared.NewDBPool(ctx)
+	pool, err := db.NewPool(ctx)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
 
 	// Valkey (Redis-compatible cache) — nil if VALKEY_URL not set
-	valkeyClient := shared.NewValkeyClient(ctx)
-	defer shared.CloseValkey(valkeyClient)
+	valkeyClient := valkey.NewClient(ctx)
+	defer valkey.Close(valkeyClient)
 
 	// Tenant store — loads and caches tenant configs from platform_tenants table
 	store := plat.NewTenantStore(pool)
@@ -67,7 +71,7 @@ func main() {
 	if listenDSN == "" {
 		listenDSN = os.Getenv("DATABASE_URL")
 	}
-	sseHub := shared.NewSSEHub(listenDSN)
+	sseHub := sse.NewHub(listenDSN)
 	sseHub.Listen(ctx, "notification_changes")
 	sseHub.Listen(ctx, "chat_message_changes")
 	sseHub.Listen(ctx, "voice_presence_changes")
@@ -184,8 +188,8 @@ func main() {
 
 	// Global middleware
 	var handler http.Handler = mux
-	handler = shared.CORSMiddleware(handler)
-	handler = shared.SecurityHeaders(handler)
+	handler = httpkit.CORSMiddleware(handler)
+	handler = httpkit.SecurityHeaders(handler)
 	handler = spaHandler(handler, store, siteCache)
 
 	port := os.Getenv("PORT")

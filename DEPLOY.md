@@ -23,12 +23,12 @@ Workflows in `.github/workflows/`. Runners execute on CT 109 with direct LAN acc
 |----------|---------|-------------|
 | `lint` | push, PR | Run lefthook checks (Go lint, tests, ESLint, gitleaks) |
 | `deploy-forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
-| `deploy-hosted` | `services/hosted/**`, `packages/shared-go/**` | Deploy hosted forum platform |
+| `deploy-hosted` | `services/hosted/**`, `packages/backend/**` | Deploy hosted forum platform |
 | `deploy-website` | `services/website/**` | Deploy static website |
 | `deploy-logs` | `deploy/compose/logs/**` | Deploy central VictoriaLogs |
 | `deploy-auth` | `deploy/compose/auth/**` | Deploy Zitadel auth |
 | `deploy-logs-agents` | `deploy/compose/logs-agent/**` | Deploy Vector agents to all LXCs |
-| `publish-packages` | `packages/**` | Publish TS packages to GitHub Packages |
+| `publish-packages` | `packages/frontend/**` | Publish TS packages to GitHub Packages |
 | `terraform-plan` | PR touching `deploy/terraform/` | Run OpenTofu plan |
 | `terraform-apply` | manual | Run OpenTofu apply |
 

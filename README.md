@@ -23,9 +23,10 @@ Traditional forums lack real-time interaction. Chat apps lack structure. Forumli
 
 | Directory | Description |
 |-----------|-------------|
-| `packages/protocol/` | Federation types (zero-dependency) |
-| `packages/server-sdk/` | Protocol endpoint handler factories |
-| `packages/shared-go/` | Shared Go infrastructure (db, auth, SSE, middleware) |
+| `packages/frontend/protocol/` | Federation types (zero-dependency) |
+| `packages/frontend/server-sdk/` | Protocol endpoint handler factories |
+| `packages/frontend/client-sdk/` | Browser API client, auth, realtime streams |
+| `packages/backend/` | Go backend packages (auth, db, httpkit, sse, valkey) |
 | `services/forumline-api/` | Forumline Go API server (`cmd/forumline/`) |
 | `services/forumline-web/` | Forumline app — identity & federation registry (Vite + vanilla TS) |
 | `services/hosted/` | Multi-tenant hosted forum platform (Go backend + vanilla JS frontend) |

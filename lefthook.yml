@@ -15,7 +15,7 @@ pre-commit:
         - run: "! command -v gitleaks >/dev/null 2>&1"
 
     eslint-workspace:
-      glob: "{services/forumline-web,packages}/**/*.{ts,tsx,js,mjs}"
+      glob: "{services/forumline-web,packages/frontend}/**/*.{ts,tsx,js,mjs}"
       run: pnpm lint
 
     eslint-forum:
@@ -26,30 +26,30 @@ pre-commit:
     golangci-lint:
       glob: "**/*.go"
       run: >
-        cd packages/shared-go &&
+        cd packages/backend &&
         golangci-lint run ./... &&
         cd ../../services/forumline-api &&
         golangci-lint run ./... &&
         cd ../hosted &&
         golangci-lint run ./...
 
-    go-test-shared:
-      glob: "packages/shared-go/**/*.go"
-      root: "packages/shared-go/"
+    go-test-backend:
+      glob: "packages/backend/**/*.go"
+      root: "packages/backend/"
       run: go test ./...
 
     go-test-api:
-      glob: "{services/forumline-api,packages/shared-go}/**/*.go"
+      glob: "{services/forumline-api,packages/backend}/**/*.go"
       root: "services/forumline-api/"
       run: go test ./...
 
     go-test-hosted:
-      glob: "{services/hosted,packages/shared-go}/**/*.go"
+      glob: "{services/hosted,packages/backend}/**/*.go"
       root: "services/hosted/"
       run: go test ./...
 
     ts-test:
-      glob: "{services/forumline-web,packages}/**/*.{ts,tsx,js,mjs}"
+      glob: "{services/forumline-web,packages/frontend}/**/*.{ts,tsx,js,mjs}"
       run: pnpm test
 
 pre-push:
@@ -59,4 +59,4 @@ pre-push:
       run: bash .githooks/pre-push
     validate-ci:
       run: bash .githooks/validate-ci.sh
-      glob: "{.github/workflows/*.yml,deploy/docker/Dockerfile.*,packages/**}"
+      glob: "{.github/workflows/*.yml,deploy/docker/Dockerfile.*,packages/frontend/**,packages/backend/**}"

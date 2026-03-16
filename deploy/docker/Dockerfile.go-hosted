@@ -3,7 +3,7 @@ FROM golang:1.26-alpine AS go-build
 
 WORKDIR /app
 COPY services/hosted/go.mod services/hosted/go.sum ./
-COPY packages/shared-go/ /packages/shared-go/
+COPY packages/backend/ /packages/backend/
 RUN go mod download
 
 COPY services/hosted/forum/ forum/

@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/db"
 )
 
 // ExportData is the portable format for importing/exporting forum data.
@@ -40,7 +40,7 @@ type ForumMeta struct {
 // Import loads ExportData into a forum database.
 // Import is additive — it uses ON CONFLICT DO NOTHING to avoid duplicating
 // data if run multiple times. It preserves original UUIDs and timestamps.
-func Import(ctx context.Context, db shared.DB, data *ExportData) error {
+func Import(ctx context.Context, database db.DB, data *ExportData) error {
 	steps := []struct {
 		name  string
 		items []json.RawMessage
@@ -105,7 +105,7 @@ func Import(ctx context.Context, db shared.DB, data *ExportData) error {
 
 	for _, step := range steps {
 		for i, item := range step.items {
-			_, err := db.Exec(ctx, step.query, string(item))
+			_, err := database.Exec(ctx, step.query, string(item))
 			if err != nil {
 				return fmt.Errorf("import %s row %d: %w", step.name, i, err)
 			}

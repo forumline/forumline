@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/hosted/forum/service"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 // ============================================================================
@@ -14,7 +14,7 @@ import (
 
 // HandleCreateThread handles POST /api/threads
 func (h *Handlers) HandleCreateThread(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		CategoryID string  `json:"category_id"`
@@ -44,7 +44,7 @@ func (h *Handlers) HandleCreateThread(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateThread handles PATCH /api/threads/{id}
 func (h *Handlers) HandleUpdateThread(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	threadID := r.PathValue("id")
 
 	var body struct {
@@ -79,7 +79,7 @@ func (h *Handlers) HandleUpdateThread(w http.ResponseWriter, r *http.Request) {
 
 // HandleCreatePost handles POST /api/posts
 func (h *Handlers) HandleCreatePost(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		ThreadID  string  `json:"thread_id"`
@@ -109,7 +109,7 @@ func (h *Handlers) HandleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 // HandleSendChatMessage handles POST /api/channels/{slug}/messages
 func (h *Handlers) HandleSendChatMessage(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	slug := r.PathValue("slug")
 
 	var body struct {
@@ -129,7 +129,7 @@ func (h *Handlers) HandleSendChatMessage(w http.ResponseWriter, r *http.Request)
 
 // HandleSendChatMessageByID handles POST /api/channels/_by-id/{id}/messages
 func (h *Handlers) HandleSendChatMessageByID(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	channelID := r.PathValue("id")
 
 	var body struct {
@@ -153,7 +153,7 @@ func (h *Handlers) HandleSendChatMessageByID(w http.ResponseWriter, r *http.Requ
 
 // HandleAddBookmark handles POST /api/bookmarks
 func (h *Handlers) HandleAddBookmark(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		ThreadID string `json:"thread_id"`
@@ -172,7 +172,7 @@ func (h *Handlers) HandleAddBookmark(w http.ResponseWriter, r *http.Request) {
 
 // HandleRemoveBookmark handles DELETE /api/bookmarks/{threadId}
 func (h *Handlers) HandleRemoveBookmark(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	threadID := r.PathValue("threadId")
 
 	if err := h.Store.RemoveBookmark(r.Context(), userID, threadID); err != nil {
@@ -184,7 +184,7 @@ func (h *Handlers) HandleRemoveBookmark(w http.ResponseWriter, r *http.Request) 
 
 // HandleRemoveBookmarkByID handles DELETE /api/bookmarks/by-id/{id}
 func (h *Handlers) HandleRemoveBookmarkByID(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	bookmarkID := r.PathValue("id")
 
 	if err := h.Store.RemoveBookmarkByID(r.Context(), userID, bookmarkID); err != nil {
@@ -200,7 +200,7 @@ func (h *Handlers) HandleRemoveBookmarkByID(w http.ResponseWriter, r *http.Reque
 
 // HandleMarkAllNotificationsRead handles POST /api/notifications/read-all
 func (h *Handlers) HandleMarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	if err := h.Store.MarkAllNotificationsRead(r.Context(), userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -215,7 +215,7 @@ func (h *Handlers) HandleMarkAllNotificationsRead(w http.ResponseWriter, r *http
 
 // HandleUpsertProfile handles PUT /api/profiles/{id}
 func (h *Handlers) HandleUpsertProfile(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	profileID := r.PathValue("id")
 
 	var body struct {
@@ -246,7 +246,7 @@ func (h *Handlers) HandleUpsertProfile(w http.ResponseWriter, r *http.Request) {
 
 // HandleClearForumlineID handles DELETE /api/profiles/{id}/forumline-id
 func (h *Handlers) HandleClearForumlineID(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	profileID := r.PathValue("id")
 
 	if err := h.ProfileSvc.ClearForumlineID(r.Context(), userID, profileID); err != nil {
@@ -262,7 +262,7 @@ func (h *Handlers) HandleClearForumlineID(w http.ResponseWriter, r *http.Request
 
 // HandleSetVoicePresence handles PUT /api/voice-presence
 func (h *Handlers) HandleSetVoicePresence(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		RoomSlug string `json:"room_slug"`
@@ -281,7 +281,7 @@ func (h *Handlers) HandleSetVoicePresence(w http.ResponseWriter, r *http.Request
 
 // HandleClearVoicePresence handles DELETE /api/voice-presence
 func (h *Handlers) HandleClearVoicePresence(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	if err := h.Store.ClearVoicePresence(r.Context(), userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

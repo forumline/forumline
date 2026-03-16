@@ -1,4 +1,4 @@
-module github.com/forumline/forumline/shared-go
+module github.com/forumline/forumline/backend
 
 go 1.26.1
 

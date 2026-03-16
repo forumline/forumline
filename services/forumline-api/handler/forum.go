@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type ForumHandler struct {
@@ -61,7 +61,7 @@ func (h *ForumHandler) HandleListTags(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ForumHandler) HandleRecommended(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	forums, err := h.Store.ListRecommendedForums(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch recommendations"})
@@ -71,7 +71,7 @@ func (h *ForumHandler) HandleRecommended(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ForumHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
 		Domain       string   `json:"domain"`
@@ -114,7 +114,7 @@ func (h *ForumHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ForumHandler) HandleListOwned(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	forums, err := h.Store.ListOwnedForums(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch owned forums"})
@@ -124,7 +124,7 @@ func (h *ForumHandler) HandleListOwned(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ForumHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	ctx := r.Context()
 
 	var body struct {

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/sse"
 )
 
 // HandleChatStream handles GET /api/channels/{slug}/stream (SSE).
@@ -21,7 +21,7 @@ func (h *Handlers) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &shared.SSEClient{
+	client := &sse.Client{
 		Channel: "chat_message_changes",
 		Filter:  map[string]string{"channel_id": channelID},
 		Send:    make(chan []byte, 32),
@@ -92,7 +92,7 @@ func (h *Handlers) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandlePostStream(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("id")
 
-	client := &shared.SSEClient{
+	client := &sse.Client{
 		Channel: "post_changes",
 		Filter:  map[string]string{"thread_id": threadID},
 		Send:    make(chan []byte, 32),
@@ -160,7 +160,7 @@ func (h *Handlers) HandlePostStream(w http.ResponseWriter, r *http.Request) {
 // HandleVoicePresenceStream handles GET /api/voice-presence/stream (SSE).
 // Streams voice presence changes (join/leave/update).
 func (h *Handlers) HandleVoicePresenceStream(w http.ResponseWriter, r *http.Request) {
-	client := &shared.SSEClient{
+	client := &sse.Client{
 		Channel: "voice_presence_changes",
 		Filter:  map[string]string{}, // no filter — all changes
 		Send:    make(chan []byte, 32),

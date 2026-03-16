@@ -3,19 +3,19 @@ package store
 import (
 	"time"
 
+	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/services/hosted/forum/model"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 // Store provides data access methods for the forum database.
-// DB is the shared.DB interface — in single-tenant mode this is a *pgxpool.Pool,
+// DB is the db.DB interface — in single-tenant mode this is a *pgxpool.Pool,
 // in multi-tenant mode this is a *TenantPool that sets search_path per-request.
 type Store struct {
-	DB shared.DB
+	DB db.DB
 }
 
 // New creates a new Store.
-func New(db shared.DB) *Store {
+func New(db db.DB) *Store {
 	return &Store{DB: db}
 }
 

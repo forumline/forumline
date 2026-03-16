@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/forumline/forumline/backend/db"
+	"github.com/forumline/forumline/backend/valkey"
 	"github.com/forumline/forumline/services/hosted/forum/model"
 	"github.com/forumline/forumline/services/hosted/forum/store"
 	"github.com/redis/go-redis/v9"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 // ProfileCache caches forum profile lookups in Valkey to avoid per-event
@@ -16,12 +17,12 @@ import (
 // Valkey is nil or unavailable.
 type ProfileCache struct {
 	client *redis.Client
-	db     shared.DB
+	db     db.DB
 	ttl    time.Duration
 }
 
 // NewProfileCache creates a profile cache. client may be nil for DB-only mode.
-func NewProfileCache(client *redis.Client, db shared.DB, ttl time.Duration) *ProfileCache {
+func NewProfileCache(client *redis.Client, db db.DB, ttl time.Duration) *ProfileCache {
 	return &ProfileCache{client: client, db: db, ttl: ttl}
 }
 
@@ -30,7 +31,7 @@ func NewProfileCache(client *redis.Client, db shared.DB, ttl time.Duration) *Pro
 // tenant-specific schemas).
 func (pc *ProfileCache) Get(ctx context.Context, schema, authorID string) (model.Profile, error) {
 	if pc.client != nil {
-		key := shared.ValkeyKey("profile", schema, authorID)
+		key := valkey.Key("profile", schema, authorID)
 		data, err := pc.client.Get(ctx, key).Bytes()
 		if err == nil {
 			var p model.Profile
@@ -51,7 +52,7 @@ func (pc *ProfileCache) Get(ctx context.Context, schema, authorID string) (model
 
 	// Cache the result in Valkey (best-effort, don't fail if cache write fails)
 	if pc.client != nil {
-		key := shared.ValkeyKey("profile", schema, authorID)
+		key := valkey.Key("profile", schema, authorID)
 		if data, err := json.Marshal(p); err == nil {
 			pc.client.Set(ctx, key, data, pc.ttl)
 		}

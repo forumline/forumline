@@ -12,7 +12,7 @@ export default tseslint.config(
       '.claude/',
       'services/website/',
       '.github/scripts/',
-      'packages/protocol/src/**/*.d.ts',
+      'packages/frontend/protocol/src/**/*.d.ts',
     ],
   },
   ...tseslint.configs.recommended,
@@ -23,7 +23,7 @@ export default tseslint.config(
         projectService: {
           allowDefaultProject: [
             'vitest.workspace.ts',
-            'packages/protocol/src/validation.test.ts',
+            'packages/frontend/protocol/src/validation.test.ts',
           ],
         },
         tsconfigRootDir: import.meta.dirname,

@@ -1,4 +1,4 @@
-package shared
+package sse
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// SSEClient represents a connected SSE client with a filter.
-type SSEClient struct {
+// Client represents a connected SSE client with a filter.
+type Client struct {
 	Channel    string                                 // LISTEN channel name
 	Filter     map[string]string                      // e.g. {"recipient_id": "uuid"}
 	FilterFunc func(data map[string]interface{}) bool // dynamic filter (used instead of Filter when set)
@@ -21,32 +21,32 @@ type SSEClient struct {
 	Done       chan struct{}
 }
 
-// SSEHub manages LISTEN/NOTIFY subscriptions and fans out to SSE clients.
+// Hub manages LISTEN/NOTIFY subscriptions and fans out to SSE clients.
 // Uses a single direct pgx connection for all LISTEN channels to minimize
 // Postgres backend processes on memory-constrained instances.
-type SSEHub struct {
+type Hub struct {
 	mu        sync.RWMutex
-	clients   map[string][]*SSEClient // channel -> clients
-	listenDSN string                  // direct Postgres DSN for LISTEN connections
-	channels  []string                // channels to listen on
+	clients   map[string][]*Client // channel -> clients
+	listenDSN string               // direct Postgres DSN for LISTEN connections
+	channels  []string             // channels to listen on
 }
 
-func NewSSEHub(listenDSN string) *SSEHub {
-	return &SSEHub{
-		clients:   make(map[string][]*SSEClient),
+func NewHub(listenDSN string) *Hub {
+	return &Hub{
+		clients:   make(map[string][]*Client),
 		listenDSN: listenDSN,
 	}
 }
 
 // Listen registers a channel to be listened on. Call StartListening after
 // all channels are registered to open a single multiplexed connection.
-func (h *SSEHub) Listen(ctx context.Context, channel string) {
+func (h *Hub) Listen(ctx context.Context, channel string) {
 	h.channels = append(h.channels, channel)
 }
 
 // StartListening opens a single Postgres connection and LISTENs on all
 // registered channels. Automatically reconnects on failure.
-func (h *SSEHub) StartListening(ctx context.Context) {
+func (h *Hub) StartListening(ctx context.Context) {
 	go func() {
 		for {
 			if ctx.Err() != nil {
@@ -66,7 +66,7 @@ func (h *SSEHub) StartListening(ctx context.Context) {
 	}()
 }
 
-func (h *SSEHub) listenAll(ctx context.Context) {
+func (h *Hub) listenAll(ctx context.Context) {
 	conn, err := pgx.Connect(ctx, h.listenDSN)
 	if err != nil {
 		log.Printf("SSEHub: failed to connect for LISTEN: %v", err)
@@ -101,7 +101,7 @@ func (h *SSEHub) listenAll(ctx context.Context) {
 
 // broadcast sends a payload to all clients listening on the given channel,
 // filtering by each client's filter criteria.
-func (h *SSEHub) broadcast(channel string, payload []byte) {
+func (h *Hub) broadcast(channel string, payload []byte) {
 	h.mu.RLock()
 	clients := h.clients[channel]
 	h.mu.RUnlock()
@@ -135,14 +135,14 @@ func (h *SSEHub) broadcast(channel string, payload []byte) {
 }
 
 // Register adds an SSE client to the hub.
-func (h *SSEHub) Register(client *SSEClient) {
+func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	h.clients[client.Channel] = append(h.clients[client.Channel], client)
 	h.mu.Unlock()
 }
 
 // Unregister removes an SSE client from the hub.
-func (h *SSEHub) Unregister(client *SSEClient) {
+func (h *Hub) Unregister(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -155,8 +155,8 @@ func (h *SSEHub) Unregister(client *SSEClient) {
 	}
 }
 
-// ServeSSE writes SSE events to the response writer for the given client.
-func ServeSSE(w http.ResponseWriter, r *http.Request, client *SSEClient) {
+// Serve writes SSE events to the response writer for the given client.
+func Serve(w http.ResponseWriter, r *http.Request, client *Client) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -185,33 +185,33 @@ func ServeSSE(w http.ResponseWriter, r *http.Request, client *SSEClient) {
 	}
 }
 
-// SSEMultiClient fans multiple channel subscriptions into a single HTTP response.
+// MultiClient fans multiple channel subscriptions into a single HTTP response.
 // Each event is tagged with the SSE "event:" field so clients can use addEventListener.
-type SSEMultiClient struct {
-	Entries []SSEMultiEntry
-	Send    chan SSETaggedEvent
+type MultiClient struct {
+	Entries []MultiEntry
+	Send    chan TaggedEvent
 	Done    chan struct{}
 }
 
-// SSEMultiEntry describes one channel subscription within a multi-client.
-type SSEMultiEntry struct {
+// MultiEntry describes one channel subscription within a multi-client.
+type MultiEntry struct {
 	Channel    string
 	EventType  string // SSE event: field (e.g. "dm", "notification", "call")
 	FilterFunc func(data map[string]interface{}) bool
 }
 
-// SSETaggedEvent carries a payload with its event type for ServeSSEMulti.
-type SSETaggedEvent struct {
+// TaggedEvent carries a payload with its event type for ServeMulti.
+type TaggedEvent struct {
 	EventType string
 	Data      []byte
 }
 
-// RegisterMulti registers an SSEMultiClient by creating internal per-channel
+// RegisterMulti registers a MultiClient by creating internal per-channel
 // clients that fan into the shared Send channel.
-func (h *SSEHub) RegisterMulti(mc *SSEMultiClient) []*SSEClient {
-	clients := make([]*SSEClient, len(mc.Entries))
+func (h *Hub) RegisterMulti(mc *MultiClient) []*Client {
+	clients := make([]*Client, len(mc.Entries))
 	for i, entry := range mc.Entries {
-		client := &SSEClient{
+		client := &Client{
 			Channel:    entry.Channel,
 			FilterFunc: entry.FilterFunc,
 			Send:       make(chan []byte, 32),
@@ -221,7 +221,7 @@ func (h *SSEHub) RegisterMulti(mc *SSEMultiClient) []*SSEClient {
 		h.Register(client)
 
 		// Fan each internal client's Send into the multi-client's tagged Send
-		go func(c *SSEClient, eventType string) {
+		go func(c *Client, eventType string) {
 			for {
 				select {
 				case <-mc.Done:
@@ -231,7 +231,7 @@ func (h *SSEHub) RegisterMulti(mc *SSEMultiClient) []*SSEClient {
 						return
 					}
 					select {
-					case mc.Send <- SSETaggedEvent{EventType: eventType, Data: data}:
+					case mc.Send <- TaggedEvent{EventType: eventType, Data: data}:
 					case <-mc.Done:
 						return
 					}
@@ -243,14 +243,14 @@ func (h *SSEHub) RegisterMulti(mc *SSEMultiClient) []*SSEClient {
 }
 
 // UnregisterMulti removes all internal clients for a multi-client.
-func (h *SSEHub) UnregisterMulti(clients []*SSEClient) {
+func (h *Hub) UnregisterMulti(clients []*Client) {
 	for _, c := range clients {
 		h.Unregister(c)
 	}
 }
 
-// ServeSSEMulti writes tagged SSE events to the response from an SSEMultiClient.
-func ServeSSEMulti(w http.ResponseWriter, r *http.Request, mc *SSEMultiClient) {
+// ServeMulti writes tagged SSE events to the response from a MultiClient.
+func ServeMulti(w http.ResponseWriter, r *http.Request, mc *MultiClient) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)

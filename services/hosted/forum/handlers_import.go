@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	shared "github.com/forumline/forumline/shared-go"
+	"github.com/forumline/forumline/backend/auth"
 )
 
 // HandleImport imports forum data from a forumline export file.
@@ -15,7 +15,7 @@ func (h *Handlers) HandleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	if userID == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 		return

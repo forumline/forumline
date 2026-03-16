@@ -1,4 +1,4 @@
-package shared
+package valkey
 
 import (
 	"context"
@@ -9,13 +9,13 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// ValkeyPrefix namespaces all Forumline keys in Valkey to avoid collisions.
-const ValkeyPrefix = "fl:"
+// Prefix namespaces all Forumline keys in Valkey to avoid collisions.
+const Prefix = "fl:"
 
-// NewValkeyClient creates a Valkey (Redis-compatible) client from the VALKEY_URL
+// NewClient creates a Valkey (Redis-compatible) client from the VALKEY_URL
 // environment variable. Returns nil if VALKEY_URL is not set — callers must
 // handle nil gracefully (fall back to in-memory).
-func NewValkeyClient(ctx context.Context) *redis.Client {
+func NewClient(ctx context.Context) *redis.Client {
 	addr := os.Getenv("VALKEY_URL")
 	if addr == "" {
 		slog.Info("VALKEY_URL not set, Valkey caching disabled")
@@ -37,9 +37,9 @@ func NewValkeyClient(ctx context.Context) *redis.Client {
 	return client
 }
 
-// ValkeyKey builds a namespaced key: "fl:{parts[0]}:{parts[1]}:..."
-func ValkeyKey(parts ...string) string {
-	key := ValkeyPrefix
+// Key builds a namespaced key: "fl:{parts[0]}:{parts[1]}:..."
+func Key(parts ...string) string {
+	key := Prefix
 	for i, p := range parts {
 		if i > 0 {
 			key += ":"
@@ -49,16 +49,16 @@ func ValkeyKey(parts ...string) string {
 	return key
 }
 
-// ValkeyHealthy returns true if the client is non-nil and responds to PING.
-func ValkeyHealthy(ctx context.Context, client *redis.Client) bool {
+// Healthy returns true if the client is non-nil and responds to PING.
+func Healthy(ctx context.Context, client *redis.Client) bool {
 	if client == nil {
 		return false
 	}
 	return client.Ping(ctx).Err() == nil
 }
 
-// CloseValkey safely closes a Valkey client (nil-safe).
-func CloseValkey(client *redis.Client) {
+// Close safely closes a Valkey client (nil-safe).
+func Close(client *redis.Client) {
 	if client != nil {
 		if err := client.Close(); err != nil {
 			slog.Warn("Valkey close error", "err", err)
@@ -66,8 +66,8 @@ func CloseValkey(client *redis.Client) {
 	}
 }
 
-// ValkeyInfo logs the Valkey server info for diagnostics.
-func ValkeyInfo(ctx context.Context, client *redis.Client) {
+// Info logs the Valkey server info for diagnostics.
+func Info(ctx context.Context, client *redis.Client) {
 	if client == nil {
 		return
 	}

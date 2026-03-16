@@ -36,13 +36,13 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)
 
-  packages/client-sdk:
+  packages/frontend/client-sdk:
     dependencies:
       livekit-client:
         specifier: '>=2.0.0'
         version: 2.17.3(@types/dom-mediacapture-record@1.0.22)
 
-  packages/protocol:
+  packages/frontend/protocol:
     dependencies:
       zod:
         specifier: '>=3.23.0'
@@ -52,7 +52,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/server-sdk:
+  packages/frontend/server-sdk:
     dependencies:
       '@forumline/protocol':
         specifier: workspace:*
@@ -81,7 +81,7 @@ importers:
         version: 9.4.0(@dicebear/core@9.4.0)
       '@forumline/client-sdk':
         specifier: workspace:*
-        version: link:../../packages/client-sdk
+        version: link:../../packages/frontend/client-sdk
       livekit-client:
         specifier: ^2.17.2
         version: 2.17.3(@types/dom-mediacapture-record@1.0.22)

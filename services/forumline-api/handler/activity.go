@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/store"
-	shared "github.com/forumline/forumline/shared-go"
 )
 
 type ActivityHandler struct {
@@ -58,7 +58,7 @@ type activityItem struct {
 
 // HandleActivity handles GET /api/activity
 func (h *ActivityHandler) HandleActivity(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
+	userID := auth.UserIDFromContext(r.Context())
 	memberships, err := h.Store.ListMemberships(r.Context(), userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch memberships"})
