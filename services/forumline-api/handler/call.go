@@ -19,12 +19,11 @@ type LiveKitConfig struct {
 
 type CallHandler struct {
 	Service *service.CallService
-	SSEHub  *shared.SSEHub
 	LiveKit *LiveKitConfig
 }
 
-func NewCallHandler(svc *service.CallService, hub *shared.SSEHub, lk *LiveKitConfig) *CallHandler {
-	return &CallHandler{Service: svc, SSEHub: hub, LiveKit: lk}
+func NewCallHandler(svc *service.CallService, lk *LiveKitConfig) *CallHandler {
+	return &CallHandler{Service: svc, LiveKit: lk}
 }
 
 func (h *CallHandler) HandleInitiate(w http.ResponseWriter, r *http.Request) {
@@ -130,23 +129,3 @@ func (h *CallHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 
 func boolPtr(b bool) *bool { return &b }
 
-func (h *CallHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
-
-	client := &shared.SSEClient{
-		Channel: "call_signal",
-		FilterFunc: func(data map[string]interface{}) bool {
-			targetID, _ := data["target_user_id"].(string)
-			return targetID == userID
-		},
-		Send: make(chan []byte, 32),
-		Done: make(chan struct{}),
-	}
-
-	h.SSEHub.Register(client)
-	defer func() {
-		h.SSEHub.Unregister(client)
-		close(client.Done)
-	}()
-	shared.ServeSSE(w, r, client)
-}

@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -13,11 +12,10 @@ import (
 
 type ConversationHandler struct {
 	Service *service.ConversationService
-	SSEHub  *shared.SSEHub
 }
 
-func NewConversationHandler(svc *service.ConversationService, hub *shared.SSEHub) *ConversationHandler {
-	return &ConversationHandler{Service: svc, SSEHub: hub}
+func NewConversationHandler(svc *service.ConversationService) *ConversationHandler {
+	return &ConversationHandler{Service: svc}
 }
 
 func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request) {
@@ -151,40 +149,6 @@ func (h *ConversationHandler) HandleLeave(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
-}
-
-func (h *ConversationHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
-
-	client := &shared.SSEClient{
-		Channel: "dm_changes",
-		FilterFunc: func(data map[string]interface{}) bool {
-			memberIDs, ok := data["member_ids"]
-			if !ok {
-				return false
-			}
-			arr, ok := memberIDs.([]interface{})
-			if !ok {
-				return false
-			}
-			for _, id := range arr {
-				if fmt.Sprintf("%v", id) == userID {
-					return true
-				}
-			}
-			return false
-		},
-		Send: make(chan []byte, 32),
-		Done: make(chan struct{}),
-	}
-
-	h.SSEHub.Register(client)
-	defer func() {
-		h.SSEHub.Unregister(client)
-		close(client.Done)
-	}()
-
-	shared.ServeSSE(w, r, client)
 }
 
 // --- Legacy /api/dms/{userId} routes ---

@@ -31,17 +31,17 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	identityH := handler.NewIdentityHandler(s)
 	membershipH := handler.NewMembershipHandler(s, forumSvc)
 	forumH := handler.NewForumHandler(s, forumSvc)
-	convoH := handler.NewConversationHandler(convoSvc, sseHub)
+	convoH := handler.NewConversationHandler(convoSvc)
 	lkCfg := &handler.LiveKitConfig{
 		URL:       os.Getenv("LIVEKIT_URL"),
 		APIKey:    os.Getenv("LIVEKIT_API_KEY"),
 		APISecret: os.Getenv("LIVEKIT_API_SECRET"),
 	}
-	callH := handler.NewCallHandler(callSvc, sseHub, lkCfg)
+	callH := handler.NewCallHandler(callSvc, lkCfg)
 	eventsH := handler.NewEventsHandler(sseHub)
 	pushH := handler.NewPushHandler(s, pushSvc)
 	activityH := handler.NewActivityHandler(s)
-	notifH := handler.NewNotificationHandler(s, sseHub)
+	notifH := handler.NewNotificationHandler(s)
 	presenceH := handler.NewPresenceHandler(s, presence.NewTracker(90*time.Second))
 
 	// Middleware
@@ -62,7 +62,6 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("DELETE /api/memberships", use(membershipH.HandleLeave, auth))
 
 	// Conversations / DMs
-	mux.Handle("GET /api/conversations/stream", use(convoH.HandleStream, auth))
 	mux.Handle("GET /api/conversations", use(convoH.HandleList, auth))
 	mux.Handle("POST /api/conversations", use(convoH.HandleCreateGroup, auth))
 	mux.Handle("POST /api/conversations/dm", use(convoH.HandleGetOrCreateDM, auth))
@@ -78,7 +77,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("GET /api/dms/{userId}", use(convoH.HandleLegacyGetMessages, auth))
 	mux.Handle("POST /api/dms/{userId}", use(convoH.HandleLegacySendMessage, auth, dmRL))
 	mux.Handle("POST /api/dms/{userId}/read", use(convoH.HandleLegacyMarkRead, auth))
-	mux.Handle("GET /api/dms/{userId}/stream", use(convoH.HandleStream, auth))
+
 
 	// Forums
 	mux.HandleFunc("GET /api/forums", forumH.HandleListForums)
@@ -99,7 +98,6 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	mux.Handle("GET /api/activity", use(activityH.HandleActivity, auth))
 
 	// Notifications (local DB, pushed from forums)
-	mux.Handle("GET /api/notifications/stream", use(notifH.HandleStream, auth))
 	mux.Handle("GET /api/notifications", use(notifH.HandleNotifications, auth))
 	mux.Handle("GET /api/notifications/unread", use(notifH.HandleUnreadCount, auth))
 	mux.Handle("POST /api/notifications/read", use(notifH.HandleMarkRead, auth))
@@ -126,8 +124,7 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub) *http.ServeMux {
 	// Unified event stream (DMs + notifications + calls in one SSE connection)
 	mux.Handle("GET /api/events/stream", use(eventsH.HandleStream, auth))
 
-	// Calls (lifecycle via SSE, media via LiveKit)
-	mux.Handle("GET /api/calls/stream", use(callH.HandleStream, auth))
+	// Calls (media via LiveKit)
 	mux.Handle("POST /api/calls", use(callH.HandleInitiate, auth))
 	mux.Handle("POST /api/calls/{callId}/respond", use(callH.HandleRespond, auth))
 	mux.Handle("POST /api/calls/{callId}/end", use(callH.HandleEnd, auth))

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/forumline/forumline/services/forumline-api/store"
@@ -10,12 +9,11 @@ import (
 )
 
 type NotificationHandler struct {
-	Store  *store.Store
-	SSEHub *shared.SSEHub
+	Store *store.Store
 }
 
-func NewNotificationHandler(s *store.Store, hub *shared.SSEHub) *NotificationHandler {
-	return &NotificationHandler{Store: s, SSEHub: hub}
+func NewNotificationHandler(s *store.Store) *NotificationHandler {
+	return &NotificationHandler{Store: s}
 }
 
 type notificationResponse struct {
@@ -103,25 +101,3 @@ func (h *NotificationHandler) HandleUnreadCount(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]int{"count": count})
 }
 
-// HandleStream handles GET /api/notifications/stream (SSE).
-// Pushes new notifications in real-time via pg_notify.
-func (h *NotificationHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	userID := shared.UserIDFromContext(r.Context())
-
-	client := &shared.SSEClient{
-		Channel: "forumline_notification_changes",
-		FilterFunc: func(data map[string]interface{}) bool {
-			return fmt.Sprintf("%v", data["user_id"]) == userID
-		},
-		Send: make(chan []byte, 32),
-		Done: make(chan struct{}),
-	}
-
-	h.SSEHub.Register(client)
-	defer func() {
-		h.SSEHub.Unregister(client)
-		close(client.Done)
-	}()
-
-	shared.ServeSSE(w, r, client)
-}
