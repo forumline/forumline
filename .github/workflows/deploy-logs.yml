@@ -1,0 +1,20 @@
+name: Deploy Logs (VictoriaLogs + Docker Syslog)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/compose/logs/**'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy VictoriaLogs
+        run: ci/deploy.sh logs
+
+      - name: Configure Docker syslog on all LXCs
+        run: ci/deploy.sh logs-docker
