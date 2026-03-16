@@ -49,7 +49,8 @@ func newRouter(s *store.Store, sseHub *shared.SSEHub, valkey *redis.Client) *htt
 	auth := shared.AuthMiddleware
 
 	// Rate limiters — use Valkey when available, in-memory fallback otherwise
-	dmRL := shared.RateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 30, time.Minute))
+	// DMs are per-user (authenticated), webhooks are per-IP (service keys)
+	dmRL := shared.UserRateLimitMiddleware(shared.NewValkeyRateLimiter(valkey, 30, time.Minute))
 
 	// Auth routes (Zitadel handles login/signup, we just need session + logout)
 	mux.Handle("GET /api/auth/session", use(authH.HandleSession, auth))
