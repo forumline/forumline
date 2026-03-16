@@ -102,7 +102,7 @@ fi
 # Rebuild and restart
 if [ "$SERVICE" = "auth" ] || [ "$SERVICE" = "logs" ] || [ "$SERVICE" = "livekit" ]; then
   echo "Pulling and restarting..."
-  ssh "$HOST" "cd $REMOTE && docker compose pull && docker compose up -d --wait && docker compose ps"
+  ssh "$HOST" "cd $REMOTE && docker compose pull && docker compose up -d --force-recreate --wait && docker compose ps"
   # Post-provision configuration (SMTP, etc.)
   if [ "$SERVICE" = "auth" ]; then
     echo "Running Zitadel post-deploy configuration..."
