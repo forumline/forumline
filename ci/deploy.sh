@@ -20,11 +20,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ "$SERVICE" = "logs-docker" ]; then
   echo "=== Configuring Docker syslog logging on all LXCs ==="
   DAEMON_JSON="$REPO_ROOT/deploy/compose/logs/daemon.json"
-  for LXC_HOST in forumline-prod hosted-prod livekit-prod auth-prod; do
-    echo "Configuring $LXC_HOST..."
-    scp "$DAEMON_JSON" "$LXC_HOST:/etc/docker/daemon.json"
-    ssh "$LXC_HOST" "systemctl restart docker"
-    echo "$LXC_HOST: Docker restarted with syslog driver"
+  declare -A SYSLOG_HOSTS=(
+    [forumline-prod]="192.168.1.99"
+    [hosted-prod]="192.168.1.107"
+    [livekit-prod]="192.168.1.111"
+    [auth-prod]="192.168.1.110"
+  )
+  for LXC_NAME in "${!SYSLOG_HOSTS[@]}"; do
+    LXC_IP="${SYSLOG_HOSTS[$LXC_NAME]}"
+    echo "Configuring $LXC_NAME ($LXC_IP)..."
+    scp "$DAEMON_JSON" "root@$LXC_IP:/etc/docker/daemon.json"
+    ssh "root@$LXC_IP" "systemctl restart docker"
+    echo "$LXC_NAME: Docker restarted with syslog driver"
   done
   echo "=== All LXCs configured ==="
   exit 0
