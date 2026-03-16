@@ -20,12 +20,12 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate && npm install -g
 WORKDIR /app
 
 # Set up pnpm workspace so @forumline/client-sdk resolves
-COPY pnpm-workspace.yaml .
+COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY packages/client-sdk/ packages/client-sdk/
 COPY services/forumline-web/ services/forumline-web/
 
-WORKDIR /app/services/forumline-web
-RUN pnpm install --ignore-scripts && pnpm run build
+RUN pnpm install --ignore-scripts --frozen-lockfile && \
+    pnpm --filter forumline-central-services run build
 
 # ---- Production stage ----
 FROM alpine:3.21
