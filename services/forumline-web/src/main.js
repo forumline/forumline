@@ -45,12 +45,12 @@ import { closeAllDropdowns, initNav } from './components/nav.js';
 import { initRouter, pushState, consumePendingRoute } from './router.js';
 
 // API modules (from @forumline/client-sdk)
-import { ForumlineAPI, ForumlineAuth, EventStream, DmStore, PresenceTracker, ForumStore, ForumDiscoveryAPI, CallManager, Identity, PushNotifications, NativeBridge } from '@forumline/client-sdk';
+import { ForumlineAPI, ForumlineAuth, EventStream, DmStore, PresenceTracker, ForumStore, CallManager, PushNotifications, NativeBridge } from '@forumline/client-sdk';
 
 // UI modules that extend the SDK with DOM rendering
 import { initCallUI } from './api/call-ui.js';
 import { loginToForum } from './api/forum-webview.js';
-import { parseDeepLink, handleDeepLinkParams, checkUrlParams } from './api/deep-link.js';
+import { handleDeepLinkParams, checkUrlParams } from './api/deep-link.js';
 
 // ========== CORE VIEW MANAGEMENT ==========
 function showView(viewId) {
