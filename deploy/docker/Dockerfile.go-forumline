@@ -19,18 +19,14 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-# Copy workspace config and package sources
+# Copy workspace config and all source (inject-workspace-packages copies
+# files at install time, so source must be present before pnpm install)
 COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
-COPY packages/client-sdk/package.json packages/client-sdk/package.json
-COPY services/forumline-web/package.json services/forumline-web/package.json
-
-RUN pnpm install --ignore-scripts
-
-# Copy source files after deps are cached
 COPY packages/client-sdk/ packages/client-sdk/
 COPY services/forumline-web/ services/forumline-web/
 
-RUN cd services/forumline-web && npx vite build
+RUN pnpm install --ignore-scripts && \
+    cd services/forumline-web && npx vite build
 
 # ---- Production stage ----
 FROM alpine:3.21
