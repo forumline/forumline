@@ -19,13 +19,14 @@ RUN corepack enable && corepack prepare pnpm@10.6.5 --activate
 
 WORKDIR /app
 
-# Copy workspace config and all source upfront (inject-workspace-packages
-# copies files at install time, so source must exist before install)
-COPY pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+# Copy workspace config and all source
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/client-sdk/ packages/client-sdk/
 COPY services/forumline-web/ services/forumline-web/
 
-RUN pnpm install --ignore-scripts && \
+# Disable inject-workspace-packages for Docker (use symlinks instead)
+RUN echo "inject-workspace-packages=false" > .npmrc && \
+    pnpm install --ignore-scripts && \
     cd services/forumline-web && npx vite build
 
 # ---- Production stage ----
