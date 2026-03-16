@@ -4,7 +4,7 @@
 #
 # Usage: ci/deploy.sh <service>
 #
-# Services: forumline, hosted, website, logs, auth, livekit
+# Services: forumline, hosted, website, logs, auth, livekit, logs-docker
 #
 # Secrets are read from deploy/secrets.kdbx via ci/secrets.sh.
 # The master password comes from KEEPASS_PASSWORD env var (CI)
@@ -15,6 +15,20 @@ set -euo pipefail
 SERVICE="${1:?Usage: ci/deploy.sh <service>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- Configure Docker syslog logging on all service LXCs ---
+if [ "$SERVICE" = "logs-docker" ]; then
+  echo "=== Configuring Docker syslog logging on all LXCs ==="
+  DAEMON_JSON="$REPO_ROOT/deploy/compose/logs/daemon.json"
+  for LXC_HOST in forumline-prod hosted-prod livekit-prod auth-prod; do
+    echo "Configuring $LXC_HOST..."
+    scp "$DAEMON_JSON" "$LXC_HOST:/etc/docker/daemon.json"
+    ssh "$LXC_HOST" "systemctl restart docker"
+    echo "$LXC_HOST: Docker restarted with syslog driver"
+  done
+  echo "=== All LXCs configured ==="
+  exit 0
+fi
 
 # --- Website deploys to Cloudflare Pages (no LXC, no SSH) ---
 if [ "$SERVICE" = "website" ]; then
@@ -70,10 +84,6 @@ echo "Uploading docker-compose.yml..."
 scp "deploy/compose/$SERVICE/docker-compose.yml" "$HOST:$REMOTE/docker-compose.yml"
 
 # Upload extra config files
-if [ "$SERVICE" = "logs" ]; then
-  [ -f deploy/compose/logs/loki-config.yml ] && scp deploy/compose/logs/loki-config.yml "$HOST:$REMOTE/loki-config.yml"
-  [ -f deploy/compose/logs/users.yml ] && scp deploy/compose/logs/users.yml "$HOST:$REMOTE/users.yml"
-fi
 if [ "$SERVICE" = "livekit" ]; then
   echo "Uploading livekit.yaml..."
   scp deploy/compose/livekit/livekit.yaml "$HOST:$REMOTE/livekit.yaml"

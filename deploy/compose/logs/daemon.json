@@ -1,0 +1,8 @@
+{
+  "log-driver": "syslog",
+  "log-opts": {
+    "syslog-address": "tcp://192.168.1.108:1514",
+    "syslog-format": "rfc5424",
+    "tag": "{{.Name}}"
+  }
+}

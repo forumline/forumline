@@ -52,29 +52,25 @@ graph TB
             FL_API["Forumline API<br/>Go · stdlib ServeMux<br/>:3000"]
             FL_SPA["Forumline Web SPA<br/>Vanilla TS · Vite"]
             FL_PG[("Postgres 17<br/>forumline_* tables<br/>LISTEN/NOTIFY")]
-            FL_Vector["Vector 0.45.0"]
         end
 
         subgraph CT104["CT 104 · hosted-prod · 192.168.1.107"]
             Hosted_API["Hosted Server<br/>Go · Chi v5<br/>:3000"]
             Hosted_FE["Forum Frontend<br/>default tenant template"]
             Hosted_Citus[("Citus 13.0<br/>Schema-per-tenant<br/>platform_tenants")]
-            Hosted_Vector["Vector 0.45.0"]
         end
 
         subgraph CT106["CT 106 · livekit-prod · 192.168.1.111"]
             LK_Server["LiveKit Server<br/>v1.9.12 · SFU<br/>:7880"]
-            LK_Vector["Vector 0.45.0"]
         end
 
         subgraph CT107["CT 107 · auth-prod · 192.168.1.110"]
             Zitadel["Zitadel v4.11<br/>OIDC/OAuth2 Provider<br/>:8080"]
             Zitadel_PG[("Postgres 17<br/>Zitadel-managed")]
-            Auth_Vector["Vector 0.45.0"]
         end
 
         subgraph CT105["CT 105 · logs-prod · 192.168.1.108"]
-            VLogs["VictoriaLogs<br/>:9428 · 30-day retention<br/>LogsQL · vmui web UI"]
+            VLogs["VictoriaLogs<br/>:9428 HTTP · :1514 syslog<br/>30-day retention · LogsQL"]
         end
 
         subgraph CT109["CT 109 · ci · 192.168.1.112"]
@@ -142,12 +138,12 @@ graph TB
     FL_API -->|"VAPID Web Push"| Browser
 
     %% ═══════════════════════════════════════════════
-    %% CONNECTIONS — Log shipping
+    %% CONNECTIONS — Log shipping (Docker syslog driver → VictoriaLogs)
     %% ═══════════════════════════════════════════════
-    FL_Vector -->|"Loki push"| VLogs
-    Hosted_Vector -->|"Loki push"| VLogs
-    LK_Vector -->|"Loki push"| VLogs
-    Auth_Vector -->|"Loki push"| VLogs
+    CT101 -->|"syslog TCP"| VLogs
+    CT104 -->|"syslog TCP"| VLogs
+    CT106 -->|"syslog TCP"| VLogs
+    CT107 -->|"syslog TCP"| VLogs
 
     %% ═══════════════════════════════════════════════
     %% CONNECTIONS — CI/CD
@@ -201,7 +197,7 @@ Website:       Browser → Cloudflare DNS → Cloudflare Pages (static HTML/CSS)
 Voice Room:    Browser → LiveKit Cloud (SFU) ← Browser
 1:1 Call:      Browser → LiveKit Cloud (SFU) ← Browser  (call lifecycle via SSE)
 Push Notify:   Postgres NOTIFY → Go API → VAPID Web Push → Browser
-Log Pipeline:  Docker Container → Vector Agent → VictoriaLogs (:9428)
+Log Pipeline:  Docker Container → syslog driver → VictoriaLogs (:1514 TCP)
 Deploy:        git push → GitHub Actions → self-hosted runner → secrets.kdbx → SSH to LXC → docker compose up
 Website Deploy: git push → GitHub Actions → wrangler pages deploy → Cloudflare Pages
 Infra Change:  OpenTofu → Cloudflare (Tunnel + Zero Trust)

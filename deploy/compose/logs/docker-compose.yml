@@ -8,8 +8,10 @@ services:
       - -storageDataPath=/victoria-logs-data
       - -retentionPeriod=30d
       - -httpListenAddr=:9428
+      - -syslog.listenAddr.tcp=:1514
     ports:
       - "9428:9428"
+      - "1514:1514"
 
 volumes:
   victoria-logs-data:
