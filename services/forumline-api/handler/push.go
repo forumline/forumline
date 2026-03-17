@@ -23,7 +23,7 @@ func NewPushHandler(s *store.Store, ps *service.PushService) *PushHandler {
 func (h *PushHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	action := r.URL.Query().Get("action")
 	if action == "notify" && r.Method == http.MethodPost {
-		h.handleNotify(w, r)
+		h.HandleNotify(w, r)
 		return
 	}
 	if action == "subscribe" {
@@ -77,7 +77,8 @@ func (h *PushHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
 }
 
-func (h *PushHandler) handleNotify(w http.ResponseWriter, r *http.Request) {
+// HandleNotify handles POST /api/push?action=notify (service key auth).
+func (h *PushHandler) HandleNotify(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Missing authorization"})

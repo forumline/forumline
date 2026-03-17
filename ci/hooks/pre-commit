@@ -57,10 +57,18 @@ fi
 run_check "api-gen-check" \
   "services/forumline-api/openapi\.yaml$" \
   bash -c '
+    # Regenerate TypeScript client
     pnpm --filter @forumline/client-sdk generate --silent 2>/dev/null
     if ! git diff --quiet packages/frontend/client-sdk/src/api.gen.ts; then
       echo "api.gen.ts is stale — run: pnpm --filter @forumline/client-sdk generate" >&2
       echo "Then re-stage api.gen.ts alongside the openapi.yaml change." >&2
+      exit 1
+    fi
+    # Regenerate Go server
+    cd services/forumline-api && oapi-codegen --config oapi-codegen.yaml openapi.yaml >/dev/null 2>&1
+    if ! git diff --quiet oapi/server.gen.go; then
+      echo "oapi/server.gen.go is stale — run: cd services/forumline-api && oapi-codegen --config oapi-codegen.yaml openapi.yaml" >&2
+      echo "Then re-stage oapi/server.gen.go alongside the openapi.yaml change." >&2
       exit 1
     fi
   '

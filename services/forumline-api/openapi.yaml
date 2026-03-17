@@ -1184,24 +1184,17 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - type: object
-                  required: [endpoint, keys]
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint:
+                  type: string
+                keys:
+                  type: object
                   properties:
-                    endpoint:
+                    p256dh:
                       type: string
-                    keys:
-                      type: object
-                      required: [p256dh, auth]
-                      properties:
-                        p256dh:
-                          type: string
-                        auth:
-                          type: string
-                - type: object
-                  required: [endpoint]
-                  properties:
-                    endpoint:
+                    auth:
                       type: string
       responses:
         '200':

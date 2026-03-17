@@ -1,0 +1,281 @@
+package main
+
+// helpers.go contains business logic extracted from handler/ for use by StrictServer.
+// When the handler/ package is eventually removed, these can move to service/.
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	lkauth "github.com/livekit/protocol/auth"
+
+	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/store"
+)
+
+// --- Activity feed ---
+
+type activityThread struct {
+	ID         string           `json:"id"`
+	Title      string           `json:"title"`
+	PostCount  int              `json:"post_count"`
+	LastPostAt *string          `json:"last_post_at"`
+	CreatedAt  string           `json:"created_at"`
+	Author     activityAuthor   `json:"author"`
+	Category   activityCategory `json:"category"`
+}
+
+type activityAuthor struct {
+	Username    string  `json:"username"`
+	DisplayName *string `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+}
+
+type activityCategory struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+type activityItem struct {
+	ThreadID    string  `json:"thread_id"`
+	ThreadTitle string  `json:"thread_title"`
+	Author      string  `json:"author"`
+	AvatarURL   *string `json:"avatar_url"`
+	Action      string  `json:"action"`
+	ForumName   string  `json:"forum_name"`
+	ForumDomain string  `json:"forum_domain"`
+	Category    string  `json:"category"`
+	Timestamp   string  `json:"timestamp"`
+}
+
+// fetchActivityItems fetches recent thread activity from each joined forum concurrently.
+func fetchActivityItems(ctx context.Context, memberships []model.Membership) ([]activityItem, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var mu sync.Mutex
+	var items []activityItem
+	var wg sync.WaitGroup
+
+	for _, m := range memberships {
+		wg.Add(1)
+		go func(webBase, forumName, forumDomain string) {
+			defer wg.Done()
+			threads, err := fetchForumThreads(ctx, webBase)
+			if err != nil {
+				log.Printf("[activity] failed to fetch threads from %s: %v", forumDomain, err)
+				return
+			}
+			mu.Lock()
+			for _, t := range threads {
+				action := "posted"
+				ts := t.CreatedAt
+				if t.PostCount > 0 && t.LastPostAt != nil {
+					action = "active"
+					ts = *t.LastPostAt
+				}
+				author := t.Author.Username
+				if t.Author.DisplayName != nil && *t.Author.DisplayName != "" {
+					author = *t.Author.DisplayName
+				}
+				items = append(items, activityItem{
+					ThreadID:    t.ID,
+					ThreadTitle: t.Title,
+					Author:      author,
+					AvatarURL:   t.Author.AvatarURL,
+					Action:      action,
+					ForumName:   forumName,
+					ForumDomain: forumDomain,
+					Category:    t.Category.Name,
+					Timestamp:   ts,
+				})
+			}
+			mu.Unlock()
+		}(m.WebBase, m.ForumName, m.ForumDomain)
+	}
+
+	wg.Wait()
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Timestamp > items[j].Timestamp
+	})
+	if len(items) > 20 {
+		items = items[:20]
+	}
+	if items == nil {
+		items = []activityItem{}
+	}
+	return items, nil
+}
+
+func fetchForumThreads(ctx context.Context, webBase string) ([]activityThread, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", webBase+"/api/threads?limit=10", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+	var threads []activityThread
+	if err := json.NewDecoder(resp.Body).Decode(&threads); err != nil {
+		return nil, err
+	}
+	return threads, nil
+}
+
+// --- Profile auto-provisioning ---
+
+var zitadelUserinfoURL string
+
+func init() {
+	if u := os.Getenv("ZITADEL_URL"); u != "" {
+		zitadelUserinfoURL = u + "/oidc/v1/userinfo"
+	}
+}
+
+// provisionProfileFromZitadel fetches user info from Zitadel and creates a local profile.
+func provisionProfileFromZitadel(ctx context.Context, s *store.Store, userID, authHeader string) (*model.Profile, error) {
+	if zitadelUserinfoURL == "" {
+		return nil, fmt.Errorf("ZITADEL_URL not set")
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", zitadelUserinfoURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("userinfo request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("userinfo returned %d", resp.StatusCode)
+	}
+	var info struct {
+		Sub               string `json:"sub"`
+		PreferredUsername string `json:"preferred_username"`
+		Name              string `json:"name"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		Picture           string `json:"picture"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode userinfo: %w", err)
+	}
+	username := info.PreferredUsername
+	if username == "" {
+		username = "user_" + userID[len(userID)-6:]
+	}
+	displayName := info.Name
+	if displayName == "" {
+		displayName = strings.TrimSpace(info.GivenName + " " + info.FamilyName)
+	}
+	if displayName == "" {
+		displayName = username
+	}
+	if exists, _ := s.UsernameExists(ctx, username); exists {
+		username = username + "_" + userID[len(userID)-4:]
+	}
+	if err := s.CreateProfile(ctx, userID, username, displayName, info.Picture); err != nil {
+		return nil, fmt.Errorf("create profile: %w", err)
+	}
+	return &model.Profile{
+		ID: userID, Username: username, DisplayName: displayName,
+		StatusMessage: "", OnlineStatus: "online", ShowOnlineStatus: true,
+	}, nil
+}
+
+// --- LiveKit token ---
+
+func generateLiveKitToken(apiKey, apiSecret, callID, userID string, s *store.Store, ctx context.Context) (string, error) {
+	profile, _ := s.GetProfile(ctx, userID)
+	participantName := userID
+	if profile != nil {
+		if profile.DisplayName != "" {
+			participantName = profile.DisplayName
+		} else {
+			participantName = profile.Username
+		}
+	}
+
+	boolTrue := true
+	at := lkauth.NewAccessToken(apiKey, apiSecret)
+	grant := &lkauth.VideoGrant{
+		Room:         "call-" + callID,
+		RoomJoin:     true,
+		CanPublish:   &boolTrue,
+		CanSubscribe: &boolTrue,
+	}
+	at.SetVideoGrant(grant).
+		SetIdentity(userID).
+		SetName(participantName).
+		SetValidFor(time.Hour)
+
+	return at.ToJWT()
+}
+
+// --- Forum provisioning ---
+
+// hostedPlatformURL is the URL for the hosted platform provisioning API.
+var hostedPlatformURL string //nolint:gosec // Not a credential — this is a URL constant.
+
+func init() {
+	hostedPlatformURL = os.Getenv("HOSTED_PLATFORM_URL")
+	if hostedPlatformURL == "" {
+		hostedPlatformURL = "https://hosted.forumline.net"
+	}
+}
+
+// provisionHostedForum calls the hosted platform to create the actual forum tenant.
+func provisionHostedForum(ctx context.Context, authHeader, userID, slug, name, description string) error {
+	body := map[string]string{"slug": slug, "name": name, "description": description}
+	bodyJSON, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, "POST", hostedPlatformURL+"/api/platform/forums", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forumline-ID", userID)
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is from trusted env var, not user input.
+	if err != nil {
+		return fmt.Errorf("provision request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("hosted platform returned %d: %s", resp.StatusCode, string(respBody))
+	}
+	log.Printf("[Forums] provisioned hosted forum: slug=%s", slug)
+	return nil
+}
+
+// --- Generic helpers ---
+
+// derefStrSlice dereferences a *[]string, returning nil if the pointer is nil.
+func derefStrSlice(p *[]string) []string {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
