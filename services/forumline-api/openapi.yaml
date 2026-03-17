@@ -1,0 +1,1300 @@
+openapi: 3.0.3
+info:
+  title: Forumline API
+  description: The Forumline platform hub — DMs, forums, memberships, notifications, calls, and presence.
+  version: 1.0.0
+servers:
+  - url: https://app.forumline.net
+    description: Production
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    serviceKey:
+      type: http
+      scheme: bearer
+      description: Service account PAT for forum-to-platform calls
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    Profile:
+      type: object
+      required: [forumline_id, username, display_name, avatar_url, status_message, online_status, show_online_status]
+      properties:
+        forumline_id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+        bio:
+          type: string
+        status_message:
+          type: string
+        online_status:
+          type: string
+          enum: [online, away, offline]
+        show_online_status:
+          type: boolean
+
+    ProfileSearchResult:
+      type: object
+      required: [id, username]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+
+    Forum:
+      type: object
+      required: [id, domain, name, api_base, web_base, capabilities, tags, member_count, approved]
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        name:
+          type: string
+        icon_url:
+          type: string
+          nullable: true
+        api_base:
+          type: string
+        web_base:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+          nullable: true
+        screenshot_url:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        member_count:
+          type: integer
+        owner_id:
+          type: string
+          nullable: true
+        approved:
+          type: boolean
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        consecutive_failures:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Membership:
+      type: object
+      required: [forum_domain, forum_name, api_base, web_base, capabilities, member_count, joined_at, notifications_muted]
+      properties:
+        forum_domain:
+          type: string
+        forum_name:
+          type: string
+        forum_icon_url:
+          type: string
+          nullable: true
+        api_base:
+          type: string
+        web_base:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        member_count:
+          type: integer
+        joined_at:
+          type: string
+        forum_authed_at:
+          type: string
+          nullable: true
+        notifications_muted:
+          type: boolean
+
+    ConversationMember:
+      type: object
+      required: [id, username, displayName, avatarUrl]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+
+    Conversation:
+      type: object
+      required: [id, isGroup, name, members, lastMessage, lastMessageTime, unreadCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        isGroup:
+          type: boolean
+        name:
+          type: string
+          nullable: true
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMember'
+        lastMessage:
+          type: string
+        lastMessageTime:
+          type: string
+        unreadCount:
+          type: integer
+
+    DirectMessage:
+      type: object
+      required: [id, conversation_id, sender_id, content, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CallRecord:
+      type: object
+      required: [id, conversation_id, caller_id, callee_id, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        caller_id:
+          type: string
+        callee_id:
+          type: string
+        status:
+          type: string
+          enum: [ringing, active, completed, declined, missed]
+        started_at:
+          type: string
+          nullable: true
+        ended_at:
+          type: string
+          nullable: true
+        duration_seconds:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+
+    Notification:
+      type: object
+      required: [id, type, title, body, link, read, timestamp, forum_domain, forum_name]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [reply, mention, chat_mention, dm, custom]
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+        read:
+          type: boolean
+        timestamp:
+          type: string
+        forum_domain:
+          type: string
+        forum_name:
+          type: string
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+
+    ActivityItem:
+      type: object
+      required: [thread_id, thread_title, author, action, forum_name, forum_domain, category, timestamp]
+      properties:
+        thread_id:
+          type: string
+        thread_title:
+          type: string
+        author:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        action:
+          type: string
+          enum: [posted, active]
+        forum_name:
+          type: string
+        forum_domain:
+          type: string
+        category:
+          type: string
+        timestamp:
+          type: string
+
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      security: []
+      tags: [Health]
+      responses:
+        '200':
+          description: Server is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+
+  /api/auth/session:
+    get:
+      operationId: getSession
+      summary: Get current auth session
+      tags: [Auth]
+      responses:
+        '200':
+          description: Authenticated user session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/logout:
+    post:
+      operationId: logout
+      summary: Log out
+      security: []
+      tags: [Auth]
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: string
+
+  /api/identity:
+    get:
+      operationId: getIdentity
+      summary: Get current user's profile
+      tags: [Identity]
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+    put:
+      operationId: updateIdentity
+      summary: Update current user's profile
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                status_message:
+                  type: string
+                online_status:
+                  type: string
+                  enum: [online, away, offline]
+                show_online_status:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+    delete:
+      operationId: deleteIdentity
+      summary: Delete current user's account
+      tags: [Identity]
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+
+  /api/profiles/search:
+    get:
+      operationId: searchProfiles
+      summary: Search user profiles by username or display name
+      tags: [Identity]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileSearchResult'
+
+  /api/forums:
+    get:
+      operationId: listForums
+      summary: List/search public forums
+      security: []
+      tags: [Forums]
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Forum list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Forum'
+    post:
+      operationId: registerForum
+      summary: Register a new forum
+      tags: [Forums]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain, name, api_base, web_base, capabilities]
+              properties:
+                domain:
+                  type: string
+                name:
+                  type: string
+                api_base:
+                  type: string
+                web_base:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+                description:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Forum registered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [forum_id, approved, message]
+                properties:
+                  forum_id:
+                    type: string
+                  approved:
+                    type: boolean
+                  message:
+                    type: string
+    delete:
+      operationId: deleteForum
+      summary: Delete a forum
+      tags: [Forums]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain]
+              properties:
+                forum_domain:
+                  type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, members_removed]
+                properties:
+                  ok:
+                    type: boolean
+                  members_removed:
+                    type: integer
+
+  /api/forums/tags:
+    get:
+      operationId: listForumTags
+      summary: List all forum tags
+      security: []
+      tags: [Forums]
+      responses:
+        '200':
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /api/forums/recommended:
+    get:
+      operationId: getRecommendedForums
+      summary: Get personalized forum recommendations
+      tags: [Forums]
+      responses:
+        '200':
+          description: Recommended forums
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Forum'
+
+  /api/forums/owned:
+    get:
+      operationId: getOwnedForums
+      summary: Get forums owned by current user
+      tags: [Forums]
+      responses:
+        '200':
+          description: Owned forums
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Forum'
+
+  /api/memberships:
+    get:
+      operationId: getMemberships
+      summary: List current user's forum memberships
+      tags: [Memberships]
+      responses:
+        '200':
+          description: Memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Membership'
+    post:
+      operationId: updateMembershipAuth
+      summary: Update forum auth state for a membership
+      tags: [Memberships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain, authed]
+              properties:
+                forum_domain:
+                  type: string
+                authed:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+    put:
+      operationId: toggleMembershipMute
+      summary: Toggle notification muting for a membership
+      tags: [Memberships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain, muted]
+              properties:
+                forum_domain:
+                  type: string
+                muted:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+    delete:
+      operationId: leaveForum
+      summary: Leave a forum
+      tags: [Memberships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain]
+              properties:
+                forum_domain:
+                  type: string
+      responses:
+        '200':
+          description: Left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/memberships/join:
+    post:
+      operationId: joinForum
+      summary: Join a forum by domain
+      tags: [Memberships]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain]
+              properties:
+                forum_domain:
+                  type: string
+      responses:
+        '200':
+          description: Joined — returns membership details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+
+  /api/conversations:
+    get:
+      operationId: listConversations
+      summary: List all conversations for the current user
+      tags: [Conversations]
+      responses:
+        '200':
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
+    post:
+      operationId: createGroupConversation
+      summary: Create a group conversation
+      tags: [Conversations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberIds]
+              properties:
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+
+  /api/conversations/dm:
+    post:
+      operationId: getOrCreateDM
+      summary: Get or create a 1:1 DM conversation
+      tags: [Conversations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: string
+      responses:
+        '200':
+          description: Conversation ID
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+
+  /api/conversations/{conversationId}:
+    get:
+      operationId: getConversation
+      summary: Get a conversation by ID
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      operationId: updateConversation
+      summary: Update a conversation (rename, add/remove members)
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  nullable: true
+                addMembers:
+                  type: array
+                  items:
+                    type: string
+                removeMembers:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/conversations/{conversationId}/messages:
+    get:
+      operationId: getMessages
+      summary: Get messages in a conversation
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: before
+          in: query
+          schema:
+            type: string
+          description: Cursor — return messages created before this message ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectMessage'
+    post:
+      operationId: sendMessage
+      summary: Send a message in a conversation
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectMessage'
+
+  /api/conversations/{conversationId}/read:
+    post:
+      operationId: markConversationRead
+      summary: Mark all messages in a conversation as read
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/conversations/{conversationId}/members/me:
+    delete:
+      operationId: leaveConversation
+      summary: Leave a conversation
+      tags: [Conversations]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Left
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/notifications:
+    get:
+      operationId: getNotifications
+      summary: Get notifications for current user
+      tags: [Notifications]
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /api/notifications/unread:
+    get:
+      operationId: getUnreadCount
+      summary: Get unread notification count
+      tags: [Notifications]
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCount'
+
+  /api/notifications/read:
+    post:
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark all notifications as read
+      tags: [Notifications]
+      responses:
+        '200':
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/activity:
+    get:
+      operationId: getActivity
+      summary: Get recent activity feed across all joined forums
+      tags: [Activity]
+      responses:
+        '200':
+          description: Activity items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityItem'
+
+  /api/presence/heartbeat:
+    post:
+      operationId: presenceHeartbeat
+      summary: Send presence heartbeat
+      tags: [Presence]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/presence/status:
+    get:
+      operationId: getPresenceStatus
+      summary: Batch-fetch online status for a list of user IDs
+      tags: [Presence]
+      parameters:
+        - name: userIds
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated list of user IDs
+      responses:
+        '200':
+          description: Online status map
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+
+  /api/events/stream:
+    get:
+      operationId: getEventStream
+      summary: Server-sent event stream (DMs, notifications, calls)
+      tags: [Events]
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/calls:
+    post:
+      operationId: initiateCall
+      summary: Initiate a call in a conversation
+      tags: [Calls]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id]
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Call created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallRecord'
+
+  /api/calls/{callId}/respond:
+    post:
+      operationId: respondToCall
+      summary: Accept or decline a call
+      tags: [Calls]
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [accept, decline]
+      responses:
+        '200':
+          description: Response recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+
+  /api/calls/{callId}/end:
+    post:
+      operationId: endCall
+      summary: End an active call
+      tags: [Calls]
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Call ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+
+  /api/calls/{callId}/token:
+    post:
+      operationId: getCallToken
+      summary: Get a LiveKit access token for a call
+      tags: [Calls]
+      parameters:
+        - name: callId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: LiveKit token and URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, url]
+                properties:
+                  token:
+                    type: string
+                  url:
+                    type: string
+
+  /api/push:
+    post:
+      operationId: managePushSubscription
+      summary: Subscribe or unsubscribe from push notifications
+      tags: [Push]
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [subscribe, unsubscribe]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [endpoint, keys]
+                  properties:
+                    endpoint:
+                      type: string
+                    keys:
+                      type: object
+                      required: [p256dh, auth]
+                      properties:
+                        p256dh:
+                          type: string
+                        auth:
+                          type: string
+                - type: object
+                  required: [endpoint]
+                  properties:
+                    endpoint:
+                      type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/webhooks/notification:
+    post:
+      operationId: webhookNotification
+      summary: Forum → Forumline single notification push
+      tags: [Webhooks]
+      security:
+        - serviceKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain, forumline_user_id, type, title, body, link]
+              properties:
+                forum_domain:
+                  type: string
+                forumline_user_id:
+                  type: string
+                type:
+                  type: string
+                  enum: [reply, mention, chat_mention, dm, custom]
+                title:
+                  type: string
+                body:
+                  type: string
+                link:
+                  type: string
+      responses:
+        '200':
+          description: Notification queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+
+  /api/webhooks/notifications:
+    post:
+      operationId: webhookNotificationBatch
+      summary: Forum → Forumline batch notification push
+      tags: [Webhooks]
+      security:
+        - serviceKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [forum_domain, forum_name, items]
+              properties:
+                forum_domain:
+                  type: string
+                forum_name:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [forumline_user_id, type, title, body, link]
+                    properties:
+                      forumline_user_id:
+                        type: string
+                      type:
+                        type: string
+                        enum: [reply, mention, chat_mention, dm, custom]
+                      title:
+                        type: string
+                      body:
+                        type: string
+                      link:
+                        type: string
+      responses:
+        '200':
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [inserted]
+                properties:
+                  inserted:
+                    type: integer

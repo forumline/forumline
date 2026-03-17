@@ -155,8 +155,8 @@ export function startNotificationUpdates() {
 
   // Fetch unread count for badge
   ForumlineAPI.getUnreadCount()
-    .then(data => {
-      updateBadge(data.count);
+    .then(count => {
+      updateBadge(count);
     })
     .catch(() => {});
 

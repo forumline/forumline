@@ -54,6 +54,17 @@ if command -v gitleaks >/dev/null 2>&1; then
     gitleaks protect --staged --no-banner -c ci/.gitleaks.toml
 fi
 
+run_check "api-gen-check" \
+  "services/forumline-api/openapi\.yaml$" \
+  bash -c '
+    pnpm --filter @forumline/client-sdk generate --silent 2>/dev/null
+    if ! git diff --quiet packages/frontend/client-sdk/src/api.gen.ts; then
+      echo "api.gen.ts is stale — run: pnpm --filter @forumline/client-sdk generate" >&2
+      echo "Then re-stage api.gen.ts alongside the openapi.yaml change." >&2
+      exit 1
+    fi
+  '
+
 run_check "biome" \
   "(services/forumline-web|packages/frontend|services/hosted/src)/.*\.(ts|tsx|js|mjs)$" \
   pnpm lint

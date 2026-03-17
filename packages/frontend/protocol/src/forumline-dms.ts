@@ -45,6 +45,6 @@ export interface ForumlineDmConversation {
 export interface ForumlineProfile {
   id: string;
   username: string;
-  display_name: string;
+  display_name: string | null;
   avatar_url: string | null;
 }

@@ -13,14 +13,13 @@
  * ```
  */
 
-import type { ForumlineDmConversation } from '@forumline/protocol';
-import { ForumlineAPI } from './client.js';
+import { ForumlineAPI, type Conversation } from './client.js';
 import { EventStream } from './event-stream.js';
 
 type ChangeListener = () => void;
 type Unsubscribe = () => void;
 
-let conversations: ForumlineDmConversation[] = [];
+let conversations: Conversation[] = [];
 let initialLoad = true;
 let loadError = false;
 let unreadCount = 0;
@@ -31,7 +30,7 @@ let refCount = 0;
 const changeListeners = new Set<ChangeListener>();
 
 /** Get the current list of DM conversations (sorted by last message time). */
-function getConversations(): ForumlineDmConversation[] {
+function getConversations(): Conversation[] {
   return conversations;
 }
 

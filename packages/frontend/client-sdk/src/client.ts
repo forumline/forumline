@@ -11,13 +11,8 @@
  * ```
  */
 
-import type {
-  ForumlineDirectMessage,
-  ForumlineDmConversation,
-  ForumlineProfile,
-  ForumNotification,
-  UnreadCounts,
-} from '@forumline/protocol';
+import createClient, { type Middleware } from 'openapi-fetch';
+import type { paths } from './api.gen.js';
 
 /** Options for {@link ForumlineAPI.configure}. All fields are optional — only provided fields are updated. */
 export interface ConfigureOptions {
@@ -38,12 +33,34 @@ let _accessToken: string | null = null;
 let _userId: string | null = null;
 let _baseUrl = '';
 
+// Rebuild the client whenever config changes
+let _client = createClient<paths>({ baseUrl: _baseUrl });
+
+const authMiddleware: Middleware = {
+  async onRequest({ request }) {
+    if (_accessToken) {
+      request.headers.set('Authorization', `Bearer ${_accessToken}`);
+    }
+    return request;
+  },
+};
+
+_client.use(authMiddleware);
+
+function rebuildClient(): void {
+  _client = createClient<paths>({ baseUrl: _baseUrl });
+  _client.use(authMiddleware);
+}
+
 /**
  * Set the API base URL, access token, and/or user ID.
  * Typically called once after authentication succeeds.
  */
 function configure({ baseUrl, accessToken, userId }: ConfigureOptions): void {
-  if (baseUrl !== undefined) _baseUrl = baseUrl;
+  if (baseUrl !== undefined) {
+    _baseUrl = baseUrl;
+    rebuildClient();
+  }
   if (accessToken !== undefined) _accessToken = accessToken ?? null;
   if (userId !== undefined) _userId = userId ?? null;
 }
@@ -64,13 +81,8 @@ function isAuthenticated(): boolean {
 }
 
 /**
- * Authenticated fetch wrapper. Automatically injects the Bearer token and
- * Content-Type header. Parses JSON responses.
- *
- * @typeParam T - Expected response body type.
- * @param path - API path relative to the configured base URL (e.g. `/api/conversations`).
- * @param options - Standard fetch options plus an optional `silent` flag.
- * @throws {Error} If not authenticated or the server returns a non-2xx status.
+ * Low-level authenticated fetch for paths not yet in the OpenAPI spec.
+ * @deprecated Prefer typed methods; this is for migration transitional use only.
  */
 async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   if (!_accessToken) throw new Error('Not authenticated');
@@ -86,7 +98,7 @@ async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `API error: ${res.status}`);
+      throw new Error((err as { error?: string }).error || `API error: ${res.status}`);
     }
     const text = await res.text();
     return (text ? JSON.parse(text) : null) as T;
@@ -96,6 +108,30 @@ async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}
   }
 }
 
+async function unwrap<T>(promise: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
+  const { data, error, response } = await promise;
+  if (error || !data) {
+    const msg = (error as { error?: string } | undefined)?.error ?? `API error: ${response.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// --- Conversations ---
+
+export type Conversation = paths['/api/conversations']['get']['responses']['200']['content']['application/json'][number];
+export type DirectMessage = paths['/api/conversations/{conversationId}/messages']['get']['responses']['200']['content']['application/json'][number];
+
+/** Fetch all DM conversations for the current user. */
+function getConversations(): Promise<Conversation[]> {
+  return unwrap(_client.GET('/api/conversations'));
+}
+
+/** Fetch a single conversation by ID, including member list. */
+function getConversation(id: string): Promise<Conversation> {
+  return unwrap(_client.GET('/api/conversations/{conversationId}', { params: { path: { conversationId: id } } }));
+}
+
 export interface GetMessagesOpts {
   /** Cursor — return messages created before this message ID. */
   before?: string;
@@ -103,32 +139,17 @@ export interface GetMessagesOpts {
   limit?: number;
 }
 
-export interface ConversationUpdates {
-  /** New display name for the conversation. */
-  name?: string;
-}
-
-/** Fetch all DM conversations for the current user. */
-function getConversations(): Promise<ForumlineDmConversation[]> {
-  return apiFetch('/api/conversations');
-}
-
-/** Fetch a single conversation by ID, including member list. */
-function getConversation(id: string): Promise<ForumlineDmConversation> {
-  return apiFetch(`/api/conversations/${id}`);
-}
-
 /**
  * Fetch messages in a conversation with optional cursor-based pagination.
  * @param id - Conversation ID.
  * @param opts - Pagination options (`before` cursor, `limit`).
  */
-function getMessages(id: string, opts: GetMessagesOpts = {}): Promise<ForumlineDirectMessage[]> {
-  const params = new URLSearchParams();
-  if (opts.before) params.set('before', opts.before);
-  if (opts.limit) params.set('limit', String(opts.limit));
-  const qs = params.toString();
-  return apiFetch(`/api/conversations/${id}/messages${qs ? '?' + qs : ''}`);
+function getMessages(id: string, opts: GetMessagesOpts = {}): Promise<DirectMessage[]> {
+  return unwrap(
+    _client.GET('/api/conversations/{conversationId}/messages', {
+      params: { path: { conversationId: id }, query: { before: opts.before, limit: opts.limit } },
+    }),
+  );
 }
 
 /**
@@ -136,28 +157,35 @@ function getMessages(id: string, opts: GetMessagesOpts = {}): Promise<ForumlineD
  * @param id - Conversation ID.
  * @param content - Message body text.
  */
-function sendMessage(id: string, content: string): Promise<ForumlineDirectMessage> {
-  return apiFetch(`/api/conversations/${id}/messages`, {
-    method: 'POST',
-    body: JSON.stringify({ content }),
-  });
+function sendMessage(id: string, content: string): Promise<DirectMessage> {
+  return unwrap(
+    _client.POST('/api/conversations/{conversationId}/messages', {
+      params: { path: { conversationId: id } },
+      body: { content },
+    }),
+  );
 }
 
 /** Mark all messages in a conversation as read. */
 function markRead(id: string): Promise<void> {
-  return apiFetch(`/api/conversations/${id}/read`, { method: 'POST', silent: true });
+  return unwrap(
+    _client.POST('/api/conversations/{conversationId}/read', { params: { path: { conversationId: id } } }),
+  ).then(() => undefined);
 }
 
 /**
  * Get or create a 1:1 DM conversation with another user.
- * Returns the existing conversation if one already exists.
+ * Returns the conversation ID.
  * @param userId - The other user's ID.
  */
-function getOrCreateDM(userId: string): Promise<ForumlineDmConversation> {
-  return apiFetch('/api/conversations/dm', {
-    method: 'POST',
-    body: JSON.stringify({ userId }),
-  });
+function getOrCreateDM(userId: string): Promise<string> {
+  return unwrap(_client.POST('/api/conversations/dm', { body: { userId } })).then((r) => r.id);
+}
+
+export interface ConversationUpdates {
+  name?: string | null;
+  addMembers?: string[];
+  removeMembers?: string[];
 }
 
 /**
@@ -165,93 +193,88 @@ function getOrCreateDM(userId: string): Promise<ForumlineDmConversation> {
  * @param memberIds - Array of user IDs to include (besides the current user).
  * @param name - Optional display name for the group.
  */
-function createGroupConversation(
-  memberIds: string[],
-  name?: string,
-): Promise<ForumlineDmConversation> {
-  return apiFetch('/api/conversations', {
-    method: 'POST',
-    body: JSON.stringify({ memberIds, name }),
-  });
+function createGroupConversation(memberIds: string[], name?: string): Promise<Conversation> {
+  return unwrap(_client.POST('/api/conversations', { body: { memberIds, name } }));
 }
 
 /**
- * Update a conversation's metadata (e.g. rename a group).
+ * Update a conversation's metadata (e.g. rename a group, add/remove members).
  * @param id - Conversation ID.
  * @param updates - Fields to update.
  */
 function updateConversation(id: string, updates: ConversationUpdates): Promise<void> {
-  return apiFetch(`/api/conversations/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
+  return unwrap(
+    _client.PATCH('/api/conversations/{conversationId}', {
+      params: { path: { conversationId: id } },
+      body: updates,
+    }),
+  ).then(() => undefined);
 }
 
-/** Leave a group conversation. Cannot be undone. */
+/** Leave a group conversation. */
 function leaveConversation(id: string): Promise<void> {
-  return apiFetch(`/api/conversations/${id}/leave`, { method: 'POST' });
+  return unwrap(
+    _client.DELETE('/api/conversations/{conversationId}/members/me', {
+      params: { path: { conversationId: id } },
+    }),
+  ).then(() => undefined);
 }
+
+// --- Identity / Profiles ---
+
+export type ProfileSearchResult = paths['/api/profiles/search']['get']['responses']['200']['content']['application/json'][number];
 
 /** Search user profiles by username or display name. */
-function searchProfiles(query: string): Promise<ForumlineProfile[]> {
-  return apiFetch(`/api/profiles/search?q=${encodeURIComponent(query)}`);
+function searchProfiles(query: string): Promise<ProfileSearchResult[]> {
+  return unwrap(_client.GET('/api/profiles/search', { params: { query: { q: query } } }));
 }
 
-/** Search identities across the Forumline network by username or display name. */
-function searchIdentity(query: string): Promise<ForumlineProfile[]> {
-  return apiFetch(`/api/identity/search?q=${encodeURIComponent(query)}`);
-}
+// --- Activity ---
 
-interface ActivityItem {
-  id: string;
-  type: string;
-  [key: string]: unknown;
-}
+export type ActivityItem = paths['/api/activity']['get']['responses']['200']['content']['application/json'][number];
 
 /** Fetch the current user's recent activity feed. */
 function getActivity(): Promise<ActivityItem[]> {
-  return apiFetch('/api/activity');
+  return unwrap(_client.GET('/api/activity'));
 }
+
+// --- Notifications ---
+
+export type Notification = paths['/api/notifications']['get']['responses']['200']['content']['application/json'][number];
 
 /** Fetch all notifications for the current user. */
-function getNotifications(): Promise<ForumNotification[]> {
-  return apiFetch('/api/notifications');
+function getNotifications(): Promise<Notification[]> {
+  return unwrap(_client.GET('/api/notifications'));
 }
 
-/** Fetch aggregated unread counts (notifications, chat mentions, DMs). */
-function getUnreadCount(): Promise<UnreadCounts> {
-  return apiFetch('/api/notifications/unread');
+/** Fetch the unread notification count. */
+function getUnreadCount(): Promise<number> {
+  return unwrap(_client.GET('/api/notifications/unread')).then((r) => r.count);
 }
 
 /** Mark a single notification as read by ID. */
 function markNotificationRead(id: string): Promise<void> {
-  return apiFetch('/api/notifications/read', {
-    method: 'POST',
-    body: JSON.stringify({ id }),
-  });
+  return unwrap(_client.POST('/api/notifications/read', { body: { id } })).then(() => undefined);
 }
 
 /** Mark all notifications as read. */
 function markAllNotificationsRead(): Promise<void> {
-  return apiFetch('/api/notifications/read-all', { method: 'POST' });
+  return unwrap(_client.POST('/api/notifications/read-all')).then(() => undefined);
 }
 
-/** Send a presence heartbeat so the server knows we're online. Called automatically by {@link PresenceTracker}. */
+// --- Presence ---
+
+/** Send a presence heartbeat so the server knows we're online. */
 function presenceHeartbeat(): Promise<void> {
-  return apiFetch('/api/presence/heartbeat', { method: 'POST', silent: true });
+  return unwrap(_client.POST('/api/presence/heartbeat')).then(() => undefined);
 }
 
-interface PresenceStatusMap {
-  [userId: string]: boolean | { online: boolean };
-}
-
-/**
- * Batch-fetch online/offline status for a list of user IDs.
- * Returns an empty object if the list is empty.
- */
-function getPresenceStatus(userIds: string[]): Promise<PresenceStatusMap> {
+/** Batch-fetch online/offline status for a list of user IDs. */
+function getPresenceStatus(userIds: string[]): Promise<Record<string, boolean>> {
   if (!userIds.length) return Promise.resolve({});
-  return apiFetch(`/api/presence/status?userIds=${userIds.join(',')}`);
+  return unwrap(
+    _client.GET('/api/presence/status', { params: { query: { userIds: userIds.join(',') } } }),
+  ) as Promise<Record<string, boolean>>;
 }
 
 /**
@@ -263,6 +286,7 @@ export const ForumlineAPI = {
   getToken,
   getUserId,
   isAuthenticated,
+  /** @deprecated Use typed methods instead */
   apiFetch,
   getConversations,
   getConversation,
@@ -274,7 +298,6 @@ export const ForumlineAPI = {
   updateConversation,
   leaveConversation,
   searchProfiles,
-  searchIdentity,
   getActivity,
   presenceHeartbeat,
   getPresenceStatus,

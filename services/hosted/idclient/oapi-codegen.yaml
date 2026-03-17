@@ -1,0 +1,10 @@
+# oapi-codegen configuration for the Forumline Identity Service client.
+# Generates a typed Go HTTP client used by auth_provider.go to call id.forumline.net.
+# Run from services/hosted/idclient/: go generate .
+package: idclient
+output: client.gen.go
+generate:
+  client: true
+  models: true
+output-options:
+  skip-prune: true

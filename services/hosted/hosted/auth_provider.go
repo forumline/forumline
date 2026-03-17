@@ -5,16 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
-	"time"
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/forum"
 	"github.com/forumline/forumline/forum/store"
+	"github.com/forumline/forumline/services/hosted/idclient"
 )
 
 // ForumlineAuthProvider implements forum.AuthProvider using id.forumline.net
@@ -81,10 +79,10 @@ func (p *ForumlineAuthProvider) HandleCallback(w http.ResponseWriter, r *http.Re
 	}
 
 	identity := &forum.UserIdentity{
-		ProviderID:  userInfo.ForumlineID,
+		ProviderID:  userInfo.ForumlineId,
 		Username:    userInfo.Username,
 		DisplayName: userInfo.DisplayName,
-		AvatarURL:   userInfo.AvatarURL,
+		AvatarURL:   userInfo.AvatarUrl,
 	}
 	localUserID, err := p.CreateOrLinkUser(r.Context(), identity)
 	if err != nil {
@@ -124,10 +122,10 @@ func (p *ForumlineAuthProvider) TokenExchange(w http.ResponseWriter, r *http.Req
 	}
 
 	identity := &forum.UserIdentity{
-		ProviderID:  userInfo.ForumlineID,
+		ProviderID:  userInfo.ForumlineId,
 		Username:    userInfo.Username,
 		DisplayName: userInfo.DisplayName,
-		AvatarURL:   userInfo.AvatarURL,
+		AvatarURL:   userInfo.AvatarUrl,
 	}
 	localUserID, err := p.CreateOrLinkUser(r.Context(), identity)
 	if err != nil {
@@ -143,7 +141,7 @@ func (p *ForumlineAuthProvider) TokenExchange(w http.ResponseWriter, r *http.Req
 			"id":           localUserID,
 			"username":     userInfo.Username,
 			"display_name": userInfo.DisplayName,
-			"avatar_url":   userInfo.AvatarURL,
+			"avatar_url":   userInfo.AvatarUrl,
 		},
 	})
 }
@@ -192,65 +190,58 @@ func (p *ForumlineAuthProvider) CreateOrLinkUser(ctx context.Context, identity *
 
 // --- Identity service integration ---
 
-type idUserInfo struct {
-	ForumlineID string `json:"forumline_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	AvatarURL   string `json:"avatar_url"`
-	AccessToken string `json:"access_token"`
+func (p *ForumlineAuthProvider) newIDClient() (*idclient.Client, error) {
+	return idclient.NewClient(p.IdentityURL)
 }
 
-func (p *ForumlineAuthProvider) exchangeAuthCode(r *http.Request, code, redirectURI string) (*idUserInfo, error) {
-	body, _ := json.Marshal(map[string]string{
-		"code":         code,
-		"redirect_uri": redirectURI,
-	})
-
-	req, err := http.NewRequestWithContext(r.Context(), "POST", p.IdentityURL+"/token", strings.NewReader(string(body)))
+func (p *ForumlineAuthProvider) exchangeAuthCode(r *http.Request, code, redirectURI string) (*idclient.UserInfo, error) {
+	c, err := p.newIDClient()
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := c.TokenExchange(r.Context(), idclient.TokenRequest{
+		Code:        code,
+		RedirectUri: redirectURI,
+	})
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, &idError{Status: resp.StatusCode, Body: string(respBody)}
+		var errResp idclient.ErrorResponse
+		_ = json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, &idError{Status: resp.StatusCode, Body: errResp.Error}
 	}
 
-	var info idUserInfo
+	var info idclient.UserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err
 	}
 	return &info, nil
 }
 
-func (p *ForumlineAuthProvider) validateForumlineToken(r *http.Request, token string) (*idUserInfo, error) {
-	req, err := http.NewRequestWithContext(r.Context(), "GET", p.IdentityURL+"/userinfo", nil)
+func (p *ForumlineAuthProvider) validateForumlineToken(r *http.Request, token string) (*idclient.UserInfoPublic, error) {
+	c, err := p.newIDClient()
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := c.UserInfo(r.Context(), &idclient.UserInfoParams{}, func(ctx context.Context, req *http.Request) error {
+		req.Header.Set("Authorization", "Bearer "+token)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, &idError{Status: resp.StatusCode, Body: string(respBody)}
+		var errResp idclient.ErrorResponse
+		_ = json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, &idError{Status: resp.StatusCode, Body: errResp.Error}
 	}
 
-	var info idUserInfo
+	var info idclient.UserInfoPublic
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err
 	}

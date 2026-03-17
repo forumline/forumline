@@ -21,11 +21,13 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "generate": "openapi-typescript ../../../services/forumline-api/openapi.yaml -o src/api.gen.ts",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
   },
   "dependencies": {
-    "@forumline/protocol": "workspace:*"
+    "@forumline/protocol": "workspace:*",
+    "openapi-fetch": "^0.13.5"
   },
   "peerDependencies": {
     "livekit-client": ">=2.0.0"
@@ -36,6 +38,7 @@
     }
   },
   "devDependencies": {
+    "openapi-typescript": "^7.8.0",
     "typedoc": "^0.28.17",
     "typescript": "^5.9.3"
   },
