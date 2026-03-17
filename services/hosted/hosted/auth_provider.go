@@ -184,10 +184,11 @@ func (p *ForumlineAuthProvider) CreateOrLinkUser(ctx context.Context, identity *
 		DisplayName: identity.DisplayName,
 		AvatarURL:   identity.AvatarURL,
 	}
-	if err := p.Store.CreateProfileHosted(ctx, fIdentity); err != nil {
+	localID, err := p.Store.CreateProfileHosted(ctx, fIdentity)
+	if err != nil {
 		return "", err
 	}
-	return identity.ProviderID, nil
+	return localID, nil
 }
 
 // --- Identity service integration ---

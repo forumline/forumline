@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/forumline/forumline/forum/model"
@@ -195,13 +196,16 @@ func (s *Store) CreateProfileSimple(ctx context.Context, id, username, displayNa
 	})
 }
 
-// CreateProfileHosted creates a profile for hosted mode (using forumline_id as profile ID).
-func (s *Store) CreateProfileHosted(ctx context.Context, identity *model.ForumlineIdentity) error {
-	return s.Q.CreateProfileHosted(ctx, sqlcdb.CreateProfileHostedParams{
-		ID:          pgUUID(identity.ForumlineID),
+// CreateProfileHosted creates a profile for hosted mode with a generated UUID
+// and stores the forumline_id for identity linking.
+func (s *Store) CreateProfileHosted(ctx context.Context, identity *model.ForumlineIdentity) (string, error) {
+	id := uuid.New().String()
+	err := s.Q.CreateProfileHosted(ctx, sqlcdb.CreateProfileHostedParams{
+		ID:          pgUUID(id),
 		Username:    identity.Username,
 		DisplayName: textToPgtext(identity.DisplayName),
 		AvatarUrl:   textToPgtext(identity.AvatarURL),
 		ForumlineID: textToPgtext(identity.ForumlineID),
 	})
+	return id, err
 }
