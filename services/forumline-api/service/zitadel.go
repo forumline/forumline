@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/zitadel/zitadel-go/v3/pkg/client"
@@ -41,8 +42,11 @@ func initZitadelClient(ctx context.Context) (*ZitadelClient, error) {
 		return nil, fmt.Errorf("ZITADEL_URL and ZITADEL_SERVICE_USER_PAT are required")
 	}
 
+	// zitadel.New() expects a bare domain, not a full URL
+	zitadelDomain := strings.TrimPrefix(strings.TrimPrefix(zitadelURL, "https://"), "http://")
+
 	api, err := client.New(ctx,
-		zitadel.New(zitadelURL),
+		zitadel.New(zitadelDomain),
 		client.WithAuth(client.PAT(pat)),
 	)
 	if err != nil {
