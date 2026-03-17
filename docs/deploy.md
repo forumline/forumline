@@ -21,7 +21,7 @@ Workflows in `.github/workflows/`. Runners execute on CT 109 with direct LAN acc
 
 | Pipeline | Trigger | Description |
 |----------|---------|-------------|
-| `lint` | push, PR | Run lefthook checks (Go lint, tests, ESLint, gitleaks) |
+| `lint` | push, PR | Run Go lint, tests, ESLint, gitleaks via `ci/hooks/pre-commit --all-files` |
 | `deploy-forumline` | `services/forumline-api/**`, `services/forumline-web/**`, `packages/**` | Deploy Forumline app |
 | `deploy-hosted` | `services/hosted/**`, `packages/backend/**` | Deploy hosted forum platform |
 | `deploy-website` | `services/website/**` | Deploy static website |
