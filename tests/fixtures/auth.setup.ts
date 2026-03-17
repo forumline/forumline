@@ -1,7 +1,5 @@
 import path from 'node:path';
 import { expect, test as setup } from '@playwright/test';
-
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const APP_URL = 'https://app.forumline.net';
 
 /**

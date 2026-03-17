@@ -1,8 +1,6 @@
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
-
 const BASE_URLS = {
   app: 'https://app.forumline.net',
   hosted: 'https://hosted.forumline.net',

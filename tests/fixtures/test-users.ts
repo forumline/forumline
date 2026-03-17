@@ -1,8 +1,6 @@
 import path from 'node:path';
 import { test as base, type Page } from '@playwright/test';
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
-
 type TestFixtures = {
   testcallerPage: Page;
   testuser_debugPage: Page;
