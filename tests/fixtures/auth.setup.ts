@@ -13,13 +13,12 @@ const APP_URL = "https://app.forumline.net";
  *   5. Save browser state (cookies, localStorage) for reuse in tests
  *
  * Credentials come from env vars:
- *   - TESTCALLER_PASSWORD (from macOS Keychain via run-local.sh)
- *   - TESTUSER_DEBUG_PASSWORD (from macOS Keychain via run-local.sh)
+ *   - TESTCALLER_PASSWORD (from secrets.kdbx via run-local.sh)
+ *   - TESTUSER_DEBUG_PASSWORD (from secrets.kdbx via run-local.sh)
  *
- * TODO: Create dedicated test users in Zitadel. The old test users
- * (testcaller@example.com, testavatar2@example.com) don't exist in the
- * current Zitadel instance. For now, use your real account or create
- * test users via the Zitadel admin console at auth.forumline.net.
+ * Test users created in Zitadel via API:
+ *   - testcaller (testcaller@forumline.net, ID: 364424139072602115)
+ *   - testuser_debug (testuser_debug@forumline.net, ID: 364424151923949571)
  */
 async function loginAndSave(
   browser: typeof setup,
@@ -52,14 +51,14 @@ async function loginAndSave(
 
 void loginAndSave(
   setup,
-  process.env.TESTCALLER_EMAIL ?? "testcaller@example.com",
+  process.env.TESTCALLER_EMAIL ?? "testcaller@forumline.net",
   process.env.TESTCALLER_PASSWORD!,
   "auth/testcaller.json",
 );
 
 void loginAndSave(
   setup,
-  process.env.TESTUSER_DEBUG_EMAIL ?? "testavatar2@example.com",
+  process.env.TESTUSER_DEBUG_EMAIL ?? "testuser_debug@forumline.net",
   process.env.TESTUSER_DEBUG_PASSWORD!,
   "auth/testuser_debug.json",
 );
