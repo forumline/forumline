@@ -97,6 +97,7 @@ func (cs *codeStore) Consume(code, redirectURI string) (*authCode, bool) {
 		return nil, false
 	}
 	if ac.RedirectURI != redirectURI {
+		delete(cs.codes, code) // invalidate on any failed attempt (RFC 6749 §4.1.2)
 		return nil, false
 	}
 	delete(cs.codes, code)
