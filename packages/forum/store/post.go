@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListPostsByThread returns posts for a thread ordered by creation time.

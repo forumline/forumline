@@ -1,12 +1,12 @@
-//go:generate sqlc generate -f ../../sqlc.yaml
+//go:generate sqlc generate -f ../sqlc.yaml
 package store
 
 import (
 	"time"
 
 	"github.com/forumline/forumline/backend/db"
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // Store provides data access methods for the forum database.

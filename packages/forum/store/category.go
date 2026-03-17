@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
+	"github.com/forumline/forumline/forum/model"
 )
 
 // ListCategories returns all categories ordered by sort_order.

@@ -7,8 +7,8 @@ import (
 
 	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/valkey"
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/forum/store"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/store"
 	"github.com/redis/go-redis/v9"
 )
 

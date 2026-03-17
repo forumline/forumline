@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/forumline/forumline/backend/db"
-	"github.com/forumline/forumline/services/hosted/forum"
+	"github.com/forumline/forumline/forum"
 )
 
 // Import loads ExportData into a forum database.

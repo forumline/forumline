@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListVoiceRooms returns all voice rooms ordered by name.

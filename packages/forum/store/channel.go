@@ -3,8 +3,8 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListChannels returns all chat channels ordered by name.

@@ -36,13 +36,13 @@ func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
 
 	userID := fauth.UserIDFromContext(r.Context())
 
-	apiKey := h.Config.LiveKitAPIKey
-	apiSecret := h.Config.LiveKitAPISecret
-	livekitURL := h.Config.LiveKitURL
-	if apiKey == "" || apiSecret == "" || livekitURL == "" {
+	if h.Config.LiveKit == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "LiveKit not configured"})
 		return
 	}
+	apiKey := h.Config.LiveKit.APIKey
+	apiSecret := h.Config.LiveKit.APISecret
+	livekitURL := h.Config.LiveKit.URL
 
 	// Remove user from any existing rooms (enforce one room at a time, clean up ghosts)
 	httpHost := strings.Replace(strings.Replace(livekitURL, "wss://", "https://", 1), "ws://", "http://", 1)
@@ -94,13 +94,13 @@ func (h *Handlers) HandleLiveKitParticipants(w http.ResponseWriter, r *http.Requ
 
 	_ = fauth.UserIDFromContext(r.Context()) // not required for this endpoint
 
-	apiKey := h.Config.LiveKitAPIKey
-	apiSecret := h.Config.LiveKitAPISecret
-	livekitURL := h.Config.LiveKitURL
-	if apiKey == "" || apiSecret == "" || livekitURL == "" {
+	if h.Config.LiveKit == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"participants": []interface{}{}})
 		return
 	}
+	apiKey := h.Config.LiveKit.APIKey
+	apiSecret := h.Config.LiveKit.APISecret
+	livekitURL := h.Config.LiveKit.URL
 
 	httpHost := strings.Replace(strings.Replace(livekitURL, "wss://", "https://", 1), "ws://", "http://", 1)
 	roomClient := lksdk.NewRoomServiceClient(httpHost, apiKey, apiSecret)

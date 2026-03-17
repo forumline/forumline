@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/forum/store"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/store"
 )
 
 // AdminService handles admin business logic.

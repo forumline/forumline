@@ -32,8 +32,9 @@ import (
 	"github.com/forumline/forumline/backend/httpkit"
 	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/backend/valkey"
+	"github.com/forumline/forumline/forum"
+	forumstore "github.com/forumline/forumline/forum/store"
 	localdb "github.com/forumline/forumline/services/hosted/db"
-	"github.com/forumline/forumline/services/hosted/forum"
 	plat "github.com/forumline/forumline/services/hosted/platform"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -147,6 +148,25 @@ func main() {
 	// Forum config and router are built once per tenant and cached.
 	tenantMw := plat.TenantMiddleware(store, tp)
 
+	// Shared storage provider for all tenants
+	r2Storage := &R2Storage{
+		AccountID: os.Getenv("R2_ACCOUNT_ID"),
+		KeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
+		Secret:    os.Getenv("R2_SECRET_ACCESS_KEY"),
+		Bucket:    os.Getenv("R2_BUCKET_NAME"),
+		PublicURL: os.Getenv("R2_PUBLIC_URL"),
+	}
+
+	// Optional LiveKit config
+	var livekitCfg *forum.LiveKitConfig
+	if lkURL := os.Getenv("LIVEKIT_URL"); lkURL != "" {
+		livekitCfg = &forum.LiveKitConfig{
+			URL:       lkURL,
+			APIKey:    os.Getenv("LIVEKIT_API_KEY"),
+			APISecret: os.Getenv("LIVEKIT_API_SECRET"),
+		}
+	}
+
 	getForumRouter := func(tenant *plat.Tenant) http.Handler {
 		routerMu.RLock()
 		cached, ok := routerCache[tenant.Domain]
@@ -155,23 +175,31 @@ func main() {
 			return cached
 		}
 
-		cfg := &forum.Config{
-			SiteURL:           "https://" + tenant.Domain,
-			Domain:            tenant.Domain,
-			ForumName:         tenant.Name,
-			ForumlineURL:      os.Getenv("FORUMLINE_APP_URL"),
-			IdentityURL:       os.Getenv("IDENTITY_URL"),
-			LiveKitURL:        os.Getenv("LIVEKIT_URL"),
-			LiveKitAPIKey:     os.Getenv("LIVEKIT_API_KEY"),
-			LiveKitAPISecret:  os.Getenv("LIVEKIT_API_SECRET"),
-			R2AccountID:       os.Getenv("R2_ACCOUNT_ID"),
-			R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
-			R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
-			R2BucketName:      os.Getenv("R2_BUCKET_NAME"),
-			R2PublicURL:       os.Getenv("R2_PUBLIC_URL"),
+		siteURL := "https://" + tenant.Domain
+
+		// Each tenant gets its own auth provider wired to its store
+		authProvider := &ForumlineAuthProvider{
+			IdentityURL: os.Getenv("IDENTITY_URL"),
+			SiteURL:     siteURL,
+			Store:       forumstore.New(tp),
 		}
 
-		forumRouter := forum.NewRouter(tp, sseHub, cfg, valkeyClient)
+		cfg := &forum.Config{
+			SiteURL:      siteURL,
+			Domain:       tenant.Domain,
+			ForumName:    tenant.Name,
+			HostedMode:   true,
+			Auth:         authProvider,
+			Storage:      r2Storage,
+			DB:           tp,
+			SSEHub:       sseHub,
+			ValkeyClient: valkeyClient,
+			LiveKit:      livekitCfg,
+			ForumlineURL:        os.Getenv("FORUMLINE_APP_URL"),
+			ForumlineServiceKey: os.Getenv("ZITADEL_SERVICE_USER_PAT"),
+		}
+
+		forumRouter := forum.NewRouter(cfg)
 
 		routerMu.Lock()
 		routerCache[tenant.Domain] = forumRouter

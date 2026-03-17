@@ -28,6 +28,8 @@ pre-commit:
       run: >
         cd packages/backend &&
         golangci-lint run ./... &&
+        cd ../forum &&
+        golangci-lint run ./... &&
         cd ../../services/forumline-api &&
         golangci-lint run ./... &&
         cd ../hosted &&
@@ -43,8 +45,13 @@ pre-commit:
       root: "services/forumline-api/"
       run: go test ./...
 
+    go-test-forum:
+      glob: "packages/forum/**/*.go"
+      root: "packages/forum/"
+      run: go test ./...
+
     go-test-hosted:
-      glob: "{services/hosted,packages/backend}/**/*.go"
+      glob: "{services/hosted,packages/backend,packages/forum}/**/*.go"
       root: "services/hosted/"
       run: go test ./...
 
@@ -59,4 +66,4 @@ pre-push:
       run: bash .githooks/pre-push
     validate-ci:
       run: bash .githooks/validate-ci.sh
-      glob: "{.github/workflows/*.yml,deploy/docker/Dockerfile.*,packages/frontend/**,packages/backend/**}"
+      glob: "{.github/workflows/*.yml,deploy/docker/Dockerfile.*,packages/frontend/**,packages/backend/**,packages/forum/**}"

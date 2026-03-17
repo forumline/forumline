@@ -4,25 +4,26 @@ import (
 	"net/http"
 	"time"
 
-	fauth "github.com/forumline/forumline/backend/auth"
-	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/httpkit"
-	"github.com/forumline/forumline/backend/sse"
-	"github.com/forumline/forumline/services/hosted/forum/service"
-	"github.com/forumline/forumline/services/hosted/forum/store"
-	"github.com/redis/go-redis/v9"
+	"github.com/forumline/forumline/forum/service"
+	"github.com/forumline/forumline/forum/store"
 )
 
-func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Client) *http.ServeMux {
+// NewRouter creates the forum HTTP router with all endpoints wired up.
+// The Config must have Auth, Storage, DB, and SSEHub set.
+// ValkeyClient may be nil (rate limiting falls back to in-memory).
+func NewRouter(cfg *Config) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	auth := fauth.Middleware
+	// Auth middleware from the pluggable provider
+	auth := cfg.Auth.Middleware()
 
 	// Create layers
-	s := store.New(pool)
+	s := store.New(cfg.DB)
 
 	notifSvc := service.NewNotificationService(s, &service.NotificationConfig{
 		ForumlineURL: cfg.ForumlineURL,
+		ServiceKey:   cfg.ForumlineServiceKey,
 	})
 	threadSvc := service.NewThreadService(s)
 	postSvc := service.NewPostService(s, notifSvc)
@@ -31,7 +32,7 @@ func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Cli
 	adminSvc := service.NewAdminService(s)
 
 	h := &Handlers{
-		SSEHub:          sseHub,
+		SSEHub:          cfg.SSEHub,
 		Config:          cfg,
 		Store:           s,
 		ThreadSvc:       threadSvc,
@@ -40,15 +41,15 @@ func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Cli
 		ChatSvc:         chatSvc,
 		AdminSvc:        adminSvc,
 		NotificationSvc: notifSvc,
-		ProfileCache:    NewProfileCache(valkeyClient, pool, 30*time.Second),
+		ProfileCache:    NewProfileCache(cfg.ValkeyClient, cfg.DB, 30*time.Second),
 	}
 
 	// Rate limiters (per-user for authenticated, per-IP for public/auth)
-	chatRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 60, time.Minute))   // 60 msgs/min
-	writeRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 20, time.Minute))  // 20 creates/min
-	uploadRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 5, time.Minute))  // 5 uploads/min
-	importRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 3, time.Minute))  // 3 imports/min
-	authRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkeyClient, 20, time.Minute))       // 20 auth attempts/min per IP
+	chatRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 60, time.Minute))   // 60 msgs/min
+	writeRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 20, time.Minute))  // 20 creates/min
+	uploadRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 5, time.Minute))  // 5 uploads/min
+	importRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 3, time.Minute))  // 3 imports/min
+	authRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 20, time.Minute))       // 20 auth attempts/min per IP
 
 	// Channel follows (authenticated)
 	mux.Handle("GET /api/channel-follows", httpkit.Use(h.HandleChannelFollows, auth))
@@ -59,13 +60,12 @@ func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Cli
 	mux.Handle("GET /api/notification-preferences", httpkit.Use(h.HandleNotificationPreferences, auth))
 	mux.Handle("PUT /api/notification-preferences", httpkit.Use(h.HandleNotificationPreferences, auth))
 
-	// Forumline auth (IP-based rate limit on auth endpoints)
-	mux.Handle("GET /api/forumline/auth", httpkit.Use(h.HandleForumlineAuth, authRL))
-	mux.Handle("GET /api/forumline/auth/callback", httpkit.Use(h.HandleForumlineCallback, authRL))
-	mux.Handle("POST /api/forumline/auth/token-exchange", httpkit.Use(h.HandleTokenExchange, authRL))
-	mux.Handle("GET /api/forumline/auth/forumline-token", httpkit.Use(h.HandleForumlineToken, authRL))
-	mux.HandleFunc("GET /api/forumline/auth/session", h.HandleForumlineSession)
-	mux.HandleFunc("DELETE /api/forumline/auth/session", h.HandleForumlineSession)
+	// Auth endpoints — delegated to the AuthProvider
+	mux.Handle("GET /api/forumline/auth", httpkit.Use(http.HandlerFunc(cfg.Auth.StartLogin), authRL))
+	mux.Handle("GET /api/forumline/auth/callback", httpkit.Use(http.HandlerFunc(cfg.Auth.HandleCallback), authRL))
+	mux.Handle("POST /api/forumline/auth/token-exchange", httpkit.Use(http.HandlerFunc(cfg.Auth.TokenExchange), authRL))
+	mux.HandleFunc("GET /api/forumline/auth/session", cfg.Auth.GetSession)
+	mux.HandleFunc("DELETE /api/forumline/auth/session", cfg.Auth.Logout)
 
 	// Forumline notifications (authenticated)
 	mux.Handle("GET /api/forumline/notifications", httpkit.Use(h.HandleNotifications, auth))
@@ -78,7 +78,7 @@ func NewRouter(pool db.DB, sseHub *sse.Hub, cfg *Config, valkeyClient *redis.Cli
 	mux.Handle("GET /api/livekit", httpkit.Use(h.HandleLiveKitParticipants, auth))
 
 	// ================================================================
-	// Data endpoints (Phase B)
+	// Data endpoints
 	// ================================================================
 
 	// Forum config (public)

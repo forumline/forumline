@@ -8,13 +8,12 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/forum/store"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/store"
 )
 
 var mentionRe = regexp.MustCompile(`@(\w+)`)
@@ -22,6 +21,9 @@ var mentionRe = regexp.MustCompile(`@(\w+)`)
 // NotificationConfig holds config needed for notification push.
 type NotificationConfig struct {
 	ForumlineURL string
+	// ServiceKey is the bearer token for authenticating webhook pushes
+	// to the Forumline app. If empty, webhook push is disabled.
+	ServiceKey string
 }
 
 // NotificationService handles notification business logic.
@@ -117,14 +119,11 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 // pushToForumline sends a batch of notifications to the forumline API webhook.
 // Authenticates using the ZITADEL_SERVICE_USER_PAT service key.
 func (ns *NotificationService) pushToForumline(items []model.ForumlinePushItem) {
-	if ns.Config.ForumlineURL == "" {
+	if ns.Config.ForumlineURL == "" || ns.Config.ServiceKey == "" {
 		return
 	}
 
-	serviceKey := os.Getenv("ZITADEL_SERVICE_USER_PAT")
-	if serviceKey == "" {
-		return
-	}
+	serviceKey := ns.Config.ServiceKey
 
 	var endpoint string
 	var payload []byte

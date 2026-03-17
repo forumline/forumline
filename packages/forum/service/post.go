@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/forum/store"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/store"
 )
 
 // PostService handles post business logic.

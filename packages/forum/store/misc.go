@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListChannelFollows returns category IDs the user follows.

@@ -15,11 +15,11 @@ func (h *Handlers) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]interface{}{
 		"name":        name,
-		"hosted_mode": true,
+		"hosted_mode": h.Config.HostedMode,
 		"icon_url":    h.Config.IconURL,
 	}
-	if h.Config.LiveKitURL != "" {
-		resp["livekit_url"] = h.Config.LiveKitURL
+	if h.Config.LiveKit != nil {
+		resp["livekit_url"] = h.Config.LiveKit.URL
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

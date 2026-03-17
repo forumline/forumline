@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/forumline/forumline/services/hosted/forum/model"
-	"github.com/forumline/forumline/services/hosted/sqlcdb"
+	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListThreads returns threads ordered by pinned + last_post_at.

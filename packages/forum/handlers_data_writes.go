@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/forumline/forumline/backend/auth"
-	"github.com/forumline/forumline/services/hosted/forum/service"
+	"github.com/forumline/forumline/forum/service"
 )
 
 // ============================================================================

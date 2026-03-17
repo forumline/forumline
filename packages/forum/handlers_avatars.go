@@ -1,26 +1,14 @@
 package forum
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-
 	"github.com/forumline/forumline/backend/auth"
 )
 
-func (h *Handlers) r2Client() (*minio.Client, error) {
-	endpoint := fmt.Sprintf("%s.r2.cloudflarestorage.com", h.Config.R2AccountID)
-	return minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(h.Config.R2AccessKeyID, h.Config.R2SecretAccessKey, ""),
-		Secure: true,
-	})
-}
-
-// HandleAvatarUpload accepts a multipart file upload and stores it in R2.
+// HandleAvatarUpload accepts a multipart file upload and stores it via FileStorage.
 // POST /api/avatars/upload
 func (h *Handlers) HandleAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
@@ -59,20 +47,15 @@ func (h *Handlers) HandleAvatarUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := h.r2Client()
+	publicURL, err := h.Config.Storage.Upload(r.Context(), path, file, header.Size, contentType)
 	if err != nil {
-		http.Error(w, "Storage unavailable", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = client.PutObject(context.Background(), h.Config.R2BucketName, path, file, header.Size, minio.PutObjectOptions{
-		ContentType: contentType,
-	})
-	if err != nil {
+		if _, ok := err.(*StorageDisabledError); ok {
+			http.Error(w, "File uploads are not configured", http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, "Upload failed", http.StatusInternalServerError)
 		return
 	}
 
-	publicURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.Config.R2PublicURL, "/"), path)
 	writeJSON(w, http.StatusOK, map[string]string{"url": publicURL})
 }
