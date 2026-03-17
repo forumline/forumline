@@ -5,67 +5,36 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/services/hosted/forum/model"
+	"github.com/forumline/forumline/services/hosted/sqlcdb"
 )
 
 // ListVoiceRooms returns all voice rooms ordered by name.
 func (s *Store) ListVoiceRooms(ctx context.Context) ([]model.VoiceRoom, error) {
-	rows, err := s.DB.Query(ctx,
-		`SELECT id, name, slug, created_at
-		 FROM voice_rooms ORDER BY name`)
+	rows, err := s.Q.ListVoiceRooms(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var rooms []model.VoiceRoom
-	for rows.Next() {
-		var room model.VoiceRoom
-		var createdAt time.Time
-		if err := rows.Scan(&room.ID, &room.Name, &room.Slug, &createdAt); err != nil {
-			return nil, err
-		}
-		room.CreatedAt = createdAt.Format(time.RFC3339)
-		rooms = append(rooms, room)
-	}
-	if rooms == nil {
-		rooms = []model.VoiceRoom{}
+	rooms := make([]model.VoiceRoom, 0, len(rows))
+	for _, r := range rows {
+		rooms = append(rooms, model.VoiceRoom{
+			ID:        uuidStr(r.ID),
+			Name:      r.Name,
+			Slug:      r.Slug,
+			CreatedAt: tsStr(r.CreatedAt),
+		})
 	}
 	return rooms, nil
 }
 
 // ListVoicePresence returns all voice presence entries with profile.
 func (s *Store) ListVoicePresence(ctx context.Context) ([]model.VoicePresence, error) {
-	rows, err := s.DB.Query(ctx,
-		`SELECT vp.id, vp.user_id, vp.room_slug, vp.joined_at,
-		        p.id, p.username, p.display_name, p.avatar_url, p.bio, p.website,
-		        p.is_admin, p.forumline_id, p.created_at, p.updated_at
-		 FROM voice_presence vp
-		 JOIN profiles p ON p.id = vp.user_id`)
+	rows, err := s.Q.ListVoicePresence(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var presence []model.VoicePresence
-	for rows.Next() {
-		var vp model.VoicePresence
-		var joinedAt, authorCreatedAt, authorUpdatedAt time.Time
-		err := rows.Scan(
-			&vp.ID, &vp.UserID, &vp.RoomSlug, &joinedAt,
-			&vp.Profile.ID, &vp.Profile.Username, &vp.Profile.DisplayName, &vp.Profile.AvatarURL,
-			&vp.Profile.Bio, &vp.Profile.Website, &vp.Profile.IsAdmin, &vp.Profile.ForumlineID,
-			&authorCreatedAt, &authorUpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		vp.JoinedAt = joinedAt.Format(time.RFC3339)
-		vp.Profile.CreatedAt = authorCreatedAt.Format(time.RFC3339)
-		vp.Profile.UpdatedAt = authorUpdatedAt.Format(time.RFC3339)
-		presence = append(presence, vp)
-	}
-	if presence == nil {
-		presence = []model.VoicePresence{}
+	presence := make([]model.VoicePresence, 0, len(rows))
+	for _, r := range rows {
+		presence = append(presence, voicePresenceRowToModel(r))
 	}
 	return presence, nil
 }
@@ -73,18 +42,14 @@ func (s *Store) ListVoicePresence(ctx context.Context) ([]model.VoicePresence, e
 // SetVoicePresence sets a user's voice presence.
 func (s *Store) SetVoicePresence(ctx context.Context, userID, roomSlug string) error {
 	now := time.Now()
-	_, err := s.DB.Exec(ctx,
-		`INSERT INTO voice_presence (user_id, room_slug, joined_at)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (user_id) DO UPDATE SET room_slug = $2, joined_at = $3`,
-		userID, roomSlug, now)
-	return err
+	return s.Q.SetVoicePresence(ctx, sqlcdb.SetVoicePresenceParams{
+		UserID:   pgUUID(userID),
+		RoomSlug: roomSlug,
+		JoinedAt: pgTimestamp(now),
+	})
 }
 
 // ClearVoicePresence removes a user's voice presence.
 func (s *Store) ClearVoicePresence(ctx context.Context, userID string) error {
-	_, err := s.DB.Exec(ctx,
-		`DELETE FROM voice_presence WHERE user_id = $1`, userID)
-	return err
+	return s.Q.ClearVoicePresence(ctx, pgUUID(userID))
 }
-

@@ -4,74 +4,76 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/forumline/forumline/services/hosted/forum/model"
+	"github.com/forumline/forumline/services/hosted/sqlcdb"
 )
 
 // ListPostsByThread returns posts for a thread ordered by creation time.
 func (s *Store) ListPostsByThread(ctx context.Context, threadID string) ([]model.Post, error) {
-	rows, err := s.DB.Query(ctx,
-		postWithJoinsQuery+` WHERE po.thread_id = $1 ORDER BY po.created_at ASC`, threadID)
+	rows, err := s.Q.ListPostsByThread(ctx, pgUUID(threadID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return scanPostRows(rows)
+	posts := make([]model.Post, 0, len(rows))
+	for _, r := range rows {
+		posts = append(posts, postRowToModel(r))
+	}
+	return posts, nil
 }
 
 // ListUserPosts returns posts authored by a user.
 func (s *Store) ListUserPosts(ctx context.Context, userID string) ([]model.Post, error) {
-	rows, err := s.DB.Query(ctx,
-		postWithJoinsQuery+` WHERE po.author_id = $1 ORDER BY po.created_at DESC LIMIT 20`, userID)
+	rows, err := s.Q.ListUserPosts(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return scanPostRows(rows)
+	posts := make([]model.Post, 0, len(rows))
+	for _, r := range rows {
+		posts = append(posts, listUserPostsRowToModel(r))
+	}
+	return posts, nil
 }
 
 // SearchPosts searches posts by content.
 func (s *Store) SearchPosts(ctx context.Context, pattern string) ([]model.Post, error) {
-	rows, err := s.DB.Query(ctx,
-		postWithJoinsQuery+` WHERE po.content ILIKE $1 ORDER BY po.created_at DESC LIMIT 20`, pattern)
+	rows, err := s.Q.SearchPosts(ctx, pattern)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return scanPostRows(rows)
+	posts := make([]model.Post, 0, len(rows))
+	for _, r := range rows {
+		posts = append(posts, searchPostsRowToModel(r))
+	}
+	return posts, nil
 }
 
 // CreatePost inserts a new post and returns its ID.
 func (s *Store) CreatePost(ctx context.Context, threadID, authorID, content string, replyToID *string) (string, error) {
-	var id string
 	now := time.Now()
-	err := s.DB.QueryRow(ctx,
-		`INSERT INTO posts (thread_id, author_id, content, reply_to_id, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $5)
-		 RETURNING id`,
-		threadID, authorID, content, replyToID, now).Scan(&id)
-	return id, err
+	var replyUUID pgtype.UUID
+	if replyToID != nil {
+		replyUUID = pgUUID(*replyToID)
+	}
+	id, err := s.Q.CreatePost(ctx, sqlcdb.CreatePostParams{
+		ThreadID:  pgUUID(threadID),
+		AuthorID:  pgUUID(authorID),
+		Content:   content,
+		ReplyToID: replyUUID,
+		CreatedAt: pgTimestamp(now),
+	})
+	if err != nil {
+		return "", err
+	}
+	return uuidStr(id), nil
 }
 
 // GetPostAuthor returns the author_id of a post.
 func (s *Store) GetPostAuthor(ctx context.Context, postID string) (string, error) {
-	var authorID string
-	err := s.DB.QueryRow(ctx,
-		`SELECT author_id FROM posts WHERE id = $1`, postID).Scan(&authorID)
-	return authorID, err
-}
-
-// scanPostRows scans multiple post rows into a slice.
-func scanPostRows(rows interface{ Next() bool; Scan(dest ...interface{}) error }) ([]model.Post, error) {
-	var posts []model.Post
-	for rows.Next() {
-		p, err := scanPostWithAuthor(rows.Scan)
-		if err != nil {
-			return nil, err
-		}
-		posts = append(posts, p)
+	id, err := s.Q.GetPostAuthor(ctx, pgUUID(postID))
+	if err != nil {
+		return "", err
 	}
-	if posts == nil {
-		posts = []model.Post{}
-	}
-	return posts, nil
+	return uuidStr(id), nil
 }

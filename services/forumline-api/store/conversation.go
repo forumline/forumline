@@ -9,53 +9,23 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.Conversation, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT
-			c.id, c.is_group, c.name,
-			COALESCE(m.content, ''), COALESCE(m.created_at, c.created_at),
-			(SELECT count(*) FROM forumline_direct_messages dm2
-			 WHERE dm2.conversation_id = c.id
-			   AND dm2.sender_id != $1
-			   AND dm2.created_at > cm.last_read_at)
-		 FROM forumline_conversations c
-		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-		 LEFT JOIN LATERAL (
-			SELECT content, created_at FROM forumline_direct_messages
-			WHERE conversation_id = c.id
-			ORDER BY created_at DESC LIMIT 1
-		 ) m ON true
-		 ORDER BY COALESCE(m.created_at, c.created_at) DESC
-		 LIMIT 100`, userID,
-	)
+	rows, err := s.Q.ListConversations(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	type convoRow struct {
-		id, lastMessage string
-		isGroup         bool
-		name            *string
-		lastMessageTime time.Time
-		unreadCount     int
-	}
-
-	var convoRows []convoRow
-	var convoIDs []string
-	for rows.Next() {
-		var cr convoRow
-		if err := rows.Scan(&cr.id, &cr.isGroup, &cr.name, &cr.lastMessage, &cr.lastMessageTime, &cr.unreadCount); err != nil {
-			continue
-		}
-		convoRows = append(convoRows, cr)
-		convoIDs = append(convoIDs, cr.id)
-	}
-
-	if len(convoIDs) == 0 {
+	if len(rows) == 0 {
 		return []model.Conversation{}, nil
+	}
+
+	convoIDs := make([]pgtype.UUID, len(rows))
+	for i, r := range rows {
+		convoIDs[i] = r.ID
 	}
 
 	membersMap, err := s.fetchConversationMembers(ctx, convoIDs)
@@ -63,91 +33,73 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 		return nil, err
 	}
 
-	conversations := make([]model.Conversation, 0, len(convoRows))
-	for _, cr := range convoRows {
-		members := membersMap[cr.id]
+	conversations := make([]model.Conversation, 0, len(rows))
+	for _, r := range rows {
+		id := uuidStr(r.ID)
+		members := membersMap[id]
 		if members == nil {
 			members = []model.ConversationMember{}
 		}
 		conversations = append(conversations, model.Conversation{
-			ID: cr.id, IsGroup: cr.isGroup, Name: cr.name,
-			Members: members, LastMessage: cr.lastMessage,
-			LastMessageTime: cr.lastMessageTime.Format(time.RFC3339),
-			UnreadCount:     cr.unreadCount,
+			ID: id, IsGroup: r.IsGroup, Name: pgtextPtr(r.Name),
+			Members: members, LastMessage: r.LastMessage,
+			LastMessageTime: r.LastMessageTime.Time.Format(time.RFC3339),
+			UnreadCount:     int(r.UnreadCount),
 		})
 	}
 	return conversations, nil
 }
 
 func (s *Store) GetConversation(ctx context.Context, userID, conversationID string) (*model.Conversation, error) {
-	var c model.Conversation
-	var lastMessageTime time.Time
-	err := s.Pool.QueryRow(ctx,
-		`SELECT c.id, c.is_group, c.name,
-			COALESCE(m.content, ''), COALESCE(m.created_at, c.created_at),
-			(SELECT count(*) FROM forumline_direct_messages dm2
-			 WHERE dm2.conversation_id = c.id AND dm2.sender_id != $1 AND dm2.created_at > cm.last_read_at)
-		 FROM forumline_conversations c
-		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-		 LEFT JOIN LATERAL (
-			SELECT content, created_at FROM forumline_direct_messages
-			WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
-		 ) m ON true
-		 WHERE c.id = $2`, userID, conversationID,
-	).Scan(&c.ID, &c.IsGroup, &c.Name, &c.LastMessage, &lastMessageTime, &c.UnreadCount)
+	row, err := s.Q.GetConversation(ctx, sqlcdb.GetConversationParams{
+		UserID:         userID,
+		ConversationID: pgUUID(conversationID),
+	})
 	if err != nil {
 		return nil, err
 	}
-	c.LastMessageTime = lastMessageTime.Format(time.RFC3339)
 
-	membersMap, err := s.fetchConversationMembers(ctx, []string{conversationID})
+	membersMap, err := s.fetchConversationMembers(ctx, []pgtype.UUID{pgUUID(conversationID)})
 	if err != nil {
 		return nil, err
 	}
-	c.Members = membersMap[conversationID]
-	if c.Members == nil {
-		c.Members = []model.ConversationMember{}
+	members := membersMap[conversationID]
+	if members == nil {
+		members = []model.ConversationMember{}
 	}
-	return &c, nil
+	return &model.Conversation{
+		ID: uuidStr(row.ID), IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
+		Members: members, LastMessage: row.LastMessage,
+		LastMessageTime: row.LastMessageTime.Time.Format(time.RFC3339),
+		UnreadCount:     int(row.UnreadCount),
+	}, nil
 }
 
-func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []string) (map[string][]model.ConversationMember, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT cm.conversation_id, cm.user_id, p.username, p.display_name, p.avatar_url
-		 FROM forumline_conversation_members cm
-		 JOIN forumline_profiles p ON p.id = cm.user_id
-		 WHERE cm.conversation_id = ANY($1)`, convoIDs,
-	)
+func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []pgtype.UUID) (map[string][]model.ConversationMember, error) {
+	rows, err := s.Q.FetchConversationMembers(ctx, convoIDs)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	result := make(map[string][]model.ConversationMember)
-	for rows.Next() {
-		var convoID, userID, username, displayName string
-		var avatarURL *string
-		if err := rows.Scan(&convoID, &userID, &username, &displayName, &avatarURL); err != nil {
-			continue
-		}
-		name := displayName
+	for _, r := range rows {
+		convoID := uuidStr(r.ConversationID)
+		name := r.DisplayName
 		if name == "" {
-			name = username
+			name = r.Username
 		}
 		result[convoID] = append(result[convoID], model.ConversationMember{
-			ID: userID, Username: username, DisplayName: name, AvatarURL: avatarURL,
+			ID: r.UserID, Username: r.Username, DisplayName: name, AvatarURL: pgtextPtr(r.AvatarUrl),
 		})
 	}
 	return result, nil
 }
 
 func (s *Store) IsConversationMember(ctx context.Context, conversationID, userID string) (bool, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2)`,
-		conversationID, userID,
-	).Scan(&exists)
-	return exists, err
+	return s.Q.IsConversationMember(ctx, sqlcdb.IsConversationMemberParams{
+		ConversationID: pgUUID(conversationID),
+		UserID:         userID,
+	})
 }
 
 func (s *Store) GetMessages(ctx context.Context, conversationID, before string, limitStr string) ([]model.DirectMessage, error) {
@@ -156,40 +108,37 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 		limit = int(math.Min(float64(l), 100))
 	}
 
-	var messages []model.DirectMessage
+	var dbMessages []sqlcdb.ForumlineDirectMessage
 
 	if before != "" {
-		rows, err := s.Pool.Query(ctx,
-			`SELECT id, conversation_id, sender_id, content, created_at
-			 FROM forumline_direct_messages
-			 WHERE conversation_id = $1 AND created_at < (SELECT created_at FROM forumline_direct_messages WHERE id = $2)
-			 ORDER BY created_at DESC LIMIT $3`, conversationID, before, limit)
+		rows, err := s.Q.GetMessagesBefore(ctx, sqlcdb.GetMessagesBeforeParams{
+			ConversationID: pgUUID(conversationID),
+			BeforeID:       pgUUID(before),
+			MsgLimit:       int32(min(limit, 1000)), //nolint:gosec // bounded
+		})
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var msg model.DirectMessage
-			if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt); err != nil {
-				continue
-			}
-			messages = append(messages, msg)
-		}
+		dbMessages = rows
 	} else {
-		rows, err := s.Pool.Query(ctx,
-			`SELECT id, conversation_id, sender_id, content, created_at
-			 FROM forumline_direct_messages
-			 WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT $2`, conversationID, limit)
+		rows, err := s.Q.GetMessagesLatest(ctx, sqlcdb.GetMessagesLatestParams{
+			ConversationID: pgUUID(conversationID),
+			Limit:          int32(min(limit, 1000)), //nolint:gosec // bounded
+		})
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var msg model.DirectMessage
-			if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt); err != nil {
-				continue
-			}
-			messages = append(messages, msg)
+		dbMessages = rows
+	}
+
+	messages := make([]model.DirectMessage, len(dbMessages))
+	for i, m := range dbMessages {
+		messages[i] = model.DirectMessage{
+			ID:             uuidStr(m.ID),
+			ConversationID: uuidStr(m.ConversationID),
+			SenderID:       m.SenderID,
+			Content:        m.Content,
+			CreatedAt:      m.CreatedAt.Time,
 		}
 	}
 
@@ -197,69 +146,68 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
-	if messages == nil {
-		messages = []model.DirectMessage{}
-	}
 	return messages, nil
 }
 
 func (s *Store) SendMessage(ctx context.Context, conversationID, senderID, content string) (*model.DirectMessage, error) {
-	var msg model.DirectMessage
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO forumline_direct_messages (conversation_id, sender_id, content)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, conversation_id, sender_id, content, created_at`,
-		conversationID, senderID, content,
-	).Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.CreatedAt)
+	row, err := s.Q.SendMessage(ctx, sqlcdb.SendMessageParams{
+		ConversationID: pgUUID(conversationID),
+		SenderID:       senderID,
+		Content:        content,
+	})
 	if err != nil {
 		return nil, err
 	}
-	// Update conversation timestamp
-	_, _ = s.Pool.Exec(ctx, `UPDATE forumline_conversations SET updated_at = now() WHERE id = $1`, conversationID)
-	return &msg, nil
+	// Update conversation timestamp (fire-and-forget)
+	_ = s.Q.TouchConversation(ctx, pgUUID(conversationID))
+	return &model.DirectMessage{
+		ID:             uuidStr(row.ID),
+		ConversationID: uuidStr(row.ConversationID),
+		SenderID:       row.SenderID,
+		Content:        row.Content,
+		CreatedAt:      row.CreatedAt.Time,
+	}, nil
 }
 
 func (s *Store) MarkRead(ctx context.Context, conversationID, userID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_conversation_members SET last_read_at = now()
-		 WHERE conversation_id = $1 AND user_id = $2`, conversationID, userID,
-	)
-	return err
+	return s.Q.MarkRead(ctx, sqlcdb.MarkReadParams{
+		ConversationID: pgUUID(conversationID),
+		UserID:         userID,
+	})
 }
 
 func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherUserID string) (string, error) {
 	// Try to find existing
-	var convoID string
-	err := s.Pool.QueryRow(ctx,
-		`SELECT c.id FROM forumline_conversations c
-		 WHERE c.is_group = false
-		   AND EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = c.id AND user_id = $1)
-		   AND EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = c.id AND user_id = $2)
-		   AND (SELECT count(*) FROM forumline_conversation_members WHERE conversation_id = c.id) = 2`,
-		userID, otherUserID,
-	).Scan(&convoID)
+	id, err := s.Q.Find1to1Conversation(ctx, sqlcdb.Find1to1ConversationParams{
+		UserID:      userID,
+		OtherUserID: otherUserID,
+	})
 	if err == nil {
-		return convoID, nil
+		return uuidStr(id), nil
 	}
 
-	// Create new
+	// Create new (needs transaction)
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	err = tx.QueryRow(ctx,
-		`INSERT INTO forumline_conversations (is_group, created_by) VALUES (false, $1) RETURNING id`, userID,
-	).Scan(&convoID)
+	qtx := s.Q.WithTx(tx)
+
+	convoID, err := qtx.CreateConversation(ctx, sqlcdb.CreateConversationParams{
+		IsGroup:   false,
+		CreatedBy: textToPgtext(userID),
+	})
 	if err != nil {
 		return "", err
 	}
 
-	_, err = tx.Exec(ctx,
-		`INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
-		convoID, userID, otherUserID,
-	)
+	err = qtx.Insert1to1Members(ctx, sqlcdb.Insert1to1MembersParams{
+		ConversationID: convoID,
+		UserID:         userID,
+		UserID_2:       otherUserID,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -267,9 +215,10 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 	if err = tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	return convoID, nil
+	return uuidStr(convoID), nil
 }
 
+// CreateGroupConversation uses dynamic SQL for batch member insert — stays hand-written.
 func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID string, memberIDs []string) (string, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -277,16 +226,18 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var convoID string
-	err = tx.QueryRow(ctx,
-		`INSERT INTO forumline_conversations (is_group, name, created_by) VALUES (true, $1, $2) RETURNING id`,
-		name, creatorID,
-	).Scan(&convoID)
+	qtx := s.Q.WithTx(tx)
+
+	convoID, err := qtx.CreateConversation(ctx, sqlcdb.CreateConversationParams{
+		IsGroup:   true,
+		Name:      textToPgtext(name),
+		CreatedBy: textToPgtext(creatorID),
+	})
 	if err != nil {
 		return "", err
 	}
 
-	// Batch insert members
+	// Batch insert members (dynamic VALUES — can't be sqlc'd)
 	valueStrings := make([]string, len(memberIDs))
 	args := make([]interface{}, 0, len(memberIDs)+1)
 	args = append(args, convoID)
@@ -306,51 +257,40 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 	if err = tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	return convoID, nil
+	return uuidStr(convoID), nil
 }
 
 func (s *Store) IsGroupConversation(ctx context.Context, conversationID, userID string) (bool, error) {
-	var isGroup bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT c.is_group FROM forumline_conversations c
-		 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-		 WHERE c.id = $2`, userID, conversationID,
-	).Scan(&isGroup)
-	return isGroup, err
+	return s.Q.IsGroupConversation(ctx, sqlcdb.IsGroupConversationParams{
+		UserID:         userID,
+		ConversationID: pgUUID(conversationID),
+	})
 }
 
 func (s *Store) UpdateConversationName(ctx context.Context, conversationID, name string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_conversations SET name = $1 WHERE id = $2`, name, conversationID)
-	return err
+	return s.Q.UpdateConversationName(ctx, sqlcdb.UpdateConversationNameParams{
+		Name: textToPgtext(name),
+		ID:   pgUUID(conversationID),
+	})
 }
 
 func (s *Store) AddConversationMembers(ctx context.Context, conversationID string, memberIDs []string) error {
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO forumline_conversation_members (conversation_id, user_id)
-		 SELECT $1, p.id FROM forumline_profiles p WHERE p.id = ANY($2)
-		 ON CONFLICT DO NOTHING`, conversationID, memberIDs)
-	return err
+	return s.Q.AddConversationMembers(ctx, sqlcdb.AddConversationMembersParams{
+		ConversationID: pgUUID(conversationID),
+		MemberIds:      memberIDs,
+	})
 }
 
 func (s *Store) RemoveConversationMembers(ctx context.Context, conversationID string, memberIDs []string) error {
-	_, err := s.Pool.Exec(ctx,
-		`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = ANY($2)`,
-		conversationID, memberIDs)
-	return err
+	return s.Q.RemoveConversationMembers(ctx, sqlcdb.RemoveConversationMembersParams{
+		ConversationID: pgUUID(conversationID),
+		MemberIds:      memberIDs,
+	})
 }
 
 func (s *Store) LeaveConversation(ctx context.Context, conversationID, userID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2`,
-		conversationID, userID)
-	return err
-}
-
-func (s *Store) CountExistingUsers(ctx context.Context, userIDs []string) (int, error) {
-	var count int
-	err := s.Pool.QueryRow(ctx,
-		`SELECT count(*) FROM forumline_profiles WHERE id = ANY($1)`, userIDs,
-	).Scan(&count)
-	return count, err
+	return s.Q.LeaveConversation(ctx, sqlcdb.LeaveConversationParams{
+		ConversationID: pgUUID(conversationID),
+		UserID:         userID,
+	})
 }

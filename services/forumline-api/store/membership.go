@@ -5,117 +5,97 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
 )
 
 func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Membership, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT m.id, m.joined_at, m.forum_authed_at, m.notifications_muted,
-		        f.domain, f.name, f.icon_url, f.api_base, f.web_base, f.capabilities,
-		        f.member_count
-		 FROM forumline_memberships m
-		 JOIN forumline_forums f ON f.id = m.forum_id
-		 WHERE m.user_id = $1
-		 ORDER BY m.joined_at DESC`, userID,
-	)
+	rows, err := s.Q.ListMemberships(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var memberships []model.Membership
-	for rows.Next() {
-		var m model.Membership
-		var id string
-		var joinedAt time.Time
-		var forumAuthedAt *time.Time
-		var notifMuted bool
-
-		if err := rows.Scan(&id, &joinedAt, &forumAuthedAt, &notifMuted,
-			&m.ForumDomain, &m.ForumName, &m.ForumIconURL, &m.APIBase, &m.WebBase, &m.Capabilities,
-			&m.MemberCount); err != nil {
-			continue
+	memberships := make([]model.Membership, 0, len(rows))
+	for _, r := range rows {
+		m := model.Membership{
+			ForumDomain:        r.Domain,
+			ForumName:          r.Name,
+			ForumIconURL:       pgtextPtr(r.IconUrl),
+			APIBase:            r.ApiBase,
+			WebBase:            r.WebBase,
+			Capabilities:       r.Capabilities,
+			MemberCount:        int(r.MemberCount),
+			JoinedAt:           r.JoinedAt.Time.Format(time.RFC3339),
+			NotificationsMuted: r.NotificationsMuted,
 		}
-		m.JoinedAt = joinedAt.Format(time.RFC3339)
-		if forumAuthedAt != nil {
-			s := forumAuthedAt.Format(time.RFC3339)
+		if r.ForumAuthedAt.Valid {
+			s := r.ForumAuthedAt.Time.Format(time.RFC3339)
 			m.ForumAuthedAt = &s
 		}
-		m.NotificationsMuted = notifMuted
 		memberships = append(memberships, m)
 	}
-	if memberships == nil {
+	if len(memberships) == 0 {
 		memberships = []model.Membership{}
 	}
 	return memberships, nil
 }
 
 func (s *Store) UpsertMembership(ctx context.Context, userID, forumID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO forumline_memberships (user_id, forum_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		userID, forumID,
-	)
-	return err
+	return s.Q.UpsertMembership(ctx, sqlcdb.UpsertMembershipParams{
+		UserID:  userID,
+		ForumID: pgUUID(forumID),
+	})
 }
 
 func (s *Store) DeleteMembership(ctx context.Context, userID, forumID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`DELETE FROM forumline_memberships WHERE user_id = $1 AND forum_id = $2`, userID, forumID,
-	)
-	return err
+	return s.Q.DeleteMembership(ctx, sqlcdb.DeleteMembershipParams{
+		UserID:  userID,
+		ForumID: pgUUID(forumID),
+	})
 }
 
 func (s *Store) UpdateMembershipAuth(ctx context.Context, userID, forumID string, authed bool) error {
 	if authed {
-		_, err := s.Pool.Exec(ctx,
-			`UPDATE forumline_memberships SET forum_authed_at = now() WHERE user_id = $1 AND forum_id = $2`,
-			userID, forumID)
-		return err
+		return s.Q.SetMembershipAuthed(ctx, sqlcdb.SetMembershipAuthedParams{
+			UserID:  userID,
+			ForumID: pgUUID(forumID),
+		})
 	}
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_memberships SET forum_authed_at = NULL WHERE user_id = $1 AND forum_id = $2`,
-		userID, forumID)
-	return err
+	return s.Q.ClearMembershipAuthed(ctx, sqlcdb.ClearMembershipAuthedParams{
+		UserID:  userID,
+		ForumID: pgUUID(forumID),
+	})
 }
 
 func (s *Store) UpdateMembershipMute(ctx context.Context, userID, forumID string, muted bool) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_memberships SET notifications_muted = $1 WHERE user_id = $2 AND forum_id = $3`,
-		muted, userID, forumID)
-	return err
+	return s.Q.UpdateMembershipMute(ctx, sqlcdb.UpdateMembershipMuteParams{
+		NotificationsMuted: muted,
+		UserID:             userID,
+		ForumID:            pgUUID(forumID),
+	})
 }
 
 func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID, userID string) (map[string]interface{}, error) {
-	var domain, name, apiBase, webBase string
-	var iconURL *string
-	var capabilities []string
-	var joinedAt time.Time
-	var memberCount int
-
-	err := s.Pool.QueryRow(ctx,
-		`SELECT f.domain, f.name, f.icon_url, f.api_base, f.web_base, f.capabilities, m.joined_at,
-		        (SELECT COUNT(*) FROM forumline_memberships WHERE forum_id = f.id)
-		 FROM forumline_forums f
-		 JOIN forumline_memberships m ON m.forum_id = f.id
-		 WHERE f.id = $1 AND m.user_id = $2`, forumID, userID,
-	).Scan(&domain, &name, &iconURL, &apiBase, &webBase, &capabilities, &joinedAt, &memberCount)
+	r, err := s.Q.GetMembershipJoinDetails(ctx, sqlcdb.GetMembershipJoinDetailsParams{
+		ID:     pgUUID(forumID),
+		UserID: userID,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"domain": domain, "name": name, "icon_url": iconURL,
-		"api_base": apiBase, "web_base": webBase, "capabilities": capabilities,
-		"joined_at": joinedAt.Format(time.RFC3339), "member_count": memberCount,
+		"domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+		"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
+		"joined_at": r.JoinedAt.Time.Format(time.RFC3339), "member_count": int(r.MemberCount),
 	}, nil
 }
 
 func (s *Store) IsNotificationsMuted(ctx context.Context, userID, forumID string) (bool, error) {
-	var muted bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT notifications_muted FROM forumline_memberships WHERE user_id = $1 AND forum_id = $2`,
-		userID, forumID,
-	).Scan(&muted)
+	muted, err := s.Q.IsNotificationsMuted(ctx, sqlcdb.IsNotificationsMutedParams{
+		UserID:  userID,
+		ForumID: pgUUID(forumID),
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil

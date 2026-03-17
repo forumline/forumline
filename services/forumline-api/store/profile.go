@@ -6,42 +6,45 @@ import (
 	"strings"
 
 	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, error) {
-	var p model.Profile
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, username, display_name, avatar_url, bio, status_message, online_status, show_online_status
-		 FROM forumline_profiles WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Username, &p.DisplayName, &p.AvatarURL, &p.Bio,
-		&p.StatusMessage, &p.OnlineStatus, &p.ShowOnlineStatus)
+	row, err := s.Q.GetProfile(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &p, nil
+	return &model.Profile{
+		ID:               row.ID,
+		Username:         row.Username,
+		DisplayName:      row.DisplayName,
+		AvatarURL:        pgtextPtr(row.AvatarUrl),
+		Bio:              pgtextPtr(row.Bio),
+		StatusMessage:    row.StatusMessage,
+		OnlineStatus:     row.OnlineStatus,
+		ShowOnlineStatus: row.ShowOnlineStatus,
+	}, nil
 }
 
 func (s *Store) CreateProfile(ctx context.Context, id, username, displayName, avatarURL string) error {
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO forumline_profiles (id, username, display_name, avatar_url) VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (id) DO NOTHING`,
-		id, username, displayName, avatarURL,
-	)
-	return err
+	return s.Q.CreateProfile(ctx, sqlcdb.CreateProfileParams{
+		ID:          id,
+		Username:    username,
+		DisplayName: displayName,
+		AvatarUrl:   pgtype.Text{String: avatarURL, Valid: avatarURL != ""},
+	})
 }
 
 func (s *Store) UsernameExists(ctx context.Context, username string) (bool, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE username = $1)`, username,
-	).Scan(&exists)
-	return exists, err
+	return s.Q.UsernameExists(ctx, username)
 }
 
+// UpdateProfile uses dynamic SQL — can't be expressed in sqlc.
 func (s *Store) UpdateProfile(ctx context.Context, id string, sets map[string]interface{}) error {
 	if len(sets) == 0 {
 		return nil
@@ -61,44 +64,32 @@ func (s *Store) UpdateProfile(ctx context.Context, id string, sets map[string]in
 }
 
 func (s *Store) DeleteUser(ctx context.Context, id string) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM forumline_profiles WHERE id = $1`, id)
-	return err
+	return s.Q.DeleteUser(ctx, id)
 }
 
 func (s *Store) SearchProfiles(ctx context.Context, query, excludeUserID string) ([]model.ProfileSearchResult, error) {
 	pattern := "%" + query + "%"
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, username, display_name, avatar_url
-		 FROM forumline_profiles
-		 WHERE id != $1 AND (username ILIKE $2 OR display_name ILIKE $2)
-		 LIMIT 10`,
-		excludeUserID, pattern,
-	)
+	rows, err := s.Q.SearchProfiles(ctx, sqlcdb.SearchProfilesParams{
+		ID:       excludeUserID,
+		Username: pattern,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var results []model.ProfileSearchResult
-	for rows.Next() {
-		var p model.ProfileSearchResult
-		if err := rows.Scan(&p.ID, &p.Username, &p.DisplayName, &p.AvatarURL); err != nil {
-			continue
+	results := make([]model.ProfileSearchResult, len(rows))
+	for i, r := range rows {
+		results[i] = model.ProfileSearchResult{
+			ID:          r.ID,
+			Username:    r.Username,
+			DisplayName: pgtextPtr(pgtype.Text{String: r.DisplayName, Valid: r.DisplayName != ""}),
+			AvatarURL:   pgtextPtr(r.AvatarUrl),
 		}
-		results = append(results, p)
-	}
-	if results == nil {
-		results = []model.ProfileSearchResult{}
 	}
 	return results, nil
 }
 
 func (s *Store) ProfileExists(ctx context.Context, id string) (bool, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, id,
-	).Scan(&exists)
-	return exists, err
+	return s.Q.ProfileExists(ctx, id)
 }
 
 func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[string]*model.Profile, error) {
@@ -106,21 +97,18 @@ func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[strin
 	if len(ids) == 0 {
 		return profiles, nil
 	}
-
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, username, display_name, avatar_url FROM forumline_profiles WHERE id = ANY($1)`, ids,
-	)
+	rows, err := s.Q.FetchProfilesByIDs(ctx, ids)
 	if err != nil {
 		return profiles, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		p := &model.Profile{}
-		if err := rows.Scan(&p.ID, &p.Username, &p.DisplayName, &p.AvatarURL); err != nil {
-			continue
+	for _, r := range rows {
+		profiles[r.ID] = &model.Profile{
+			ID:          r.ID,
+			Username:    r.Username,
+			DisplayName: r.DisplayName,
+			AvatarURL:   pgtextPtr(r.AvatarUrl),
 		}
-		profiles[p.ID] = p
 	}
 	return profiles, nil
 }
+

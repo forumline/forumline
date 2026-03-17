@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
 )
 
+// ListForums uses dynamic SQL (search, tag, sort) — stays hand-written.
 func (s *Store) ListForums(ctx context.Context, search, tag, sort string, limit, offset int) ([]map[string]interface{}, error) {
 	query := `SELECT id, domain, name, icon_url, api_base, web_base, capabilities, description, screenshot_url, tags, member_count
 		 FROM forumline_forums WHERE approved = true AND array_length(capabilities, 1) > 0`
@@ -69,300 +71,217 @@ func (s *Store) ListForums(ctx context.Context, search, tag, sort string, limit,
 }
 
 func (s *Store) ListForumTags(ctx context.Context) ([]string, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT DISTINCT unnest(tags) AS tag FROM forumline_forums WHERE approved = true AND array_length(capabilities, 1) > 0 ORDER BY tag`)
+	items, err := s.Q.ListForumTags(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var tags []string
-	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
-			continue
+	tags := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			tags = append(tags, s)
 		}
-		tags = append(tags, tag)
 	}
-	if tags == nil {
+	if len(tags) == 0 {
 		tags = []string{}
 	}
 	return tags, nil
 }
 
 func (s *Store) ListRecommendedForums(ctx context.Context, userID string) ([]map[string]interface{}, error) {
-	rows, err := s.Pool.Query(ctx,
-		`WITH my_forums AS (
-			SELECT forum_id FROM forumline_memberships WHERE user_id = $1
-		),
-		forum_mates AS (
-			SELECT DISTINCT m.user_id
-			FROM forumline_memberships m
-			JOIN my_forums mf ON m.forum_id = mf.forum_id
-			WHERE m.user_id != $1
-		)
-		SELECT f.id, f.domain, f.name, f.icon_url, f.api_base, f.web_base,
-		       f.capabilities, f.description, f.screenshot_url, f.tags, f.member_count,
-		       COUNT(m2.user_id) AS shared_member_count
-		FROM forumline_memberships m2
-		JOIN forum_mates fm ON m2.user_id = fm.user_id
-		JOIN forumline_forums f ON f.id = m2.forum_id
-		WHERE f.approved = true
-		  AND f.id NOT IN (SELECT forum_id FROM my_forums)
-		GROUP BY f.id
-		ORDER BY shared_member_count DESC, f.member_count DESC
-		LIMIT 10`, userID,
-	)
+	rows, err := s.Q.ListRecommendedForums(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var forums []map[string]interface{}
-	for rows.Next() {
-		var id, domain, name, apiBase, webBase string
-		var iconURL, description, screenshotURL *string
-		var capabilities, forumTags []string
-		var memberCount, sharedMemberCount int
-		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase,
-			&capabilities, &description, &screenshotURL, &forumTags, &memberCount, &sharedMemberCount); err != nil {
-			continue
-		}
+	forums := make([]map[string]interface{}, 0, len(rows))
+	for _, r := range rows {
 		forums = append(forums, map[string]interface{}{
-			"id": id, "domain": domain, "name": name, "icon_url": iconURL,
-			"api_base": apiBase, "web_base": webBase, "capabilities": capabilities,
-			"description": description, "screenshot_url": screenshotURL,
-			"tags": forumTags, "member_count": memberCount, "shared_member_count": sharedMemberCount,
+			"id": uuidStr(r.ID), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
+			"description": pgtextPtr(r.Description), "screenshot_url": pgtextPtr(r.ScreenshotUrl),
+			"tags": r.Tags, "member_count": int(r.MemberCount), "shared_member_count": int(r.SharedMemberCount),
 		})
 	}
-	if forums == nil {
+	if len(forums) == 0 {
 		forums = []map[string]interface{}{}
 	}
 	return forums, nil
 }
 
 func (s *Store) GetForumIDByDomain(ctx context.Context, domain string) string {
-	var id string
-	_ = s.Pool.QueryRow(ctx, `SELECT id FROM forumline_forums WHERE domain = $1`, domain).Scan(&id)
-	return id
+	id, err := s.Q.GetForumIDByDomain(ctx, domain)
+	if err != nil {
+		return ""
+	}
+	return uuidStr(id)
 }
 
 func (s *Store) GetForumDomainByID(ctx context.Context, forumID string) (string, error) {
-	var domain string
-	err := s.Pool.QueryRow(ctx, `SELECT domain FROM forumline_forums WHERE id = $1`, forumID).Scan(&domain)
-	return domain, err
+	return s.Q.GetForumDomainByID(ctx, pgUUID(forumID))
 }
 
 func (s *Store) GetForumName(ctx context.Context, forumID string) string {
-	var name string
-	_ = s.Pool.QueryRow(ctx, `SELECT COALESCE(name, domain) FROM forumline_forums WHERE id = $1`, forumID).Scan(&name)
+	name, err := s.Q.GetForumName(ctx, pgUUID(forumID))
+	if err != nil {
+		return ""
+	}
 	return name
 }
 
 func (s *Store) RegisterForum(ctx context.Context, domain, name, apiBase, webBase string,
 	capabilities []string, description *string, tags []string, ownerID string) (string, error) {
-	var forumID string
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO forumline_forums (domain, name, api_base, web_base, capabilities, description, tags, owner_id, approved)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
-		 RETURNING id`,
-		domain, name, apiBase, webBase, capabilities, description, tags, ownerID,
-	).Scan(&forumID)
-	return forumID, err
+	id, err := s.Q.RegisterForum(ctx, sqlcdb.RegisterForumParams{
+		Domain: domain, Name: name, ApiBase: apiBase, WebBase: webBase,
+		Capabilities: capabilities, Description: optTextToPgtext(description),
+		Tags: tags, OwnerID: textToPgtext(ownerID),
+	})
+	if err != nil {
+		return "", err
+	}
+	return uuidStr(id), nil
 }
 
 func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManifest, tags []string) (string, error) {
-	var forumID string
-	err := s.Pool.QueryRow(ctx,
-		`INSERT INTO forumline_forums (domain, name, icon_url, api_base, web_base, capabilities, tags, approved)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, false)
-		 ON CONFLICT (domain) DO UPDATE SET
-		   name = EXCLUDED.name, icon_url = EXCLUDED.icon_url,
-		   api_base = EXCLUDED.api_base, web_base = EXCLUDED.web_base,
-		   capabilities = EXCLUDED.capabilities, tags = EXCLUDED.tags
-		 WHERE forumline_forums.approved = false
-		 RETURNING id`,
-		m.Domain, m.Name, m.IconURL, m.APIBase, m.WebBase, m.Capabilities, tags,
-	).Scan(&forumID)
+	id, err := s.Q.UpsertForumFromManifest(ctx, sqlcdb.UpsertForumFromManifestParams{
+		Domain: m.Domain, Name: m.Name, IconUrl: textToPgtext(m.IconURL),
+		ApiBase: m.APIBase, WebBase: m.WebBase, Capabilities: m.Capabilities, Tags: tags,
+	})
 	if err == pgx.ErrNoRows {
 		return "", nil // approved forum exists, don't overwrite
 	}
-	return forumID, err
+	if err != nil {
+		return "", err
+	}
+	return uuidStr(id), nil
 }
 
 func (s *Store) CountForumsByOwner(ctx context.Context, ownerID string) (int, error) {
-	var count int
-	err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM forumline_forums WHERE owner_id = $1`, ownerID).Scan(&count)
-	return count, err
+	count, err := s.Q.CountForumsByOwner(ctx, textToPgtext(ownerID))
+	return int(count), err
 }
 
 func (s *Store) DomainExists(ctx context.Context, domain string) (bool, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM forumline_forums WHERE domain = $1)`, domain).Scan(&exists)
-	return exists, err
+	return s.Q.DomainExists(ctx, domain)
 }
 
 func (s *Store) ListOwnedForums(ctx context.Context, ownerID string) ([]map[string]interface{}, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, domain, name, icon_url, api_base, web_base, approved,
-		        member_count, last_seen_at, consecutive_failures, created_at
-		 FROM forumline_forums WHERE owner_id = $1
-		 ORDER BY created_at DESC`, ownerID,
-	)
+	rows, err := s.Q.ListOwnedForums(ctx, textToPgtext(ownerID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var forums []map[string]interface{}
-	for rows.Next() {
-		var id, domain, name, apiBase, webBase string
-		var iconURL *string
-		var approved bool
-		var memberCount, consecutiveFailures int
-		var lastSeenAt *time.Time
-		var createdAt time.Time
-		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase, &approved,
-			&memberCount, &lastSeenAt, &consecutiveFailures, &createdAt); err != nil {
-			continue
-		}
+	forums := make([]map[string]interface{}, 0, len(rows))
+	for _, r := range rows {
 		forum := map[string]interface{}{
-			"id": id, "domain": domain, "name": name, "icon_url": iconURL,
-			"api_base": apiBase, "web_base": webBase, "approved": approved,
-			"member_count": memberCount, "consecutive_failures": consecutiveFailures,
-			"created_at": createdAt.Format(time.RFC3339),
+			"id": uuidStr(r.ID), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"api_base": r.ApiBase, "web_base": r.WebBase, "approved": r.Approved,
+			"member_count": int(r.MemberCount), "consecutive_failures": int(r.ConsecutiveFailures),
+			"created_at": r.CreatedAt.Time.Format(time.RFC3339),
 		}
-		if lastSeenAt != nil {
-			forum["last_seen_at"] = lastSeenAt.Format(time.RFC3339)
+		if r.LastSeenAt.Valid {
+			forum["last_seen_at"] = r.LastSeenAt.Time.Format(time.RFC3339)
 		}
 		forums = append(forums, forum)
 	}
-	if forums == nil {
+	if len(forums) == 0 {
 		forums = []map[string]interface{}{}
 	}
 	return forums, nil
 }
 
 func (s *Store) GetForumOwner(ctx context.Context, forumID string) (*string, error) {
-	var ownerID *string
-	err := s.Pool.QueryRow(ctx, `SELECT owner_id FROM forumline_forums WHERE id = $1`, forumID).Scan(&ownerID)
-	return ownerID, err
-}
-
-func (s *Store) DeleteForum(ctx context.Context, forumID, ownerID string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM forumline_forums WHERE id = $1 AND owner_id = $2`, forumID, ownerID)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
-}
-
-func (s *Store) DeleteForumByID(ctx context.Context, forumID string) error {
-	_, err := s.Pool.Exec(ctx, `DELETE FROM forumline_forums WHERE id = $1`, forumID)
-	return err
-}
-
-func (s *Store) CountForumMembers(ctx context.Context, forumID string) int {
-	var count int
-	_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM forumline_memberships WHERE forum_id = $1`, forumID).Scan(&count)
-	return count
-}
-
-func (s *Store) UpdateForumScreenshot(ctx context.Context, domain, screenshotURL string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_forums SET screenshot_url = $1, updated_at = now() WHERE domain = $2`,
-		screenshotURL, domain)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
-}
-
-func (s *Store) UpdateForumIcon(ctx context.Context, domain, iconURL string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_forums SET icon_url = $1, updated_at = now() WHERE domain = $2`,
-		iconURL, domain)
-	if err != nil {
-		return 0, err
-	}
-	return tag.RowsAffected(), nil
-}
-
-func (s *Store) MarkForumHealthy(ctx context.Context, domain string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_forums SET last_seen_at = now(), consecutive_failures = 0 WHERE domain = $1`, domain)
-	if err != nil {
-		return 0, err
-	}
-	if tag.RowsAffected() > 0 {
-		// Re-approve owned forums that have been healthy
-		_, _ = s.Pool.Exec(ctx,
-			`UPDATE forumline_forums SET approved = true WHERE domain = $1 AND approved = false AND consecutive_failures = 0 AND owner_id IS NOT NULL`,
-			domain,
-		)
-	}
-	return tag.RowsAffected(), nil
-}
-
-func (s *Store) IncrementForumFailures(ctx context.Context, domain string) (int, *string, error) {
-	var failures int
-	var ownerID *string
-	err := s.Pool.QueryRow(ctx,
-		`UPDATE forumline_forums SET consecutive_failures = consecutive_failures + 1
-		 WHERE domain = $1 RETURNING consecutive_failures, owner_id`, domain,
-	).Scan(&failures, &ownerID)
-	if err == pgx.ErrNoRows {
-		return 0, nil, fmt.Errorf("forum not found")
-	}
-	return failures, ownerID, err
-}
-
-func (s *Store) DelistForum(ctx context.Context, domain string) int64 {
-	tag, _ := s.Pool.Exec(ctx,
-		`UPDATE forumline_forums SET approved = false WHERE domain = $1 AND approved = true`, domain)
-	return tag.RowsAffected()
-}
-
-func (s *Store) AutoDeleteUnownedForum(ctx context.Context, domain string) int64 {
-	tag, _ := s.Pool.Exec(ctx,
-		`DELETE FROM forumline_forums WHERE domain = $1 AND owner_id IS NULL`, domain)
-	return tag.RowsAffected()
-}
-
-func (s *Store) ListAllForums(ctx context.Context) ([]map[string]interface{}, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, domain, name, icon_url, api_base, web_base, capabilities, approved, owner_id,
-		        last_seen_at, consecutive_failures
-		 FROM forumline_forums ORDER BY domain`)
+	owner, err := s.Q.GetForumOwner(ctx, pgUUID(forumID))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return pgtextPtr(owner), nil
+}
 
-	var forums []map[string]interface{}
-	for rows.Next() {
-		var id, domain, name, apiBase, webBase string
-		var iconURL, ownerID *string
-		var capabilities []string
-		var approved bool
-		var lastSeenAt *time.Time
-		var consecutiveFailures int
-		if err := rows.Scan(&id, &domain, &name, &iconURL, &apiBase, &webBase,
-			&capabilities, &approved, &ownerID, &lastSeenAt, &consecutiveFailures); err != nil {
-			continue
-		}
+func (s *Store) DeleteForum(ctx context.Context, forumID, ownerID string) (int64, error) {
+	return s.Q.DeleteForum(ctx, sqlcdb.DeleteForumParams{
+		ID:      pgUUID(forumID),
+		OwnerID: textToPgtext(ownerID),
+	})
+}
+
+func (s *Store) DeleteForumByID(ctx context.Context, forumID string) error {
+	return s.Q.DeleteForumByID(ctx, pgUUID(forumID))
+}
+
+func (s *Store) CountForumMembers(ctx context.Context, forumID string) int {
+	count, err := s.Q.CountForumMembers(ctx, pgUUID(forumID))
+	if err != nil {
+		return 0
+	}
+	return int(count)
+}
+
+func (s *Store) UpdateForumScreenshot(ctx context.Context, domain, screenshotURL string) (int64, error) {
+	return s.Q.UpdateForumScreenshot(ctx, sqlcdb.UpdateForumScreenshotParams{
+		ScreenshotUrl: textToPgtext(screenshotURL),
+		Domain:        domain,
+	})
+}
+
+func (s *Store) UpdateForumIcon(ctx context.Context, domain, iconURL string) (int64, error) {
+	return s.Q.UpdateForumIcon(ctx, sqlcdb.UpdateForumIconParams{
+		IconUrl: textToPgtext(iconURL),
+		Domain:  domain,
+	})
+}
+
+func (s *Store) MarkForumHealthy(ctx context.Context, domain string) (int64, error) {
+	affected, err := s.Q.MarkForumHealthy(ctx, domain)
+	if err != nil {
+		return 0, err
+	}
+	if affected > 0 {
+		_ = s.Q.ReapproveHealthyForum(ctx, domain)
+	}
+	return affected, nil
+}
+
+func (s *Store) IncrementForumFailures(ctx context.Context, domain string) (int, *string, error) {
+	row, err := s.Q.IncrementForumFailures(ctx, domain)
+	if err == pgx.ErrNoRows {
+		return 0, nil, fmt.Errorf("forum not found")
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+	return int(row.ConsecutiveFailures), pgtextPtr(row.OwnerID), nil
+}
+
+func (s *Store) DelistForum(ctx context.Context, domain string) int64 {
+	n, _ := s.Q.DelistForum(ctx, domain)
+	return n
+}
+
+func (s *Store) AutoDeleteUnownedForum(ctx context.Context, domain string) int64 {
+	n, _ := s.Q.AutoDeleteUnownedForum(ctx, domain)
+	return n
+}
+
+func (s *Store) ListAllForums(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := s.Q.ListAllForums(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	forums := make([]map[string]interface{}, 0, len(rows))
+	for _, r := range rows {
 		forum := map[string]interface{}{
-			"id": id, "domain": domain, "name": name, "icon_url": iconURL,
-			"api_base": apiBase, "web_base": webBase, "capabilities": capabilities,
-			"approved": approved, "has_owner": ownerID != nil,
-			"consecutive_failures": consecutiveFailures,
+			"id": uuidStr(r.ID), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
+			"approved": r.Approved, "has_owner": r.OwnerID.Valid,
+			"consecutive_failures": int(r.ConsecutiveFailures),
 		}
-		if lastSeenAt != nil {
-			forum["last_seen_at"] = lastSeenAt.Format(time.RFC3339)
+		if r.LastSeenAt.Valid {
+			forum["last_seen_at"] = r.LastSeenAt.Time.Format(time.RFC3339)
 		}
 		forums = append(forums, forum)
 	}
-	if forums == nil {
+	if len(forums) == 0 {
 		forums = []map[string]interface{}{}
 	}
 	return forums, nil

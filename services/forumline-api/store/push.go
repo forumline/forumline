@@ -4,41 +4,37 @@ import (
 	"context"
 
 	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
 
 func (s *Store) UpsertPushSubscription(ctx context.Context, userID, endpoint, p256dh, auth string) error {
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = $3, auth = $4`,
-		userID, endpoint, p256dh, auth,
-	)
-	return err
+	return s.Q.UpsertPushSubscription(ctx, sqlcdb.UpsertPushSubscriptionParams{
+		UserID:   userID,
+		Endpoint: endpoint,
+		P256dh:   p256dh,
+		Auth:     auth,
+	})
 }
 
 func (s *Store) DeletePushSubscription(ctx context.Context, userID, endpoint string) error {
-	_, err := s.Pool.Exec(ctx,
-		`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`, userID, endpoint,
-	)
-	return err
+	return s.Q.DeletePushSubscription(ctx, sqlcdb.DeletePushSubscriptionParams{
+		UserID:   userID,
+		Endpoint: endpoint,
+	})
 }
 
 func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) ([]model.PushSubscription, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1`, userID,
-	)
+	rows, err := s.Q.ListPushSubscriptions(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var subs []model.PushSubscription
-	for rows.Next() {
-		var sub model.PushSubscription
-		if err := rows.Scan(&sub.Endpoint, &sub.P256dh, &sub.Auth); err != nil {
-			continue
+	subs := make([]model.PushSubscription, len(rows))
+	for i, r := range rows {
+		subs[i] = model.PushSubscription{
+			Endpoint: r.Endpoint,
+			P256dh:   r.P256dh,
+			Auth:     r.Auth,
 		}
-		subs = append(subs, sub)
 	}
 	return subs, nil
 }
@@ -47,18 +43,15 @@ func (s *Store) DeleteStaleEndpoints(ctx context.Context, userID string, endpoin
 	if len(endpoints) == 0 {
 		return
 	}
-	_, _ = s.Pool.Exec(ctx,
-		`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = ANY($2)`,
-		userID, endpoints,
-	)
+	_ = s.Q.DeleteStaleEndpoints(ctx, sqlcdb.DeleteStaleEndpointsParams{
+		UserID:    userID,
+		Endpoints: endpoints,
+	})
 }
 
 func (s *Store) GetSenderUsername(ctx context.Context, senderID string) string {
-	var username string
-	_ = s.Pool.QueryRow(ctx,
-		`SELECT username FROM forumline_profiles WHERE id = $1`, senderID,
-	).Scan(&username)
-	if username == "" {
+	username, err := s.Q.GetSenderUsername(ctx, senderID)
+	if err != nil || username == "" {
 		return "someone"
 	}
 	return username
@@ -66,25 +59,23 @@ func (s *Store) GetSenderUsername(ctx context.Context, senderID string) string {
 
 func (s *Store) GetOnlineStatusPreferences(ctx context.Context, userIDs []string) (map[string]bool, error) {
 	result := make(map[string]bool)
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id::text, online_status, show_online_status
-		 FROM forumline_profiles WHERE id = ANY($1)`, userIDs,
-	)
+	rows, err := s.Q.GetOnlineStatusPreferences(ctx, userIDs)
 	if err != nil {
 		return result, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var uid, onlineStatus string
-		var showOnline bool
-		if err := rows.Scan(&uid, &onlineStatus, &showOnline); err != nil {
-			continue
+	for _, r := range rows {
+		if !r.ShowOnlineStatus || r.OnlineStatus == "offline" || r.OnlineStatus == "away" {
+			result[r.ID] = false
 		}
-		if !showOnline || onlineStatus == "offline" || onlineStatus == "away" {
-			result[uid] = false
-		}
-		// Don't set true — let the heartbeat-based status stand
 	}
 	return result, nil
+}
+
+func (s *Store) UserExists(ctx context.Context, userID string) (bool, error) {
+	return s.Q.UserExists(ctx, userID)
+}
+
+func (s *Store) CountExistingUsers(ctx context.Context, userIDs []string) (int, error) {
+	count, err := s.Q.CountExistingUsers(ctx, userIDs)
+	return int(count), err
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -21,71 +22,67 @@ type NotificationRow struct {
 }
 
 func (s *Store) InsertNotification(ctx context.Context, userID, forumDomain, forumName, notifType, title, body, link string) error {
-	_, err := s.Pool.Exec(ctx,
-		`INSERT INTO forumline_notifications (user_id, forum_domain, forum_name, type, title, body, link)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		userID, forumDomain, forumName, notifType, title, body, link)
-	return err
+	return s.Q.InsertNotification(ctx, sqlcdb.InsertNotificationParams{
+		UserID:      userID,
+		ForumDomain: forumDomain,
+		ForumName:   forumName,
+		Type:        notifType,
+		Title:       title,
+		Body:        body,
+		Link:        link,
+	})
 }
 
 func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]NotificationRow, error) {
-	rows, err := s.Pool.Query(ctx,
-		`SELECT id, forum_domain, forum_name, type, title, body, link, read, created_at
-		 FROM forumline_notifications
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2`, userID, limit)
+	rows, err := s.Q.ListNotifications(ctx, sqlcdb.ListNotificationsParams{
+		UserID: userID,
+		Limit:  int32(min(limit, 1000)),  //nolint:gosec // limit is bounded
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var notifs []NotificationRow
-	for rows.Next() {
-		var n NotificationRow
-		var createdAt time.Time
-		if err := rows.Scan(&n.ID, &n.ForumDomain, &n.ForumName, &n.Type, &n.Title, &n.Body, &n.Link, &n.Read, &createdAt); err != nil {
-			continue
-		}
-		n.CreatedAt = createdAt.Format(time.RFC3339)
-		notifs = append(notifs, n)
+	notifs := make([]NotificationRow, 0, len(rows))
+	for _, r := range rows {
+		notifs = append(notifs, NotificationRow{
+			ID:          uuidStr(r.ID),
+			ForumDomain: r.ForumDomain,
+			ForumName:   r.ForumName,
+			Type:        r.Type,
+			Title:       r.Title,
+			Body:        r.Body,
+			Link:        r.Link,
+			Read:        r.Read,
+			CreatedAt:   r.CreatedAt.Time.Format(time.RFC3339),
+		})
 	}
-	if notifs == nil {
+	if len(notifs) == 0 {
 		notifs = []NotificationRow{}
 	}
 	return notifs, nil
 }
 
 func (s *Store) MarkNotificationRead(ctx context.Context, notifID, userID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_notifications SET read = true WHERE id = $1 AND user_id = $2`,
-		notifID, userID)
-	return err
+	return s.Q.MarkNotificationRead(ctx, sqlcdb.MarkNotificationReadParams{
+		ID:     pgUUID(notifID),
+		UserID: userID,
+	})
 }
 
 func (s *Store) MarkAllNotificationsRead(ctx context.Context, userID string) error {
-	_, err := s.Pool.Exec(ctx,
-		`UPDATE forumline_notifications SET read = true WHERE user_id = $1 AND read = false`,
-		userID)
-	return err
+	return s.Q.MarkAllNotificationsRead(ctx, userID)
 }
 
 func (s *Store) CountUnreadNotifications(ctx context.Context, userID string) (int, error) {
-	var count int
-	err := s.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM forumline_notifications WHERE user_id = $1 AND read = false`,
-		userID).Scan(&count)
-	return count, err
+	count, err := s.Q.CountUnreadNotifications(ctx, userID)
+	return int(count), err
 }
 
 func (s *Store) IsNotificationsMutedByDomain(ctx context.Context, userID, forumDomain string) (bool, error) {
-	var muted bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT m.notifications_muted
-		 FROM forumline_memberships m
-		 JOIN forumline_forums f ON f.id = m.forum_id
-		 WHERE m.user_id = $1 AND f.domain = $2`,
-		userID, forumDomain).Scan(&muted)
+	muted, err := s.Q.IsNotificationsMutedByDomain(ctx, sqlcdb.IsNotificationsMutedByDomainParams{
+		UserID: userID,
+		Domain: forumDomain,
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
@@ -96,15 +93,5 @@ func (s *Store) IsNotificationsMutedByDomain(ctx context.Context, userID, forumD
 }
 
 func (s *Store) GetForumNameByDomain(ctx context.Context, domain string) (string, error) {
-	var name string
-	err := s.Pool.QueryRow(ctx,
-		`SELECT name FROM forumline_forums WHERE domain = $1`, domain).Scan(&name)
-	return name, err
-}
-
-func (s *Store) UserExists(ctx context.Context, userID string) (bool, error) {
-	var exists bool
-	err := s.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM forumline_profiles WHERE id = $1)`, userID).Scan(&exists)
-	return exists, err
+	return s.Q.GetForumNameByDomain(ctx, domain)
 }
