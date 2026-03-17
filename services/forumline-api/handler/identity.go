@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -31,9 +32,9 @@ func (h *IdentityHandler) HandleGetIdentity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Auto-create profile on first login: fetch user info from Zitadel
+	// Auto-create profile on first login: fetch user info from Zitadel's userinfo endpoint
 	if p == nil {
-		p, err = h.provisionProfile(r.Context(), userID)
+		p, err = h.provisionProfile(r.Context(), userID, r.Header.Get("Authorization"))
 		if err != nil {
 			log.Printf("[Identity] auto-provision failed for %s: %v", userID, err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create profile"})
@@ -150,28 +151,71 @@ func (h *IdentityHandler) HandleSearchProfiles(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, profiles)
 }
 
-// provisionProfile fetches user info from Zitadel and creates a local profile.
-func (h *IdentityHandler) provisionProfile(ctx context.Context, userID string) (*model.Profile, error) {
-	z, err := service.GetZitadelClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("zitadel client: %w", err)
+// zitadelUserinfoURL is the Zitadel OIDC userinfo endpoint URL.
+var zitadelUserinfoURL string
+
+func init() {
+	if u := os.Getenv("ZITADEL_URL"); u != "" {
+		zitadelUserinfoURL = u + "/oidc/v1/userinfo"
+	}
+}
+
+// provisionProfile fetches user info from Zitadel's OIDC userinfo endpoint
+// and creates a local profile.
+func (h *IdentityHandler) provisionProfile(ctx context.Context, userID, authHeader string) (*model.Profile, error) {
+	if zitadelUserinfoURL == "" {
+		return nil, fmt.Errorf("ZITADEL_URL not set")
 	}
 
-	info, err := z.GetUser(ctx, userID)
+	// Call Zitadel's OIDC userinfo endpoint with the user's own access token
+	req, err := http.NewRequestWithContext(ctx, "GET", zitadelUserinfoURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("fetch user from zitadel: %w", err)
+		return nil, err
+	}
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
 	}
 
-	username := info.Username
-	displayName := info.DisplayName
-	avatarURL := info.AvatarURL
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("userinfo request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("userinfo returned %d", resp.StatusCode)
+	}
+
+	var info struct {
+		Sub               string `json:"sub"`
+		PreferredUsername  string `json:"preferred_username"`
+		Name              string `json:"name"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		Picture           string `json:"picture"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode userinfo: %w", err)
+	}
+
+	username := info.PreferredUsername
+	if username == "" {
+		username = "user_" + userID[len(userID)-6:]
+	}
+	displayName := info.Name
+	if displayName == "" {
+		displayName = strings.TrimSpace(info.GivenName + " " + info.FamilyName)
+	}
+	if displayName == "" {
+		displayName = username
+	}
 
 	// Deduplicate username if it already exists (case-insensitive clash)
 	if exists, _ := h.Store.UsernameExists(ctx, username); exists {
 		username = username + "_" + userID[len(userID)-4:]
 	}
 
-	if err := h.Store.CreateProfile(ctx, userID, username, displayName, avatarURL); err != nil {
+	if err := h.Store.CreateProfile(ctx, userID, username, displayName, info.Picture); err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
 
