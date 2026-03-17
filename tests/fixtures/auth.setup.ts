@@ -30,7 +30,7 @@ async function loginAndSave(
     await page.goto(`${APP_URL}/login`);
 
     // Click the sign-in button to start Zitadel OIDC flow
-    await page.getByRole("link", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: /sign in/i }).click();
 
     // Zitadel login form
     await page.waitForURL(/auth\.forumline\.net/);
