@@ -51,7 +51,7 @@ run_check "env-check" \
 if command -v gitleaks >/dev/null 2>&1; then
   run_check "gitleaks" \
     "." \
-    gitleaks protect --staged --no-banner
+    gitleaks protect --staged --no-banner -c ci/.gitleaks.toml
 fi
 
 run_check "biome" \
