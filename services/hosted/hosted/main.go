@@ -99,22 +99,16 @@ func main() {
 	// Site cache for custom frontends (256MB, 5-minute TTL)
 	siteCache := plat.NewSiteCache(256, 5*time.Minute)
 
-	// Platform API (provisioning, forum listing) — no tenant context
-	platformHandlers := &plat.PlatformHandlers{
+	// Platform API handlers (provisioning, forum listing, custom site CRUD)
+	platformHandlers := &plat.Handlers{
 		Pool:             pool,
 		Store:            store,
 		TenantMigrations: localdb.TenantMigrations,
-	}
-
-	// Site management API (custom frontend file CRUD)
-	siteHandlers := &plat.SiteHandlers{
-		Pool:      pool,
-		Store:     store,
-		R2Account: os.Getenv("R2_ACCOUNT_ID"),
-		R2KeyID:   os.Getenv("R2_ACCESS_KEY_ID"),
-		R2Secret:  os.Getenv("R2_SECRET_ACCESS_KEY"),
-		R2Bucket:  os.Getenv("R2_BUCKET_NAME"),
-		SiteCache: siteCache,
+		R2Account:        os.Getenv("R2_ACCOUNT_ID"),
+		R2KeyID:          os.Getenv("R2_ACCESS_KEY_ID"),
+		R2Secret:         os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2Bucket:         os.Getenv("R2_BUCKET_NAME"),
+		SiteCache:        siteCache,
 	}
 
 	// Build the main router.
@@ -130,18 +124,8 @@ func main() {
 	})
 
 	// Platform API endpoints (no tenant context needed)
-	mux.HandleFunc("POST /api/platform/forums", platformHandlers.HandleProvision)
-	mux.HandleFunc("GET /api/platform/forums", platformHandlers.HandleListForums)
-	mux.HandleFunc("GET /api/platform/forums/{slug}/export", platformHandlers.HandleExport)
-
-	// Site management API (custom frontend files)
-	mux.HandleFunc("GET /api/platform/owned-sites", siteHandlers.HandleOwnedSites)
-	mux.HandleFunc("GET /api/platform/sites/{slug}/files", siteHandlers.HandleListFiles)
-	mux.HandleFunc("GET /api/platform/sites/{slug}/files/{path...}", siteHandlers.HandleGetFile)
-	mux.HandleFunc("PUT /api/platform/sites/{slug}/files/{path...}", siteHandlers.HandlePutFile)
-	mux.HandleFunc("DELETE /api/platform/sites/{slug}/files/{path...}", siteHandlers.HandleDeleteFile)
-	mux.HandleFunc("POST /api/platform/sites/{slug}/upload", siteHandlers.HandleMultipartUpload)
-	mux.HandleFunc("POST /api/platform/sites/{slug}/reset", siteHandlers.HandleReset)
+	// Handlers directly implements oapi.ServerInterface — no adapter needed.
+	plat.RegisterRoutes(mux, platformHandlers)
 
 	// Forum routes — wrapped with tenant middleware.
 	// The tenant middleware resolves Host -> schema and sets search_path.

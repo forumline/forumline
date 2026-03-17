@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -18,7 +18,7 @@ func NewAdminService(s *store.Store) *AdminService {
 }
 
 // GetStats returns admin dashboard statistics after verifying admin access.
-func (as *AdminService) GetStats(ctx context.Context, userID string) (*model.AdminStats, error) {
+func (as *AdminService) GetStats(ctx context.Context, userID string) (*oapi.AdminStats, error) {
 	isAdmin, err := as.Store.IsAdmin(ctx, userID)
 	if err != nil || !isAdmin {
 		return nil, &ForbiddenError{Msg: "admin access required"}
@@ -32,7 +32,7 @@ func (as *AdminService) GetStats(ctx context.Context, userID string) (*model.Adm
 }
 
 // ListUsers returns all users after verifying admin access.
-func (as *AdminService) ListUsers(ctx context.Context, userID string) ([]model.Profile, error) {
+func (as *AdminService) ListUsers(ctx context.Context, userID string) ([]oapi.Profile, error) {
 	isAdmin, err := as.Store.IsAdmin(ctx, userID)
 	if err != nil || !isAdmin {
 		return nil, &ForbiddenError{Msg: "admin access required"}

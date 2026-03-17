@@ -1,6 +1,7 @@
 package forum
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,77 +9,73 @@ import (
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/forum/oapi"
 )
 
-// HandleNotifications handles GET /api/forumline/notifications.
-func (h *Handlers) HandleNotifications(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// ListForumlineNotifications handles GET /api/forumline/notifications.
+func (h *Handlers) ListForumlineNotifications(ctx context.Context, _ oapi.ListForumlineNotificationsRequestObject) (oapi.ListForumlineNotificationsResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	notifications, err := h.Store.ListForumlineNotifications(r.Context(), userID, 50, h.Config.Domain)
+	notifications, err := h.Store.ListForumlineNotifications(ctx, userID, 50, h.Config.Domain)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+		return oapi.ListForumlineNotifications500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	writeJSON(w, http.StatusOK, notifications)
+	return oapi.ListForumlineNotifications200JSONResponse(notifications), nil
 }
 
-// HandleNotificationRead handles POST /api/forumline/notifications/read.
-func (h *Handlers) HandleNotificationRead(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// MarkNotificationRead handles POST /api/forumline/notifications/read.
+func (h *Handlers) MarkNotificationRead(ctx context.Context, request oapi.MarkNotificationReadRequestObject) (oapi.MarkNotificationReadResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	var body struct {
-		ID string `json:"id"`
+	if err := h.Store.MarkNotificationRead(ctx, request.Body.Id.String(), userID); err != nil {
+		return oapi.MarkNotificationRead500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Notification ID required"})
-		return
-	}
-
-	if err := h.Store.MarkNotificationRead(r.Context(), body.ID, userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.MarkNotificationRead200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleUnread handles GET /api/forumline/unread.
-func (h *Handlers) HandleUnread(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// GetUnreadCounts handles GET /api/forumline/unread.
+func (h *Handlers) GetUnreadCounts(ctx context.Context, _ oapi.GetUnreadCountsRequestObject) (oapi.GetUnreadCountsResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	notifCount, chatMentionCount, err := h.Store.CountUnread(r.Context(), userID)
+	notifCount, chatMentionCount, err := h.Store.CountUnread(ctx, userID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+		return oapi.GetUnreadCounts500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 
-	writeJSON(w, http.StatusOK, map[string]int{
-		"notifications": notifCount,
-		"chat_mentions": chatMentionCount,
-		"dms":           0,
-	})
+	return oapi.GetUnreadCounts200JSONResponse(oapi.UnreadCounts{
+		Notifications: notifCount,
+		ChatMentions:  chatMentionCount,
+		Dms:           0,
+	}), nil
 }
 
-// HandleNotificationStream handles GET /api/forumline/notifications/stream (SSE).
-func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// notificationSSEStream implements oapi.StreamNotificationsResponseObject.
+// Its VisitStreamNotificationsResponse method blocks and runs the SSE loop.
+type notificationSSEStream struct {
+	ctx    context.Context
+	h      *Handlers
+	userID string
+}
 
+func (s notificationSSEStream) VisitStreamNotificationsResponse(w http.ResponseWriter) error {
 	client := &sse.Client{
 		Channel: "notification_changes",
-		Filter:  map[string]string{"user_id": userID},
+		Filter:  map[string]string{"user_id": s.userID},
 		Send:    make(chan []byte, 32),
 		Done:    make(chan struct{}),
 	}
 
-	h.SSEHub.Register(client)
+	s.h.SSEHub.Register(client)
 	defer func() {
-		h.SSEHub.Unregister(client)
+		s.h.SSEHub.Unregister(client)
 		close(client.Done)
 	}()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -88,21 +85,20 @@ func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := fmt.Fprint(w, ":connected\n\n"); err != nil {
-		return
+		return nil
 	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
-	ctx := r.Context()
 	for {
 		select {
-		case <-ctx.Done():
-			return
+		case <-s.ctx.Done():
+			return nil
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ":heartbeat\n\n"); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		case data := <-client.Send:
@@ -116,21 +112,28 @@ func (h *Handlers) HandleNotificationStream(w http.ResponseWriter, r *http.Reque
 					"timestamp":    raw["created_at"],
 					"read":         raw["read"],
 					"link":         raw["link"],
-					"forum_domain": h.Config.Domain,
+					"forum_domain": s.h.Config.Domain,
 				}
 				if event["link"] == nil {
 					event["link"] = "/"
 				}
 				eventJSON, _ := json.Marshal(event)
 				if _, err := fmt.Fprintf(w, "data: %s\n\n", eventJSON); err != nil {
-					return
+					return nil
 				}
 			} else {
 				if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
-					return
+					return nil
 				}
 			}
 			flusher.Flush()
 		}
 	}
 }
+
+// StreamNotifications handles GET /api/forumline/notifications/stream (SSE).
+func (h *Handlers) StreamNotifications(ctx context.Context, _ oapi.StreamNotificationsRequestObject) (oapi.StreamNotificationsResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	return notificationSSEStream{ctx: ctx, h: h, userID: userID}, nil
+}
+

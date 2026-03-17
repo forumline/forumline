@@ -5,68 +5,68 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListThreads returns threads ordered by pinned + last_post_at.
-func (s *Store) ListThreads(ctx context.Context, limit int) ([]model.Thread, error) {
+func (s *Store) ListThreads(ctx context.Context, limit int) ([]oapi.Thread, error) {
 	rows, err := s.Q.ListThreads(ctx, int32(min(limit, 1000))) //nolint:gosec // bounded
 	if err != nil {
 		return nil, err
 	}
-	threads := make([]model.Thread, 0, len(rows))
+	threads := make([]oapi.Thread, 0, len(rows))
 	for _, r := range rows {
-		threads = append(threads, listThreadsRowToModel(r))
+		threads = append(threads, listThreadsRowToOapi(r))
 	}
 	return threads, nil
 }
 
 // GetThread returns a single thread by ID.
-func (s *Store) GetThread(ctx context.Context, id string) (*model.Thread, error) {
+func (s *Store) GetThread(ctx context.Context, id string) (*oapi.Thread, error) {
 	row, err := s.Q.GetThread(ctx, pgUUID(id))
 	if err != nil {
 		return nil, err
 	}
-	t := threadRowToModel(row)
+	t := threadRowToOapi(row)
 	return &t, nil
 }
 
 // ListThreadsByCategory returns threads for a category slug.
-func (s *Store) ListThreadsByCategory(ctx context.Context, slug string) ([]model.Thread, error) {
+func (s *Store) ListThreadsByCategory(ctx context.Context, slug string) ([]oapi.Thread, error) {
 	rows, err := s.Q.ListThreadsByCategory(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
-	threads := make([]model.Thread, 0, len(rows))
+	threads := make([]oapi.Thread, 0, len(rows))
 	for _, r := range rows {
-		threads = append(threads, listThreadsByCategoryRowToModel(r))
+		threads = append(threads, listThreadsByCategoryRowToOapi(r))
 	}
 	return threads, nil
 }
 
 // ListUserThreads returns threads authored by a user.
-func (s *Store) ListUserThreads(ctx context.Context, userID string) ([]model.Thread, error) {
+func (s *Store) ListUserThreads(ctx context.Context, userID string) ([]oapi.Thread, error) {
 	rows, err := s.Q.ListUserThreads(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
-	threads := make([]model.Thread, 0, len(rows))
+	threads := make([]oapi.Thread, 0, len(rows))
 	for _, r := range rows {
-		threads = append(threads, listUserThreadsRowToModel(r))
+		threads = append(threads, listUserThreadsRowToOapi(r))
 	}
 	return threads, nil
 }
 
 // SearchThreads searches threads by title.
-func (s *Store) SearchThreads(ctx context.Context, pattern string) ([]model.Thread, error) {
+func (s *Store) SearchThreads(ctx context.Context, pattern string) ([]oapi.Thread, error) {
 	rows, err := s.Q.SearchThreads(ctx, pattern)
 	if err != nil {
 		return nil, err
 	}
-	threads := make([]model.Thread, 0, len(rows))
+	threads := make([]oapi.Thread, 0, len(rows))
 	for _, r := range rows {
-		threads = append(threads, searchThreadsRowToModel(r))
+		threads = append(threads, searchThreadsRowToOapi(r))
 	}
 	return threads, nil
 }

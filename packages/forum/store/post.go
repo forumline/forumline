@@ -6,45 +6,45 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListPostsByThread returns posts for a thread ordered by creation time.
-func (s *Store) ListPostsByThread(ctx context.Context, threadID string) ([]model.Post, error) {
+func (s *Store) ListPostsByThread(ctx context.Context, threadID string) ([]oapi.Post, error) {
 	rows, err := s.Q.ListPostsByThread(ctx, pgUUID(threadID))
 	if err != nil {
 		return nil, err
 	}
-	posts := make([]model.Post, 0, len(rows))
+	posts := make([]oapi.Post, 0, len(rows))
 	for _, r := range rows {
-		posts = append(posts, postRowToModel(r))
+		posts = append(posts, postRowToOapi(r))
 	}
 	return posts, nil
 }
 
 // ListUserPosts returns posts authored by a user.
-func (s *Store) ListUserPosts(ctx context.Context, userID string) ([]model.Post, error) {
+func (s *Store) ListUserPosts(ctx context.Context, userID string) ([]oapi.Post, error) {
 	rows, err := s.Q.ListUserPosts(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
-	posts := make([]model.Post, 0, len(rows))
+	posts := make([]oapi.Post, 0, len(rows))
 	for _, r := range rows {
-		posts = append(posts, listUserPostsRowToModel(r))
+		posts = append(posts, listUserPostsRowToOapi(r))
 	}
 	return posts, nil
 }
 
 // SearchPosts searches posts by content.
-func (s *Store) SearchPosts(ctx context.Context, pattern string) ([]model.Post, error) {
+func (s *Store) SearchPosts(ctx context.Context, pattern string) ([]oapi.Post, error) {
 	rows, err := s.Q.SearchPosts(ctx, pattern)
 	if err != nil {
 		return nil, err
 	}
-	posts := make([]model.Post, 0, len(rows))
+	posts := make([]oapi.Post, 0, len(rows))
 	for _, r := range rows {
-		posts = append(posts, searchPostsRowToModel(r))
+		posts = append(posts, searchPostsRowToOapi(r))
 	}
 	return posts, nil
 }

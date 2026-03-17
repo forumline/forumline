@@ -5,19 +5,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListBookmarks returns a user's bookmarks with full thread data.
-func (s *Store) ListBookmarks(ctx context.Context, userID string) ([]model.Bookmark, error) {
+func (s *Store) ListBookmarks(ctx context.Context, userID string) ([]oapi.Bookmark, error) {
 	rows, err := s.Q.ListBookmarks(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
-	bookmarks := make([]model.Bookmark, 0, len(rows))
+	bookmarks := make([]oapi.Bookmark, 0, len(rows))
 	for _, r := range rows {
-		bookmarks = append(bookmarks, bookmarkRowToModel(r))
+		bookmarks = append(bookmarks, bookmarkRowToOapi(r))
 	}
 	return bookmarks, nil
 }

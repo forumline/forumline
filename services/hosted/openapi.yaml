@@ -1,0 +1,821 @@
+openapi: 3.0.3
+info:
+  title: Forumline Platform API
+  description: |
+    Multi-tenant platform API for provisioning and managing hosted Forumline forums.
+    Handles forum lifecycle (create, list, export) and custom site file management
+    (upload, download, delete files on Cloudflare R2).
+  version: 1.0.0
+  license:
+    name: Proprietary
+    url: https://forumline.net
+  contact:
+    name: Forumline
+    url: https://forumline.net
+
+servers:
+  - url: https://hosted.forumline.net
+
+tags:
+  - name: Forums
+    description: Forum provisioning, listing, and data export.
+  - name: Site Management
+    description: Custom site file management (upload, download, delete, reset).
+
+security:
+  - forumlineIdentity: []
+
+paths:
+  /api/platform/forums:
+    post:
+      operationId: provisionForum
+      summary: Provision a new hosted forum
+      description: |
+        Creates a new hosted forum with a dedicated PostgreSQL schema, registers it
+        with the Forumline app directory, and makes it immediately routable at
+        `{slug}.forumline.net`.
+      tags: [Forums]
+      security:
+        - forumlineIdentity: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisionRequest"
+      responses:
+        "201":
+          description: Forum provisioned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionResponse"
+        "400":
+          description: |
+            Validation error. Returned when the slug is invalid, reserved,
+            already taken, or when slug/name are missing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error during provisioning.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      operationId: listForums
+      summary: List all active hosted forums
+      description: |
+        Returns every active hosted forum. This endpoint is public and requires
+        no authentication.
+      tags: [Forums]
+      security: []
+      responses:
+        "200":
+          description: Array of active forums.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForumSummary"
+
+  /api/platform/forums/{slug}/export:
+    get:
+      operationId: exportForum
+      summary: Export forum data as JSON
+      description: |
+        Exports all data from a forum's schema (categories, profiles, threads,
+        posts, chat channels, chat messages, voice rooms, bookmarks, notifications,
+        channel follows, notification preferences) as a JSON download. Only the
+        forum owner can export.
+      tags: [Forums]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: Forum data export.
+          headers:
+            Content-Disposition:
+              description: Attachment filename, e.g. `attachment; filename="myforum-export.json"`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportData"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Export failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/platform/owned-sites:
+    get:
+      operationId: listOwnedSites
+      summary: List forums owned by the caller
+      description: |
+        Returns the domain and slug of every forum owned by the authenticated user.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      responses:
+        "200":
+          description: Array of owned sites (may be empty).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OwnedSite"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: authentication required
+
+  /api/platform/sites/{slug}/files:
+    get:
+      operationId: listFiles
+      summary: List custom site files
+      description: |
+        Returns the file manifest for a forum's custom site, including per-file
+        metadata (size, content type, ETag, last updated) and overall storage usage.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: File manifest with storage usage.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileManifestResponse"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable or manifest load failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/platform/sites/{slug}/files/{path}:
+    get:
+      operationId: getFile
+      summary: Download a custom site file
+      description: |
+        Downloads a specific file from the forum's custom site storage.
+        Returns the raw file content with the appropriate Content-Type header.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/filePath"
+      responses:
+        "200":
+          description: File content.
+          headers:
+            Content-Type:
+              description: MIME type of the file.
+              schema:
+                type: string
+            Content-Length:
+              description: File size in bytes.
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid or disallowed file path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum or file not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      operationId: putFile
+      summary: Upload or replace a custom site file
+      description: |
+        Creates or replaces a single file in the forum's custom site storage.
+        The request body is the raw file content. Maximum file size is 5MB.
+        Allowed extensions: `.html`, `.css`, `.js`, `.json`, `.png`, `.jpg`,
+        `.jpeg`, `.gif`, `.svg`, `.webp`, `.ico`, `.woff`, `.woff2`, `.ttf`,
+        `.txt`, `.xml`.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/filePath"
+      requestBody:
+        required: true
+        description: Raw file content.
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: File uploaded successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PutFileResponse"
+        "400":
+          description: Invalid or disallowed file path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: File too large (max 5MB) or storage quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable or upload failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: deleteFile
+      summary: Delete a custom site file
+      description: |
+        Deletes a file from the forum's custom site storage and updates the manifest.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/filePath"
+      responses:
+        "200":
+          description: File deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteFileResponse"
+        "400":
+          description: Invalid or disallowed file path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/platform/sites/{slug}/upload:
+    post:
+      operationId: multipartUpload
+      summary: Upload multiple files via multipart form
+      description: |
+        Accepts a `multipart/form-data` request with one or more files. Each file
+        is validated, uploaded to R2, and added to the site manifest. The response
+        includes arrays of successfully uploaded paths and any per-file errors.
+        Maximum 10MB total request size; individual files capped at 5MB.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: One or more files to upload. Filenames are used as file paths.
+      responses:
+        "200":
+          description: Upload results (partial success possible).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MultipartUploadResponse"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Request too large (max 10MB total).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable or manifest load failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/platform/sites/{slug}/reset:
+    post:
+      operationId: resetSite
+      summary: Reset custom site to default
+      description: |
+        Deletes all custom site files from R2, removes the manifest, and reverts
+        the forum to the default SPA template. Sets `has_custom_site` to false
+        and `site_storage_bytes` to 0.
+      tags: [Site Management]
+      security:
+        - forumlineIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: Site reset complete.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetResponse"
+        "401":
+          description: Missing `X-Forumline-ID` header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Caller is not the forum owner.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Forum not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Storage unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    forumlineIdentity:
+      type: apiKey
+      in: header
+      name: X-Forumline-ID
+      description: |
+        Forumline user identity UUID. Set by the Forumline app after authenticating
+        the user via Zitadel. Required for all mutating operations and
+        owner-scoped reads.
+
+  parameters:
+    slug:
+      name: slug
+      in: path
+      required: true
+      description: |
+        Forum slug (subdomain). 1-40 lowercase alphanumeric characters or hyphens,
+        cannot start or end with a hyphen.
+      schema:
+        type: string
+        pattern: "^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$"
+        example: testforum
+
+    filePath:
+      name: path
+      in: path
+      required: true
+      description: |
+        Relative file path within the site. No leading slash, no `..` traversal,
+        no hidden files (segments starting with `.`). Must have an allowed extension.
+      schema:
+        type: string
+        example: index.html
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+      example:
+        error: authentication required
+
+    ProvisionRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          description: |
+            Subdomain for the forum. Becomes `{slug}.forumline.net`. Lowercase
+            alphanumeric and hyphens, 1-40 characters, cannot start/end with hyphen.
+          pattern: "^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$"
+          example: myforum
+        name:
+          type: string
+          description: Display name for the forum.
+          example: My Forum
+        description:
+          type: string
+          description: Optional forum description.
+          example: A community for discussing cool things.
+
+    ProvisionResponse:
+      type: object
+      required: [domain, slug, name, schema_name]
+      properties:
+        domain:
+          type: string
+          description: Full domain of the new forum.
+          example: myforum.forumline.net
+        slug:
+          type: string
+          description: Forum slug.
+          example: myforum
+        name:
+          type: string
+          description: Forum display name.
+          example: My Forum
+        schema_name:
+          type: string
+          description: PostgreSQL schema name for the forum's data.
+          example: forum_myforum
+
+    ForumSummary:
+      type: object
+      required: [slug, name, domain, description, icon_url, theme]
+      properties:
+        slug:
+          type: string
+          description: Forum slug (subdomain).
+          example: testforum
+        name:
+          type: string
+          description: Forum display name.
+          example: Test Forum
+        domain:
+          type: string
+          description: Full domain.
+          example: testforum.forumline.net
+        description:
+          type: string
+          description: Forum description (may be empty string).
+        icon_url:
+          type: string
+          description: URL to the forum icon (may be empty string).
+        theme:
+          type: string
+          description: Forum theme identifier.
+
+    ExportData:
+      type: object
+      required:
+        - forumline_version
+        - exported_at
+        - forum
+        - categories
+        - profiles
+        - threads
+        - posts
+        - chat_channels
+        - chat_messages
+        - voice_rooms
+        - bookmarks
+        - notifications
+        - channel_follows
+        - notification_preferences
+      properties:
+        forumline_version:
+          type: string
+          description: Export format version.
+          example: "1"
+        exported_at:
+          type: string
+          format: date-time
+          description: UTC timestamp of when the export was created.
+        forum:
+          $ref: "#/components/schemas/ForumMeta"
+        categories:
+          type: array
+          items:
+            type: object
+          description: Category rows as JSON objects.
+        profiles:
+          type: array
+          items:
+            type: object
+          description: Profile rows as JSON objects.
+        threads:
+          type: array
+          items:
+            type: object
+          description: Thread rows as JSON objects.
+        posts:
+          type: array
+          items:
+            type: object
+          description: Post rows as JSON objects.
+        chat_channels:
+          type: array
+          items:
+            type: object
+          description: Chat channel rows as JSON objects.
+        chat_messages:
+          type: array
+          items:
+            type: object
+          description: Chat message rows as JSON objects.
+        voice_rooms:
+          type: array
+          items:
+            type: object
+          description: Voice room rows as JSON objects.
+        bookmarks:
+          type: array
+          items:
+            type: object
+          description: Bookmark rows as JSON objects.
+        notifications:
+          type: array
+          items:
+            type: object
+          description: Notification rows as JSON objects.
+        channel_follows:
+          type: array
+          items:
+            type: object
+          description: Channel follow rows as JSON objects.
+        notification_preferences:
+          type: array
+          items:
+            type: object
+          description: Notification preference rows as JSON objects.
+
+    ForumMeta:
+      type: object
+      required: [slug, name, domain, description]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        domain:
+          type: string
+        description:
+          type: string
+
+    OwnedSite:
+      type: object
+      required: [domain, slug]
+      properties:
+        domain:
+          type: string
+          description: Full domain of the forum.
+          example: myforum.forumline.net
+        slug:
+          type: string
+          description: Forum slug.
+          example: myforum
+
+    SiteFileEntry:
+      type: object
+      required: [size, content_type, etag, updated]
+      properties:
+        size:
+          type: integer
+          format: int64
+          description: File size in bytes.
+        content_type:
+          type: string
+          description: MIME type of the file.
+          example: text/html; charset=utf-8
+        etag:
+          type: string
+          description: MD5 hex digest of the file content.
+        updated:
+          type: string
+          format: date-time
+          description: UTC timestamp of last upload.
+
+    FileManifestResponse:
+      type: object
+      required: [files, updated, storage_bytes, storage_limit]
+      properties:
+        files:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/SiteFileEntry"
+          description: |
+            Map of file path to file metadata. Keys are relative paths like
+            `index.html` or `css/style.css`.
+        updated:
+          type: string
+          format: date-time
+          description: UTC timestamp of the last manifest update.
+        storage_bytes:
+          type: integer
+          format: int64
+          description: Total bytes used by the custom site.
+        storage_limit:
+          type: integer
+          format: int64
+          description: Storage quota in bytes.
+
+    PutFileResponse:
+      type: object
+      required: [path, etag, size]
+      properties:
+        path:
+          type: string
+          description: Sanitized file path that was written.
+          example: css/style.css
+        etag:
+          type: string
+          description: MD5 hex digest of the uploaded content.
+        size:
+          type: string
+          description: File size in bytes (as a string).
+          example: "1234"
+
+    DeleteFileResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: string
+          description: Path of the deleted file.
+          example: css/style.css
+
+    MultipartUploadResponse:
+      type: object
+      required: [uploaded, errors]
+      properties:
+        uploaded:
+          type: array
+          items:
+            type: string
+          description: File paths that were successfully uploaded.
+          example:
+            - index.html
+            - css/style.css
+        errors:
+          type: array
+          items:
+            type: string
+          description: |
+            Per-file error messages for files that failed. Each string has the
+            format `filename: reason`.
+          example:
+            - "secret.exe: file type \".exe\" not allowed"
+
+    ResetResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: Always `"reset complete"` on success.
+          enum: [reset complete]

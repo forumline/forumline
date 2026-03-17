@@ -1,15 +1,18 @@
 package forum
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/service"
 	"github.com/forumline/forumline/forum/store"
 )
+
+// Compile-time check that *Handlers satisfies the strict generated interface.
+var _ oapi.StrictServerInterface = (*Handlers)(nil)
 
 // Handlers holds dependencies for all forum API handlers.
 // Config is injected at construction time and contains all pluggable
@@ -27,16 +30,10 @@ type Handlers struct {
 	ProfileCache    *ProfileCache
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
-}
-
-// writeServiceError maps service-layer errors to HTTP status codes.
-func writeServiceError(w http.ResponseWriter, err error) {
+// serviceErrMsg maps service-layer errors to (httpStatus, message) for
+// building typed strict responses. Callers use the returned values to
+// construct the appropriate oapi.*JSONResponse.
+func serviceErrStatus(err error) (int, string) {
 	var validationErr *service.ValidationError
 	var notFoundErr *service.NotFoundError
 	var forbiddenErr *service.ForbiddenError
@@ -44,14 +41,32 @@ func writeServiceError(w http.ResponseWriter, err error) {
 
 	switch {
 	case errors.As(err, &validationErr):
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": validationErr.Msg})
+		return http.StatusBadRequest, validationErr.Msg
 	case errors.As(err, &notFoundErr):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": notFoundErr.Msg})
+		return http.StatusNotFound, notFoundErr.Msg
 	case errors.As(err, &forbiddenErr):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": forbiddenErr.Msg})
+		return http.StatusForbidden, forbiddenErr.Msg
 	case errors.As(err, &conflictErr):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": conflictErr.Msg})
+		return http.StatusConflict, conflictErr.Msg
 	default:
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return http.StatusInternalServerError, err.Error()
 	}
+}
+
+// httpReqKey is the context key for the injected *http.Request.
+type httpReqKey struct{}
+
+// withHTTPRequest injects the *http.Request into the context so that auth
+// delegate handlers (StartLogin, AuthCallback, etc.) can retrieve it.
+func withHTTPRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), httpReqKey{}, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// reqFromCtx extracts the injected *http.Request from the context.
+func reqFromCtx(ctx context.Context) *http.Request {
+	r, _ := ctx.Value(httpReqKey{}).(*http.Request)
+	return r
 }

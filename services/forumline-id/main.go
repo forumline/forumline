@@ -5,13 +5,7 @@
 // to Zitadel directly — they redirect here, and this service handles the
 // OIDC dance behind the scenes.
 //
-// Endpoints:
-//   GET  /authorize          — Forum redirects users here to start login
-//   GET  /callback           — Zitadel redirects back here after login
-//   POST /token              — Forum exchanges auth code for user info
-//   GET  /userinfo           — Validate JWT and return user profile
-//   GET  /.well-known/jwks   — Proxy Zitadel's JWKS for direct JWT validation
-//   GET  /health             — Health check
+// Endpoints are defined in openapi.yaml and routed via oapi-codegen.
 package main
 
 import (
@@ -32,27 +26,30 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/backend/httpkit"
+	"github.com/forumline/forumline/services/forumline-id/oapi"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 
 	httphelper "github.com/zitadel/oidc/v3/pkg/http"
 )
 
+// Server implements oapi.StrictServerInterface — all 6 identity service endpoints.
+type Server struct {
+	provider    rp.RelyingParty
+	codes       *codeStore
+	jwks        *jwksCache
+	userinfoURL string
+}
+
+// Compile-time check that Server implements the generated strict interface.
+var _ oapi.StrictServerInterface = (*Server)(nil)
+
 // authCode is a short-lived, single-use authorization code issued after
 // successful Zitadel login. Forums exchange it for user info via POST /token.
 type authCode struct {
-	UserInfo    *UserInfo
+	UserInfo    *oapi.UserInfo
 	RedirectURI string
 	ExpiresAt   time.Time
-}
-
-// UserInfo is the identity payload returned to forums after auth code exchange.
-type UserInfo struct {
-	ForumlineID string `json:"forumline_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	AvatarURL   string `json:"avatar_url"`
-	AccessToken string `json:"access_token"`
 }
 
 // codeStore is an in-memory store for auth codes with automatic expiry.
@@ -63,7 +60,6 @@ type codeStore struct {
 
 func newCodeStore() *codeStore {
 	cs := &codeStore{codes: make(map[string]*authCode)}
-	// Sweep expired codes every 30 seconds
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -87,7 +83,6 @@ func (cs *codeStore) Store(code string, ac *authCode) {
 	cs.mu.Unlock()
 }
 
-// Consume retrieves and deletes an auth code (single-use).
 func (cs *codeStore) Consume(code, redirectURI string) (*authCode, bool) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -110,7 +105,283 @@ type jwksCache struct {
 	data      []byte
 	fetchedAt time.Time
 	ttl       time.Duration
+	url       string
 }
+
+// ── Custom response types ────────────────────────────────────────────────────
+
+// authorizeRedirect sets two cookies and performs a 302 redirect to Zitadel.
+// The generated Authorize302Response only supports a single Set-Cookie header,
+// so we implement AuthorizeResponseObject directly.
+type authorizeRedirect struct {
+	authURL   string
+	forumCtx  string
+	oidcState string
+}
+
+func (r authorizeRedirect) VisitAuthorizeResponse(w http.ResponseWriter) error {
+	http.SetCookie(w, &http.Cookie{
+		Name: "forumline_id_ctx", Value: r.forumCtx,
+		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: 600,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name: "forumline_id_state", Value: r.oidcState,
+		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: 600,
+	})
+	w.Header().Set("Location", r.authURL)
+	w.WriteHeader(http.StatusFound)
+	return nil
+}
+
+// callbackRedirect clears both auth cookies and performs a 302 redirect to the forum.
+// The generated Callback302Response doesn't include cookie clearing.
+type callbackRedirect struct{ location string }
+
+func (r callbackRedirect) VisitCallbackResponse(w http.ResponseWriter) error {
+	http.SetCookie(w, &http.Cookie{
+		Name: "forumline_id_state", Value: "",
+		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: -1,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name: "forumline_id_ctx", Value: "",
+		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: -1,
+	})
+	w.Header().Set("Location", r.location)
+	w.WriteHeader(http.StatusFound)
+	return nil
+}
+
+// jwksRaw writes pre-fetched JWKS bytes directly, bypassing JSON re-encoding.
+// The generated Jwks200JSONResponse would require parsing the bytes back into
+// a JWKS struct, which is unnecessary overhead.
+type jwksRaw struct{ data []byte }
+
+func (r jwksRaw) VisitJwksResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.WriteHeader(200)
+	_, err := w.Write(r.data)
+	return err
+}
+
+// ── Context key for request injection ───────────────────────────────────────
+
+type httpReqKey struct{}
+
+// injectRequest stores the *http.Request in the context so strict handler
+// methods can access cookies and headers (not available via StrictServerInterface params).
+func injectRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), httpReqKey{}, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// ── StrictServerInterface implementation ────────────────────────────────────
+
+func (s *Server) HealthCheck(_ context.Context, _ oapi.HealthCheckRequestObject) (oapi.HealthCheckResponseObject, error) {
+	return oapi.HealthCheck200JSONResponse{Status: "ok"}, nil
+}
+
+func (s *Server) Authorize(_ context.Context, request oapi.AuthorizeRequestObject) (oapi.AuthorizeResponseObject, error) {
+	redirectURI := request.Params.RedirectUri
+	var forumState string
+	if request.Params.State != nil {
+		forumState = *request.Params.State
+	}
+
+	// Validate redirect_uri is a *.forumline.net domain or localhost (dev)
+	parsed, err := url.Parse(redirectURI)
+	if err != nil || parsed.Host == "" {
+		return oapi.Authorize400JSONResponse{Error: "invalid redirect_uri"}, nil
+	}
+	if !isAllowedRedirect(parsed) {
+		return oapi.Authorize400JSONResponse{Error: "redirect_uri must be a *.forumline.net domain"}, nil
+	}
+
+	// Store forum context in a cookie (survives the Zitadel redirect)
+	forumCtx := redirectURI + "|" + forumState
+
+	// Generate OIDC state and redirect to Zitadel
+	oidcState := randomHex(16)
+	authURL := rp.AuthURL(oidcState, s.provider)
+
+	return authorizeRedirect{
+		authURL:   authURL,
+		forumCtx:  forumCtx,
+		oidcState: oidcState,
+	}, nil
+}
+
+func (s *Server) Callback(ctx context.Context, request oapi.CallbackRequestObject) (oapi.CallbackResponseObject, error) {
+	// Retrieve *http.Request from context to read cookies
+	r := ctx.Value(httpReqKey{}).(*http.Request)
+
+	// Validate OIDC state
+	stateCookie, err := r.Cookie("forumline_id_state")
+	if err != nil || stateCookie.Value != request.Params.State {
+		return oapi.Callback400JSONResponse{Error: "state mismatch"}, nil
+	}
+
+	// Retrieve forum context
+	ctxCookie, err := r.Cookie("forumline_id_ctx")
+	if err != nil {
+		return oapi.Callback400JSONResponse{Error: "missing forum context"}, nil
+	}
+	parts := strings.SplitN(ctxCookie.Value, "|", 2)
+	if len(parts) != 2 {
+		return oapi.Callback400JSONResponse{Error: "invalid forum context"}, nil
+	}
+	forumRedirectURI := parts[0]
+	forumState := parts[1]
+
+	// Exchange code for tokens with Zitadel
+	tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](r.Context(), request.Params.Code, s.provider)
+	if err != nil {
+		slog.Error("OIDC code exchange failed", "error", err)
+		return oapi.Callback500JSONResponse{Error: "authentication failed"}, nil
+	}
+
+	// Extract identity from ID token
+	claims := tokens.IDTokenClaims
+	username := claims.PreferredUsername
+	if username == "" {
+		username = string(claims.Email)
+	}
+	displayName := strings.TrimSpace(claims.GivenName + " " + claims.FamilyName)
+	if displayName == "" {
+		displayName = username
+	}
+
+	userInfo := &oapi.UserInfo{
+		ForumlineId: claims.Subject,
+		Username:    username,
+		DisplayName: displayName,
+		AvatarUrl:   claims.Picture,
+		AccessToken: tokens.AccessToken,
+	}
+
+	// Generate short-lived auth code
+	code := randomHex(32)
+	s.codes.Store(code, &authCode{
+		UserInfo:    userInfo,
+		RedirectURI: forumRedirectURI,
+		ExpiresAt:   time.Now().Add(60 * time.Second),
+	})
+
+	// Redirect back to forum with auth code (cookies cleared by callbackRedirect)
+	u, _ := url.Parse(forumRedirectURI)
+	q := u.Query()
+	q.Set("code", code)
+	if forumState != "" {
+		q.Set("state", forumState)
+	}
+	u.RawQuery = q.Encode()
+
+	return callbackRedirect{location: u.String()}, nil
+}
+
+func (s *Server) TokenExchange(_ context.Context, request oapi.TokenExchangeRequestObject) (oapi.TokenExchangeResponseObject, error) {
+	if request.Body == nil || request.Body.Code == "" || request.Body.RedirectUri == "" {
+		return oapi.TokenExchange400JSONResponse{Error: "code and redirect_uri are required"}, nil
+	}
+
+	ac, ok := s.codes.Consume(request.Body.Code, request.Body.RedirectUri)
+	if !ok {
+		return oapi.TokenExchange401JSONResponse{Error: "invalid or expired code"}, nil
+	}
+
+	return oapi.TokenExchange200JSONResponse(*ac.UserInfo), nil
+}
+
+func (s *Server) UserInfo(ctx context.Context, request oapi.UserInfoRequestObject) (oapi.UserInfoResponseObject, error) {
+	// Retrieve *http.Request from context to support Authorization header bearer token
+	r := ctx.Value(httpReqKey{}).(*http.Request)
+	token := extractBearerToken(r)
+	if token == "" {
+		return oapi.UserInfo401JSONResponse{Error: "missing bearer token"}, nil
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), "GET", s.userinfoURL, nil)
+	if err != nil {
+		return oapi.UserInfo502JSONResponse{Error: "failed to build userinfo request"}, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error("userinfo failed", "error", err)
+		return oapi.UserInfo502JSONResponse{Error: "identity provider unreachable"}, nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return oapi.UserInfo401JSONResponse{Error: "invalid or expired token"}, nil
+	}
+
+	var result struct {
+		Sub              string `json:"sub"`
+		Name             string `json:"name"`
+		GivenName        string `json:"given_name"`
+		FamilyName       string `json:"family_name"`
+		PreferredUsername string `json:"preferred_username"`
+		Email            string `json:"email"`
+		Picture          string `json:"picture"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Sub == "" {
+		return oapi.UserInfo401JSONResponse{Error: "invalid or expired token"}, nil
+	}
+
+	displayName := strings.TrimSpace(result.GivenName + " " + result.FamilyName)
+	if displayName == "" {
+		displayName = result.Name
+	}
+	username := result.PreferredUsername
+	if username == "" {
+		username = result.Email
+	}
+	if displayName == "" {
+		displayName = username
+	}
+
+	return oapi.UserInfo200JSONResponse{
+		ForumlineId: result.Sub,
+		Username:    username,
+		DisplayName: displayName,
+		AvatarUrl:   result.Picture,
+	}, nil
+}
+
+func (s *Server) Jwks(_ context.Context, _ oapi.JwksRequestObject) (oapi.JwksResponseObject, error) {
+	s.jwks.mu.RLock()
+	if s.jwks.data != nil && time.Since(s.jwks.fetchedAt) < s.jwks.ttl {
+		data := s.jwks.data
+		s.jwks.mu.RUnlock()
+		return jwksRaw{data: data}, nil
+	}
+	s.jwks.mu.RUnlock()
+
+	resp, err := http.Get(s.jwks.url) // #nosec G107 -- zitadelURL is from trusted env var
+	if err != nil {
+		slog.Error("JWKS fetch failed", "error", err)
+		return oapi.Jwks502JSONResponse{Error: "identity provider unreachable"}, nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return oapi.Jwks502JSONResponse{Error: "failed to read JWKS"}, nil
+	}
+
+	s.jwks.mu.Lock()
+	s.jwks.data = data
+	s.jwks.fetchedAt = time.Now()
+	s.jwks.mu.Unlock()
+
+	return jwksRaw{data: data}, nil
+}
+
+// ── main ────────────────────────────────────────────────────────────────────
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,22 +405,22 @@ func main() {
 	}
 	slog.Info("OIDC provider initialized", "issuer", zitadelURL, "client_id", clientID)
 
-	codes := newCodeStore()
+	server := &Server{
+		provider:    provider,
+		codes:       newCodeStore(),
+		userinfoURL: strings.TrimRight(zitadelURL, "/") + "/oidc/v1/userinfo",
+		jwks: &jwksCache{
+			ttl: 5 * time.Minute,
+			url: strings.TrimRight(zitadelURL, "/") + "/oauth/v2/keys",
+		},
+	}
 
 	mux := http.NewServeMux()
-
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	mux.HandleFunc("GET /authorize", handleAuthorize(provider, externalURL))
-	mux.HandleFunc("GET /callback", handleCallback(provider, codes))
-	mux.HandleFunc("POST /token", handleTokenExchange(codes))
-	mux.HandleFunc("GET /userinfo", handleUserInfo(zitadelURL, clientID))
-	mux.HandleFunc("GET /.well-known/jwks", handleJWKS(zitadelURL))
+	strictHandler := oapi.NewStrictHandler(server, nil)
+	oapi.HandlerFromMux(strictHandler, mux)
 
 	var handler http.Handler = mux
+	handler = injectRequest(handler)
 	handler = httpkit.CORSMiddleware(handler)
 	handler = httpkit.SecurityHeaders(handler)
 
@@ -183,283 +454,8 @@ func main() {
 	}
 }
 
-// handleAuthorize starts the "Sign in with Forumline" flow.
-// Forums redirect users here with:
-//   ?redirect_uri=https://testforum.forumline.net/api/forumline/auth/callback
-//   &state=<forum_csrf_state>
-//
-// We store the forum's redirect_uri + state in a cookie, then redirect to Zitadel.
-func handleAuthorize(provider rp.RelyingParty, externalURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		redirectURI := r.URL.Query().Get("redirect_uri")
-		forumState := r.URL.Query().Get("state")
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
-		if redirectURI == "" {
-			writeErr(w, http.StatusBadRequest, "redirect_uri is required")
-			return
-		}
-
-		// Validate redirect_uri is a *.forumline.net domain or localhost (dev)
-		parsed, err := url.Parse(redirectURI)
-		if err != nil || parsed.Host == "" {
-			writeErr(w, http.StatusBadRequest, "invalid redirect_uri")
-			return
-		}
-		if !isAllowedRedirect(parsed) {
-			writeErr(w, http.StatusBadRequest, "redirect_uri must be a *.forumline.net domain")
-			return
-		}
-
-		// Store forum context in a cookie (survives the Zitadel redirect)
-		forumCtx := redirectURI + "|" + forumState
-		http.SetCookie(w, &http.Cookie{
-			Name: "forumline_id_ctx", Value: forumCtx,
-			Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: 600,
-		})
-
-		// Generate OIDC state and redirect to Zitadel
-		oidcState := randomHex(16)
-		http.SetCookie(w, &http.Cookie{
-			Name: "forumline_id_state", Value: oidcState,
-			Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: 600,
-		})
-
-		authURL := rp.AuthURL(oidcState, provider)
-		http.Redirect(w, r, authURL, http.StatusFound)
-	}
-}
-
-// handleCallback receives the Zitadel OIDC callback after successful login.
-// Exchanges the code for tokens, generates a short-lived auth code, and
-// redirects back to the forum's callback URL.
-func handleCallback(provider rp.RelyingParty, codes *codeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Validate OIDC state
-		stateCookie, err := r.Cookie("forumline_id_state")
-		if err != nil || stateCookie.Value != r.URL.Query().Get("state") {
-			writeErr(w, http.StatusBadRequest, "state mismatch")
-			return
-		}
-
-		// Retrieve forum context
-		ctxCookie, err := r.Cookie("forumline_id_ctx")
-		if err != nil {
-			writeErr(w, http.StatusBadRequest, "missing forum context")
-			return
-		}
-		parts := strings.SplitN(ctxCookie.Value, "|", 2)
-		if len(parts) != 2 {
-			writeErr(w, http.StatusBadRequest, "invalid forum context")
-			return
-		}
-		forumRedirectURI := parts[0]
-		forumState := parts[1]
-
-		// Exchange code for tokens with Zitadel
-		tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](r.Context(), r.URL.Query().Get("code"), provider)
-		if err != nil {
-			slog.Error("OIDC code exchange failed", "error", err)
-			writeErr(w, http.StatusInternalServerError, "authentication failed")
-			return
-		}
-
-		// Extract identity from ID token
-		claims := tokens.IDTokenClaims
-		username := claims.PreferredUsername
-		if username == "" {
-			username = string(claims.Email)
-		}
-		displayName := strings.TrimSpace(claims.GivenName + " " + claims.FamilyName)
-		if displayName == "" {
-			displayName = username
-		}
-
-		userInfo := &UserInfo{
-			ForumlineID: claims.Subject,
-			Username:    username,
-			DisplayName: displayName,
-			AvatarURL:   claims.Picture,
-			AccessToken: tokens.AccessToken,
-		}
-
-		// Generate short-lived auth code
-		code := randomHex(32)
-		codes.Store(code, &authCode{
-			UserInfo:    userInfo,
-			RedirectURI: forumRedirectURI,
-			ExpiresAt:   time.Now().Add(60 * time.Second),
-		})
-
-		// Clear cookies
-		clearCookie(w, "forumline_id_state")
-		clearCookie(w, "forumline_id_ctx")
-
-		// Redirect back to forum with auth code
-		u, _ := url.Parse(forumRedirectURI)
-		q := u.Query()
-		q.Set("code", code)
-		if forumState != "" {
-			q.Set("state", forumState)
-		}
-		u.RawQuery = q.Encode()
-
-		http.Redirect(w, r, u.String(), http.StatusFound)
-	}
-}
-
-// handleTokenExchange lets forums exchange an auth code for user info.
-// This is the server-to-server call — the forum backend calls this after
-// receiving the auth code in the callback redirect.
-//
-// POST /token
-// Body: { "code": "...", "redirect_uri": "..." }
-// Returns: { "forumline_id": "...", "username": "...", ... }
-func handleTokenExchange(codes *codeStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Code        string `json:"code"`
-			RedirectURI string `json:"redirect_uri"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeErr(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
-
-		if req.Code == "" || req.RedirectURI == "" {
-			writeErr(w, http.StatusBadRequest, "code and redirect_uri are required")
-			return
-		}
-
-		ac, ok := codes.Consume(req.Code, req.RedirectURI)
-		if !ok {
-			writeErr(w, http.StatusUnauthorized, "invalid or expired code")
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(ac.UserInfo)
-	}
-}
-
-// handleUserInfo validates a Forumline JWT and returns user profile info.
-// Forums can call this to verify a token passed via iframe (in-app flow).
-//
-// GET /userinfo
-// Header: Authorization: Bearer <JWT>
-// Returns: { "forumline_id": "...", "username": "...", ... }
-func handleUserInfo(zitadelURL, _ string) http.HandlerFunc {
-	userinfoURL := strings.TrimRight(zitadelURL, "/") + "/oidc/v1/userinfo"
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		token := extractBearerToken(r)
-		if token == "" {
-			writeErr(w, http.StatusUnauthorized, "missing bearer token")
-			return
-		}
-
-		// Validate token via Zitadel's userinfo endpoint (works with public clients,
-		// unlike introspection which requires client authentication).
-		req, err := http.NewRequestWithContext(r.Context(), "GET", userinfoURL, nil)
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "failed to build userinfo request")
-			return
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			slog.Error("userinfo failed", "error", err)
-			writeErr(w, http.StatusBadGateway, "identity provider unreachable")
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			writeErr(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
-
-		var result struct {
-			Sub               string `json:"sub"`
-			Name              string `json:"name"`
-			GivenName         string `json:"given_name"`
-			FamilyName        string `json:"family_name"`
-			PreferredUsername  string `json:"preferred_username"`
-			Email             string `json:"email"`
-			Picture           string `json:"picture"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || result.Sub == "" {
-			writeErr(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
-
-		displayName := strings.TrimSpace(result.GivenName + " " + result.FamilyName)
-		if displayName == "" {
-			displayName = result.Name
-		}
-		username := result.PreferredUsername
-		if username == "" {
-			username = result.Email
-		}
-		if displayName == "" {
-			displayName = username
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(&UserInfo{
-			ForumlineID: result.Sub,
-			Username:    username,
-			DisplayName: displayName,
-			AvatarURL:   result.Picture,
-		})
-	}
-}
-
-// handleJWKS proxies Zitadel's JWKS endpoint so forums can validate JWTs
-// directly without knowing Zitadel exists. Cached for 5 minutes.
-func handleJWKS(zitadelURL string) http.HandlerFunc {
-	cache := &jwksCache{ttl: 5 * time.Minute}
-	jwksURL := strings.TrimRight(zitadelURL, "/") + "/oauth/v2/keys"
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		cache.mu.RLock()
-		if cache.data != nil && time.Since(cache.fetchedAt) < cache.ttl {
-			data := cache.data
-			cache.mu.RUnlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "public, max-age=300")
-			_, _ = w.Write(data)
-			return
-		}
-		cache.mu.RUnlock()
-
-		resp, err := http.Get(jwksURL) // #nosec G107 -- zitadelURL is from trusted env var
-		if err != nil {
-			slog.Error("JWKS fetch failed", "error", err)
-			writeErr(w, http.StatusBadGateway, "identity provider unreachable")
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			writeErr(w, http.StatusBadGateway, "failed to read JWKS")
-			return
-		}
-
-		cache.mu.Lock()
-		cache.data = data
-		cache.fetchedAt = time.Now()
-		cache.mu.Unlock()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		_, _ = w.Write(data)
-	}
-}
-
-// isAllowedRedirect checks that the redirect_uri is a trusted domain.
-// Allows *.forumline.net and localhost (for development).
 func isAllowedRedirect(u *url.URL) bool {
 	host := u.Hostname()
 	if host == "localhost" || host == "127.0.0.1" {
@@ -474,19 +470,6 @@ func extractBearerToken(r *http.Request) string {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 	return r.URL.Query().Get("access_token")
-}
-
-func writeErr(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
-func clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
-		Name: name, Value: "",
-		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true, MaxAge: -1,
-	})
 }
 
 func randomHex(n int) string {

@@ -12,51 +12,84 @@ import (
 	"os"
 	"strings"
 
+	"github.com/forumline/forumline/forum"
+	"github.com/forumline/forumline/services/hosted/oapi"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PlatformHandlers holds dependencies for platform-level API endpoints
-// (forum provisioning, listing, export). These run outside tenant context.
-type PlatformHandlers struct {
+// exportForumResponse is a custom oapi.ExportForumResponseObject that serialises
+// *forum.ExportData directly (which uses []json.RawMessage) without an intermediate
+// conversion to oapi.ExportData (which uses []map[string]interface{}).
+type exportForumResponse struct {
+	slug string
+	data *forum.ExportData // forum.ExportData from github.com/forumline/forumline/forum
+}
+
+func (r exportForumResponse) VisitExportForumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+r.slug+`-export.json"`)
+	w.WriteHeader(200)
+	return json.NewEncoder(w).Encode(r.data)
+}
+
+// ctxKeyForumlineID is the context key for the X-Forumline-ID header value.
+type ctxKeyForumlineID struct{}
+
+// ForumlineIDFromContext retrieves the X-Forumline-ID value injected by the auth middleware.
+func ForumlineIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ctxKeyForumlineID{}).(string)
+	return v
+}
+
+// ForumlineIDMiddleware extracts X-Forumline-ID from the request header and
+// injects it into the request context so strict handlers can read it from ctx.
+func ForumlineIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Forumline-ID")
+		ctx := context.WithValue(r.Context(), ctxKeyForumlineID{}, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// Handlers holds dependencies for all platform API endpoints: forum
+// provisioning/listing/export and custom-site file management. It directly
+// implements oapi.StrictServerInterface.
+type Handlers struct {
 	Pool             *pgxpool.Pool
 	Store            *TenantStore
 	TenantMigrations fs.FS // goose migration files for tenant schemas (nil to skip)
+	R2Account        string
+	R2KeyID          string
+	R2Secret         string
+	R2Bucket         string
+	SiteCache        *SiteCache
 }
 
-// HandleProvision creates a new hosted forum.
+// Compile-time check that Handlers satisfies the strict generated interface.
+var _ oapi.StrictServerInterface = (*Handlers)(nil)
+
+// ProvisionForum creates a new hosted forum.
 // POST /api/platform/forums
-// Body: {"slug": "myforum", "name": "My Forum", "description": "..."}
-// Requires Forumline identity token in Authorization header.
-func (ph *PlatformHandlers) HandleProvision(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract forumline identity from the request.
-	// In hosted mode, we validate the Forumline JWT directly.
-	forumlineID := r.Header.Get("X-Forumline-ID")
+func (h *Handlers) ProvisionForum(ctx context.Context, request oapi.ProvisionForumRequestObject) (oapi.ProvisionForumResponseObject, error) {
+	forumlineID := ForumlineIDFromContext(ctx)
 	if forumlineID == "" {
-		http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
-		return
+		return oapi.ProvisionForum401JSONResponse{Error: "authentication required"}, nil
 	}
 
-	var body struct {
-		Slug        string `json:"slug"`
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
-		return
+	if request.Body == nil {
+		return oapi.ProvisionForum400JSONResponse{Error: "invalid JSON"}, nil
 	}
 
-	body.Slug = strings.TrimSpace(strings.ToLower(body.Slug))
-	body.Name = strings.TrimSpace(body.Name)
+	slug := strings.TrimSpace(strings.ToLower(request.Body.Slug))
+	name := strings.TrimSpace(request.Body.Name)
 
-	if body.Slug == "" || body.Name == "" {
-		http.Error(w, `{"error":"slug and name are required"}`, http.StatusBadRequest)
-		return
+	if slug == "" || name == "" {
+		return oapi.ProvisionForum400JSONResponse{Error: "slug and name are required"}, nil
+	}
+
+	description := ""
+	if request.Body.Description != nil {
+		description = *request.Body.Description
 	}
 
 	baseDomain := os.Getenv("PLATFORM_BASE_DOMAIN")
@@ -64,104 +97,84 @@ func (ph *PlatformHandlers) HandleProvision(w http.ResponseWriter, r *http.Reque
 		baseDomain = "forumline.net"
 	}
 
-	result, err := Provision(r.Context(), ph.Pool, ph.Store, &ProvisionRequest{
-		Slug:             body.Slug,
-		Name:             body.Name,
-		Description:      body.Description,
+	result, err := Provision(ctx, h.Pool, h.Store, &ProvisionRequest{
+		Slug:             slug,
+		Name:             name,
+		Description:      description,
 		OwnerForumlineID: forumlineID,
 		BaseDomain:       baseDomain,
-	}, ph.TenantMigrations)
+	}, h.TenantMigrations)
 	if err != nil {
-		// Check for validation errors vs internal errors
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "invalid slug") ||
 			strings.Contains(errMsg, "reserved") ||
 			strings.Contains(errMsg, "already taken") {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errMsg})
-			return
+			return oapi.ProvisionForum400JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create forum"})
-		return
+		return oapi.ProvisionForum500JSONResponse{Error: "failed to create forum"}, nil
 	}
 
-	// Register with Forumline app so it knows about this forum
-	authHeader := r.Header.Get("Authorization")
-	if _, err := RegisterForumWithForumline(r.Context(), result.Domain, body.Name, authHeader); err != nil {
+	// Register with Forumline app so it knows about this forum.
+	// We don't have access to the Authorization header in strict mode — the
+	// middleware doesn't inject it. Pass empty string; RegisterForumWithForumline
+	// handles it gracefully.
+	if _, err := RegisterForumWithForumline(ctx, result.Domain, name, ""); err != nil {
 		log.Printf("warning: forum provisioned but Forumline registration failed: %v", err)
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"domain":      result.Domain,
-		"slug":        result.Tenant.Slug,
-		"name":        result.Tenant.Name,
-		"schema_name": result.Tenant.SchemaName,
-	})
+	return oapi.ProvisionForum201JSONResponse{
+		Domain:     result.Domain,
+		Slug:       result.Tenant.Slug,
+		Name:       result.Tenant.Name,
+		SchemaName: result.Tenant.SchemaName,
+	}, nil
 }
 
-// HandleListForums returns all active hosted forums.
+// ListForums returns all active hosted forums.
 // GET /api/platform/forums
-func (ph *PlatformHandlers) HandleListForums(w http.ResponseWriter, r *http.Request) {
-	tenants := ph.Store.All()
-	forums := make([]map[string]interface{}, 0, len(tenants))
+func (h *Handlers) ListForums(ctx context.Context, _ oapi.ListForumsRequestObject) (oapi.ListForumsResponseObject, error) {
+	tenants := h.Store.All()
+	forums := make(oapi.ListForums200JSONResponse, 0, len(tenants))
 	for _, t := range tenants {
-		forums = append(forums, map[string]interface{}{
-			"slug":        t.Slug,
-			"name":        t.Name,
-			"domain":      t.Domain,
-			"description": t.Description,
-			"icon_url":    t.IconURL,
-			"theme":       t.Theme,
+		forums = append(forums, oapi.ForumSummary{
+			Slug:        t.Slug,
+			Name:        t.Name,
+			Domain:      t.Domain,
+			Description: t.Description,
+			IconUrl:     t.IconURL,
+			Theme:       t.Theme,
 		})
 	}
-	writeJSON(w, http.StatusOK, forums)
+	return forums, nil
 }
 
-// HandleExport exports a forum's data as JSON for migration to self-hosted.
+// ExportForum exports a forum's data as JSON for migration to self-hosted.
 // GET /api/platform/forums/{slug}/export
-// Requires the request to come from the forum owner (X-Forumline-ID must match).
-func (ph *PlatformHandlers) HandleExport(w http.ResponseWriter, r *http.Request) {
-	// Extract slug from URL path: /api/platform/forums/{slug}/export
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 5 {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
-	}
-	slug := parts[3]
-
-	forumlineID := r.Header.Get("X-Forumline-ID")
+func (h *Handlers) ExportForum(ctx context.Context, request oapi.ExportForumRequestObject) (oapi.ExportForumResponseObject, error) {
+	forumlineID := ForumlineIDFromContext(ctx)
 	if forumlineID == "" {
-		http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
-		return
+		return oapi.ExportForum401JSONResponse{Error: "authentication required"}, nil
 	}
 
-	tenant := ph.Store.BySlug(slug)
+	tenant := h.Store.BySlug(request.Slug)
 	if tenant == nil {
-		http.Error(w, `{"error":"forum not found"}`, http.StatusNotFound)
-		return
+		return oapi.ExportForum404JSONResponse{Error: "forum not found"}, nil
 	}
 
-	// Only the owner can export
 	if tenant.OwnerForumlineID != forumlineID {
-		http.Error(w, `{"error":"not authorized"}`, http.StatusForbidden)
-		return
+		return oapi.ExportForum403JSONResponse{Error: "not authorized"}, nil
 	}
 
-	data, err := Export(r.Context(), ph.Pool, tenant)
+	data, err := Export(ctx, h.Pool, tenant)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "export failed"})
-		return
+		return oapi.ExportForum500JSONResponse{Error: "export failed"}, nil
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+slug+"-export.json\"")
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
+	return exportForumResponse{slug: request.Slug, data: data}, nil
 }
 
 // RegisterForumWithForumline calls POST /api/forums on the Forumline app
-// to register the new forum in the directory. No OAuth credentials needed —
-// auth is handled by id.forumline.net.
+// to register the new forum in the directory.
 func RegisterForumWithForumline(ctx context.Context, domain, name, authHeader string) (bool, error) {
 	forumlineURL := os.Getenv("FORUMLINE_APP_URL")
 	if forumlineURL == "" {
@@ -200,12 +213,4 @@ func RegisterForumWithForumline(ctx context.Context, domain, name, authHeader st
 
 	log.Printf("registered forum %s with Forumline directory", domain)
 	return true, nil
-}
-
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
 }

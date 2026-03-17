@@ -145,8 +145,9 @@ func TestProfileFromSqlc(t *testing.T) {
 
 	p := profileFromSqlc(row)
 
-	if p.ID != "550e8400-e29b-41d4-a716-446655440000" {
-		t.Errorf("ID = %q", p.ID)
+	wantID := pgUUID("550e8400-e29b-41d4-a716-446655440000")
+	if p.Id != [16]byte(wantID.Bytes) {
+		t.Errorf("Id = %v", p.Id)
 	}
 	if p.Username != "testuser" {
 		t.Errorf("Username = %q", p.Username)
@@ -154,14 +155,14 @@ func TestProfileFromSqlc(t *testing.T) {
 	if p.DisplayName == nil || *p.DisplayName != "Test User" {
 		t.Errorf("DisplayName = %v", p.DisplayName)
 	}
-	if p.AvatarURL != nil {
-		t.Errorf("AvatarURL should be nil, got %v", p.AvatarURL)
+	if p.AvatarUrl != nil {
+		t.Errorf("AvatarUrl should be nil, got %v", p.AvatarUrl)
 	}
 	if !p.IsAdmin {
 		t.Error("expected IsAdmin=true")
 	}
-	if p.ForumlineID == nil || *p.ForumlineID != "fl-123" {
-		t.Errorf("ForumlineID = %v", p.ForumlineID)
+	if p.ForumlineId == nil || *p.ForumlineId != "fl-123" {
+		t.Errorf("ForumlineId = %v", p.ForumlineId)
 	}
 }
 

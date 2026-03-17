@@ -1,50 +1,78 @@
 package forum
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
 
 	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/forum/oapi"
 )
 
-// HandleImport imports forum data from a forumline export file.
+// convertToLocalExportData converts an oapi.ExportData to the forum-local
+// ExportData via a JSON round-trip. Both structs share wire-compatible JSON
+// field names; this avoids duplicating all field mappings.
+func convertToLocalExportData(src *oapi.ExportData) (*ExportData, error) {
+	b, err := json.Marshal(src)
+	if err != nil {
+		return nil, err
+	}
+	var dst ExportData
+	if err := json.Unmarshal(b, &dst); err != nil {
+		return nil, err
+	}
+	return &dst, nil
+}
+
+// ImportData imports forum data from a forumline export file.
 // POST /api/admin/import
-func (h *Handlers) HandleImport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
-	userID := auth.UserIDFromContext(r.Context())
+//
+// Note: request.Body is *oapi.ImportDataJSONRequestBody (= *oapi.ExportData).
+// The forum-local ExportData used by Import() is a separate struct — we convert
+// by re-encoding through JSON (both are wire-compatible).
+func (h *Handlers) ImportData(ctx context.Context, request oapi.ImportDataRequestObject) (oapi.ImportDataResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 	if userID == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
-		return
+		return oapi.ImportData401JSONResponse{UnauthorizedJSONResponse: oapi.UnauthorizedJSONResponse{Error: "authentication required"}}, nil
 	}
 
-	if err := h.AdminSvc.VerifyAdmin(r.Context(), userID); err != nil {
-		writeServiceError(w, err)
-		return
+	if err := h.AdminSvc.VerifyAdmin(ctx, userID); err != nil {
+		status, msg := serviceErrStatus(err)
+		if status == 403 {
+			return oapi.ImportData403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
+		}
+		return oapi.ImportData403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
 	}
 
-	var data ExportData
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid export file"})
-		return
+	oapiData := request.Body
+	if !oapiData.ForumlineVersion.Valid() {
+		return oapi.ImportData400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "unsupported export version"}}, nil
 	}
 
-	if data.ForumlineVersion != "1" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported export version"})
-		return
+	// Convert oapi.ExportData → forum.ExportData via JSON round-trip.
+	// Both structs share identical JSON field names; this is the cleanest
+	// conversion without duplicating all fields.
+	localData, err := convertToLocalExportData(oapiData)
+	if err != nil {
+		return oapi.ImportData400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "invalid export file: " + err.Error()}}, nil
 	}
 
-	if err := Import(r.Context(), h.Store.DB, &data); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "import failed: " + err.Error()})
-		return
+	if err := Import(ctx, h.Store.DB, localData); err != nil {
+		return oapi.ImportData500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: "import failed: " + err.Error()}}, nil
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":      true,
-		"forum":   data.Forum,
-		"message": "import complete",
-	})
+	ok := true
+	msg := "import complete"
+	forum := &oapi.ForumMeta{
+		Domain: oapiData.Forum.Domain,
+		Name:   oapiData.Forum.Name,
+		Slug:   oapiData.Forum.Slug,
+	}
+	if oapiData.Forum.Description != nil {
+		forum.Description = oapiData.Forum.Description
+	}
+	return oapi.ImportData200JSONResponse{
+		Ok:      &ok,
+		Forum:   forum,
+		Message: &msg,
+	}, nil
 }

@@ -1,43 +1,44 @@
 package forum
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/forum/oapi"
 )
 
-// HandleChatStream handles GET /api/channels/{slug}/stream (SSE).
-// Streams new chat messages for a specific channel, enriched with author profile.
-func (h *Handlers) HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
+// ── StreamChatMessages ────────────────────────────────────────────────
 
-	// Look up channel_id for filtering
-	channelID, err := h.Store.GetChannelIDBySlug(r.Context(), slug)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "channel not found"})
-		return
-	}
+// chatSSEStream implements oapi.StreamChatMessagesResponseObject.
+// Its Visit method blocks and runs the SSE loop.
+type chatSSEStream struct {
+	ctx       context.Context
+	h         *Handlers
+	channelID string
+}
 
+func (s chatSSEStream) VisitStreamChatMessagesResponse(w http.ResponseWriter) error {
 	client := &sse.Client{
 		Channel: "chat_message_changes",
-		Filter:  map[string]string{"channel_id": channelID},
+		Filter:  map[string]string{"channel_id": s.channelID},
 		Send:    make(chan []byte, 32),
 		Done:    make(chan struct{}),
 	}
 
-	h.SSEHub.Register(client)
+	s.h.SSEHub.Register(client)
 	defer func() {
-		h.SSEHub.Unregister(client)
+		s.h.SSEHub.Unregister(client)
 		close(client.Done)
 	}()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -47,68 +48,78 @@ func (h *Handlers) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := fmt.Fprint(w, ":connected\n\n"); err != nil {
-		return
+		return nil
 	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
-	ctx := r.Context()
 	for {
 		select {
-		case <-ctx.Done():
-			return
+		case <-s.ctx.Done():
+			return nil
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ":heartbeat\n\n"); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		case data := <-client.Send:
-			// Enrich the pg_notify payload with author profile
 			var raw map[string]interface{}
 			if err := json.Unmarshal(data, &raw); err != nil {
 				continue
 			}
-
 			authorID, _ := raw["author_id"].(string)
 			if authorID != "" {
-				if p, err := h.ProfileCache.Get(ctx, h.Config.Domain, authorID); err == nil {
+				if p, err := s.h.ProfileCache.Get(s.ctx, s.h.Config.Domain, authorID); err == nil {
 					raw["author"] = p
 				}
 			}
-
 			enriched, _ := json.Marshal(raw)
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", enriched); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		}
 	}
 }
 
-// HandlePostStream handles GET /api/threads/{id}/stream (SSE).
-// Streams new posts for a specific thread, enriched with author profile.
-func (h *Handlers) HandlePostStream(w http.ResponseWriter, r *http.Request) {
-	threadID := r.PathValue("id")
+// StreamChatMessages handles GET /api/channels/{slug}/stream (SSE).
+func (h *Handlers) StreamChatMessages(ctx context.Context, request oapi.StreamChatMessagesRequestObject) (oapi.StreamChatMessagesResponseObject, error) {
+	channelID, err := h.Store.GetChannelIDBySlug(ctx, request.Slug)
+	if err != nil {
+		return oapi.StreamChatMessages404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: "channel not found"}}, nil
+	}
+	return chatSSEStream{ctx: ctx, h: h, channelID: channelID}, nil
+}
 
+// ── StreamPosts ───────────────────────────────────────────────────────
+
+// postsSSEStream implements oapi.StreamPostsResponseObject.
+type postsSSEStream struct {
+	ctx      context.Context
+	h        *Handlers
+	threadID string
+}
+
+func (s postsSSEStream) VisitStreamPostsResponse(w http.ResponseWriter) error {
 	client := &sse.Client{
 		Channel: "post_changes",
-		Filter:  map[string]string{"thread_id": threadID},
+		Filter:  map[string]string{"thread_id": s.threadID},
 		Send:    make(chan []byte, 32),
 		Done:    make(chan struct{}),
 	}
 
-	h.SSEHub.Register(client)
+	s.h.SSEHub.Register(client)
 	defer func() {
-		h.SSEHub.Unregister(client)
+		s.h.SSEHub.Unregister(client)
 		close(client.Done)
 	}()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -118,21 +129,20 @@ func (h *Handlers) HandlePostStream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := fmt.Fprint(w, ":connected\n\n"); err != nil {
-		return
+		return nil
 	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
-	ctx := r.Context()
 	for {
 		select {
-		case <-ctx.Done():
-			return
+		case <-s.ctx.Done():
+			return nil
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ":heartbeat\n\n"); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		case data := <-client.Send:
@@ -140,43 +150,52 @@ func (h *Handlers) HandlePostStream(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(data, &raw); err != nil {
 				continue
 			}
-
 			authorID, _ := raw["author_id"].(string)
 			if authorID != "" {
-				if p, err := h.ProfileCache.Get(ctx, h.Config.Domain, authorID); err == nil {
+				if p, err := s.h.ProfileCache.Get(s.ctx, s.h.Config.Domain, authorID); err == nil {
 					raw["author"] = p
 				}
 			}
-
 			enriched, _ := json.Marshal(raw)
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", enriched); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		}
 	}
 }
 
-// HandleVoicePresenceStream handles GET /api/voice-presence/stream (SSE).
-// Streams voice presence changes (join/leave/update).
-func (h *Handlers) HandleVoicePresenceStream(w http.ResponseWriter, r *http.Request) {
+// StreamPosts handles GET /api/threads/{id}/stream (SSE).
+func (h *Handlers) StreamPosts(ctx context.Context, request oapi.StreamPostsRequestObject) (oapi.StreamPostsResponseObject, error) {
+	return postsSSEStream{ctx: ctx, h: h, threadID: request.Id.String()}, nil
+}
+
+// ── StreamVoicePresence ───────────────────────────────────────────────
+
+// voicePresenceSSEStream implements oapi.StreamVoicePresenceResponseObject.
+type voicePresenceSSEStream struct {
+	ctx context.Context
+	h   *Handlers
+}
+
+func (s voicePresenceSSEStream) VisitStreamVoicePresenceResponse(w http.ResponseWriter) error {
 	client := &sse.Client{
 		Channel: "voice_presence_changes",
-		Filter:  map[string]string{}, // no filter — all changes
+		Filter:  map[string]string{},
 		Send:    make(chan []byte, 32),
 		Done:    make(chan struct{}),
 	}
 
-	h.SSEHub.Register(client)
+	s.h.SSEHub.Register(client)
 	defer func() {
-		h.SSEHub.Unregister(client)
+		s.h.SSEHub.Unregister(client)
 		close(client.Done)
 	}()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -186,42 +205,43 @@ func (h *Handlers) HandleVoicePresenceStream(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := fmt.Fprint(w, ":connected\n\n"); err != nil {
-		return
+		return nil
 	}
 	flusher.Flush()
 
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
-	ctx := r.Context()
 	for {
 		select {
-		case <-ctx.Done():
-			return
+		case <-s.ctx.Done():
+			return nil
 		case <-heartbeat.C:
 			if _, err := fmt.Fprint(w, ":heartbeat\n\n"); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		case data := <-client.Send:
-			// Enrich with profile data for non-DELETE events
 			var raw map[string]interface{}
 			if err := json.Unmarshal(data, &raw); err != nil {
 				continue
 			}
-
 			userID, _ := raw["user_id"].(string)
 			if userID != "" {
-				if p, err := h.ProfileCache.Get(ctx, h.Config.Domain, userID); err == nil {
+				if p, err := s.h.ProfileCache.Get(s.ctx, s.h.Config.Domain, userID); err == nil {
 					raw["profile"] = p
 				}
 			}
-
 			enriched, _ := json.Marshal(raw)
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", enriched); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		}
 	}
+}
+
+// StreamVoicePresence handles GET /api/voice-presence/stream (SSE).
+func (h *Handlers) StreamVoicePresence(ctx context.Context, _ oapi.StreamVoicePresenceRequestObject) (oapi.StreamVoicePresenceResponseObject, error) {
+	return voicePresenceSSEStream{ctx: ctx, h: h}, nil
 }

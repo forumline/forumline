@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/forumline/forumline/services/forumline-id/oapi"
 )
 
 // --- codeStore ---
@@ -12,7 +14,7 @@ import (
 func TestCodeStore_StoreAndConsume(t *testing.T) {
 	cs := &codeStore{codes: make(map[string]*authCode)}
 
-	ui := &UserInfo{ForumlineID: "user-1", Username: "alice"}
+	ui := &oapi.UserInfo{ForumlineId: "user-1", Username: "alice"}
 	cs.Store("abc123", &authCode{
 		UserInfo:    ui,
 		RedirectURI: "https://test.forumline.net/callback",
@@ -23,15 +25,15 @@ func TestCodeStore_StoreAndConsume(t *testing.T) {
 	if !ok {
 		t.Fatal("expected successful consume")
 	}
-	if ac.UserInfo.ForumlineID != "user-1" {
-		t.Errorf("ForumlineID = %q", ac.UserInfo.ForumlineID)
+	if ac.UserInfo.ForumlineId != "user-1" {
+		t.Errorf("ForumlineId = %q", ac.UserInfo.ForumlineId)
 	}
 }
 
 func TestCodeStore_SingleUse(t *testing.T) {
 	cs := &codeStore{codes: make(map[string]*authCode)}
 	cs.Store("code1", &authCode{
-		UserInfo:    &UserInfo{},
+		UserInfo:    &oapi.UserInfo{},
 		RedirectURI: "https://a.forumline.net/cb",
 		ExpiresAt:   time.Now().Add(60 * time.Second),
 	})
@@ -50,7 +52,7 @@ func TestCodeStore_SingleUse(t *testing.T) {
 func TestCodeStore_ExpiredCode(t *testing.T) {
 	cs := &codeStore{codes: make(map[string]*authCode)}
 	cs.Store("expired", &authCode{
-		UserInfo:    &UserInfo{},
+		UserInfo:    &oapi.UserInfo{},
 		RedirectURI: "https://a.forumline.net/cb",
 		ExpiresAt:   time.Now().Add(-1 * time.Second), // already expired
 	})
@@ -64,7 +66,7 @@ func TestCodeStore_ExpiredCode(t *testing.T) {
 func TestCodeStore_WrongRedirectURI(t *testing.T) {
 	cs := &codeStore{codes: make(map[string]*authCode)}
 	cs.Store("code2", &authCode{
-		UserInfo:    &UserInfo{},
+		UserInfo:    &oapi.UserInfo{},
 		RedirectURI: "https://legit.forumline.net/cb",
 		ExpiresAt:   time.Now().Add(60 * time.Second),
 	})

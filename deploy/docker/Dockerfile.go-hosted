@@ -8,6 +8,7 @@ COPY packages/forum/ /packages/forum/
 RUN go mod download
 
 COPY services/hosted/db/ db/
+COPY services/hosted/oapi/ oapi/
 COPY services/hosted/platform/ platform/
 COPY services/hosted/hosted/ hosted/
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/hosted ./hosted/

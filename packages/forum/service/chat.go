@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -18,7 +18,7 @@ func NewChatService(s *store.Store) *ChatService {
 }
 
 // ListMessages returns chat messages for a channel slug.
-func (cs *ChatService) ListMessages(ctx context.Context, slug string) ([]model.ChatMessage, error) {
+func (cs *ChatService) ListMessages(ctx context.Context, slug string) ([]oapi.ChatMessage, error) {
 	return cs.Store.ListChatMessages(ctx, slug)
 }
 

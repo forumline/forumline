@@ -8,7 +8,9 @@ linters:
     - staticcheck     # Comprehensive static analysis (default: on)
     - unused          # Unused code detection (default: on)
     - ineffassign     # Detect useless assignments (default: on)
-    - nilerr          # Return nil where error should be returned
+    # nilerr intentionally omitted — oapi-codegen strict mode handlers legitimately
+    # return (typed_response, nil) when err != nil: the error is converted to a typed
+    # HTTP response object rather than propagated as a Go error.
     - reassign        # Detect reassignment of package-level variables
 
 linters-settings:

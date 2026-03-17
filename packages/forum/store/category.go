@@ -3,42 +3,42 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 )
 
 // ListCategories returns all categories ordered by sort_order.
-func (s *Store) ListCategories(ctx context.Context) ([]model.Category, error) {
+func (s *Store) ListCategories(ctx context.Context) ([]oapi.Category, error) {
 	rows, err := s.Q.ListCategories(ctx)
 	if err != nil {
 		return nil, err
 	}
-	categories := make([]model.Category, 0, len(rows))
+	categories := make([]oapi.Category, 0, len(rows))
 	for _, r := range rows {
-		categories = append(categories, model.Category{
-			ID:          uuidStr(r.ID),
+		categories = append(categories, oapi.Category{
+			Id:          pgUUID2OapiUUID(r.ID),
 			Name:        r.Name,
 			Slug:        r.Slug,
 			Description: pgtextPtr(r.Description),
 			SortOrder:   int(r.SortOrder),
-			CreatedAt:   tsStr(r.CreatedAt),
+			CreatedAt:   tsTime(r.CreatedAt),
 		})
 	}
 	return categories, nil
 }
 
 // GetCategoryBySlug returns a category by its slug.
-func (s *Store) GetCategoryBySlug(ctx context.Context, slug string) (*model.Category, error) {
+func (s *Store) GetCategoryBySlug(ctx context.Context, slug string) (*oapi.Category, error) {
 	row, err := s.Q.GetCategoryBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
-	c := model.Category{
-		ID:          uuidStr(row.ID),
+	c := oapi.Category{
+		Id:          pgUUID2OapiUUID(row.ID),
 		Name:        row.Name,
 		Slug:        row.Slug,
 		Description: pgtextPtr(row.Description),
 		SortOrder:   int(row.SortOrder),
-		CreatedAt:   tsStr(row.CreatedAt),
+		CreatedAt:   tsTime(row.CreatedAt),
 	}
 	return &c, nil
 }

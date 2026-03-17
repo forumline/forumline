@@ -7,7 +7,7 @@ import (
 
 	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/valkey"
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 	"github.com/redis/go-redis/v9"
 )
@@ -29,12 +29,12 @@ func NewProfileCache(client *redis.Client, db db.DB, ttl time.Duration) *Profile
 // Get returns a profile by ID, checking Valkey first. The schema parameter
 // is used to namespace cache keys per-tenant (since profiles live in
 // tenant-specific schemas).
-func (pc *ProfileCache) Get(ctx context.Context, schema, authorID string) (model.Profile, error) {
+func (pc *ProfileCache) Get(ctx context.Context, schema, authorID string) (oapi.Profile, error) {
 	if pc.client != nil {
 		key := valkey.Key("profile", schema, authorID)
 		data, err := pc.client.Get(ctx, key).Bytes()
 		if err == nil {
-			var p model.Profile
+			var p oapi.Profile
 			if json.Unmarshal(data, &p) == nil {
 				return p, nil
 			}

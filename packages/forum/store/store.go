@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/forumline/forumline/backend/db"
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Store provides data access methods for the forum database.
@@ -28,17 +29,25 @@ func New(db db.DB) *Store {
 // profileColumns is the column list for scanning profiles.
 const profileColumns = `id, username, display_name, avatar_url, bio, website, is_admin, forumline_id, created_at, updated_at`
 
-// scanProfile scans a profile row into a model.Profile.
-func scanProfile(scan func(dest ...interface{}) error) (model.Profile, error) {
-	var p model.Profile
+// scanProfile scans a profile row into an oapi.Profile.
+func scanProfile(scan func(dest ...interface{}) error) (oapi.Profile, error) {
+	var p oapi.Profile
+	var idBytes [16]byte
+	var displayName, avatarURL, bio, website, forumlineID *string
 	var createdAt, updatedAt time.Time
-	err := scan(&p.ID, &p.Username, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.Website,
-		&p.IsAdmin, &p.ForumlineID, &createdAt, &updatedAt)
+	err := scan(&idBytes, &p.Username, &displayName, &avatarURL, &bio, &website,
+		&p.IsAdmin, &forumlineID, &createdAt, &updatedAt)
 	if err != nil {
 		return p, err
 	}
-	p.CreatedAt = createdAt.Format(time.RFC3339)
-	p.UpdatedAt = updatedAt.Format(time.RFC3339)
+	p.Id = openapi_types.UUID(idBytes)
+	p.DisplayName = displayName
+	p.AvatarUrl = avatarURL
+	p.Bio = bio
+	p.Website = website
+	p.ForumlineId = forumlineID
+	p.CreatedAt = createdAt
+	p.UpdatedAt = updatedAt
 	return p, nil
 }
 
@@ -48,6 +57,6 @@ func ProfileColumns() string {
 }
 
 // ScanProfile scans a profile row — exported for SSE handler use.
-func ScanProfile(scan func(dest ...interface{}) error) (model.Profile, error) {
+func ScanProfile(scan func(dest ...interface{}) error) (oapi.Profile, error) {
 	return scanProfile(scan)
 }

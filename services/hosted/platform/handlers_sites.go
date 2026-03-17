@@ -14,21 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/forumline/forumline/services/hosted/oapi"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
-
-// SiteHandlers handles the file management API for custom forum frontends.
-type SiteHandlers struct {
-	Pool       *pgxpool.Pool
-	Store      *TenantStore
-	R2Account  string
-	R2KeyID    string
-	R2Secret   string
-	R2Bucket   string
-	SiteCache  *SiteCache
-}
 
 type siteManifest struct {
 	Files   map[string]siteFileEntry `json:"files"`
@@ -70,76 +59,33 @@ var extToContentType = map[string]string{
 }
 
 const (
-	maxFileSize    = 5 << 20  // 5MB per file
+	maxFileSize    = 5 << 20 // 5MB per file
 	metaObjectName = "_meta.json"
 )
 
-func (sh *SiteHandlers) r2Client() (*minio.Client, error) {
-	endpoint := fmt.Sprintf("%s.r2.cloudflarestorage.com", sh.R2Account)
+func (h *Handlers) r2Client() (*minio.Client, error) {
+	endpoint := fmt.Sprintf("%s.r2.cloudflarestorage.com", h.R2Account)
 	return minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(sh.R2KeyID, sh.R2Secret, ""),
+		Creds:  credentials.NewStaticV4(h.R2KeyID, h.R2Secret, ""),
 		Secure: true,
 	})
 }
 
-func (sh *SiteHandlers) authenticateOwner(r *http.Request, slug string) (*Tenant, error) {
-	forumlineID := r.Header.Get("X-Forumline-ID")
+// authenticateOwnerCtx looks up the tenant and verifies the caller owns it.
+// Returns the tenant on success, or an error string + HTTP status code on failure.
+func (h *Handlers) authenticateOwnerCtx(ctx context.Context, slug string) (*Tenant, string, int) {
+	forumlineID := ForumlineIDFromContext(ctx)
 	if forumlineID == "" {
-		return nil, fmt.Errorf("authentication required")
+		return nil, "authentication required", http.StatusUnauthorized
 	}
-	tenant := sh.Store.BySlug(slug)
+	tenant := h.Store.BySlug(slug)
 	if tenant == nil {
-		return nil, fmt.Errorf("forum not found")
+		return nil, "forum not found", http.StatusNotFound
 	}
 	if tenant.OwnerForumlineID != forumlineID {
-		return nil, fmt.Errorf("not authorized")
+		return nil, "not authorized", http.StatusForbidden
 	}
-	return tenant, nil
-}
-
-// HandleOwnedSites returns the domains and slugs of forums owned by the caller.
-func (sh *SiteHandlers) HandleOwnedSites(w http.ResponseWriter, r *http.Request) {
-	forumlineID := r.Header.Get("X-Forumline-ID")
-	if forumlineID == "" {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-	type ownedSite struct {
-		Domain string `json:"domain"`
-		Slug   string `json:"slug"`
-	}
-	var sites []ownedSite
-	for _, t := range sh.Store.All() {
-		if t.OwnerForumlineID == forumlineID {
-			sites = append(sites, ownedSite{Domain: t.Domain, Slug: t.Slug})
-		}
-	}
-	if sites == nil {
-		sites = []ownedSite{}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(sites); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
-}
-
-// extractSlugAndPath parses /api/platform/sites/{slug}/files/{path...} or similar.
-func extractSlugAndPath(urlPath, prefix string) (slug, filePath string, ok bool) {
-	trimmed := strings.TrimPrefix(urlPath, prefix)
-	trimmed = strings.TrimPrefix(trimmed, "/")
-	parts := strings.SplitN(trimmed, "/", 2)
-	if len(parts) == 0 || parts[0] == "" {
-		return "", "", false
-	}
-	slug = parts[0]
-	if len(parts) > 1 {
-		// Remove "files/" prefix if present
-		rest := parts[1]
-		rest = strings.TrimPrefix(rest, "files/")
-		rest = strings.TrimPrefix(rest, "files")
-		filePath = strings.TrimPrefix(rest, "/")
-	}
-	return slug, filePath, true
+	return tenant, "", 0
 }
 
 func sanitizePath(p string) (string, error) {
@@ -176,8 +122,8 @@ func r2MetaKey(slug string) string {
 }
 
 // loadManifest fetches the manifest from R2.
-func (sh *SiteHandlers) loadManifest(ctx context.Context, client *minio.Client, slug string) (*siteManifest, error) {
-	obj, err := client.GetObject(ctx, sh.R2Bucket, r2MetaKey(slug), minio.GetObjectOptions{})
+func (h *Handlers) loadManifest(ctx context.Context, client *minio.Client, slug string) (*siteManifest, error) {
+	obj, err := client.GetObject(ctx, h.R2Bucket, r2MetaKey(slug), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get manifest object: %w", err)
 	}
@@ -198,168 +144,184 @@ func (sh *SiteHandlers) loadManifest(ctx context.Context, client *minio.Client, 
 }
 
 // saveManifest writes the manifest to R2.
-func (sh *SiteHandlers) saveManifest(ctx context.Context, client *minio.Client, slug string, m *siteManifest) error {
+func (h *Handlers) saveManifest(ctx context.Context, client *minio.Client, slug string, m *siteManifest) error {
 	m.Updated = time.Now().UTC()
 	data, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	_, err = client.PutObject(ctx, sh.R2Bucket, r2MetaKey(slug), bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+	_, err = client.PutObject(ctx, h.R2Bucket, r2MetaKey(slug), bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: "application/json",
 	})
 	return err
 }
 
 // updateSiteState updates has_custom_site and site_storage_bytes in the DB.
-func (sh *SiteHandlers) updateSiteState(ctx context.Context, slug string, manifest *siteManifest) error {
+func (h *Handlers) updateSiteState(ctx context.Context, slug string, manifest *siteManifest) error {
 	_, hasIndex := manifest.Files["index.html"]
 	var totalBytes int64
 	for _, f := range manifest.Files {
 		totalBytes += f.Size
 	}
-	_, err := sh.Pool.Exec(ctx,
+	_, err := h.Pool.Exec(ctx,
 		`UPDATE platform_tenants SET has_custom_site = $1, site_storage_bytes = $2 WHERE slug = $3`,
 		hasIndex, totalBytes, slug)
 	if err != nil {
 		return err
 	}
-	return sh.Store.Refresh(ctx)
+	return h.Store.Refresh(ctx)
 }
 
-// HandleListFiles returns the manifest for a forum's custom site.
+// ListOwnedSites returns the domains and slugs of forums owned by the caller.
+// GET /api/platform/owned-sites
+func (h *Handlers) ListOwnedSites(ctx context.Context, _ oapi.ListOwnedSitesRequestObject) (oapi.ListOwnedSitesResponseObject, error) {
+	forumlineID := ForumlineIDFromContext(ctx)
+	if forumlineID == "" {
+		return oapi.ListOwnedSites401TextResponse("authentication required"), nil
+	}
+	var sites oapi.ListOwnedSites200JSONResponse
+	for _, t := range h.Store.All() {
+		if t.OwnerForumlineID == forumlineID {
+			sites = append(sites, oapi.OwnedSite{Domain: t.Domain, Slug: t.Slug})
+		}
+	}
+	if sites == nil {
+		sites = oapi.ListOwnedSites200JSONResponse{}
+	}
+	return sites, nil
+}
+
+// ListFiles returns the manifest for a forum's custom site.
 // GET /api/platform/sites/{slug}/files
-func (sh *SiteHandlers) HandleListFiles(w http.ResponseWriter, r *http.Request) {
-	slug, _, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
-	}
-	if _, err := sh.authenticateOwner(r, slug); err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+func (h *Handlers) ListFiles(ctx context.Context, request oapi.ListFilesRequestObject) (oapi.ListFilesResponseObject, error) {
+	if _, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug); errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.ListFiles401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.ListFiles404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.ListFiles403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.ListFiles500JSONResponse{Error: "storage unavailable"}, nil
 	}
-	manifest, err := sh.loadManifest(r.Context(), client, slug)
+	manifest, err := h.loadManifest(ctx, client, request.Slug)
 	if err != nil {
-		http.Error(w, `{"error":"failed to load manifest"}`, http.StatusInternalServerError)
-		return
+		return oapi.ListFiles500JSONResponse{Error: "failed to load manifest"}, nil
 	}
 
-	tenant := sh.Store.BySlug(slug)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"files":         manifest.Files,
-		"updated":       manifest.Updated,
-		"storage_bytes": tenant.SiteStorageBytes,
-		"storage_limit": tenant.SiteStorageLimit,
-	})
+	tenant := h.Store.BySlug(request.Slug)
+	files := make(map[string]oapi.SiteFileEntry, len(manifest.Files))
+	for k, v := range manifest.Files {
+		t, _ := time.Parse(time.RFC3339, v.Updated)
+		files[k] = oapi.SiteFileEntry{
+			Size:        v.Size,
+			ContentType: v.ContentType,
+			Etag:        v.ETag,
+			Updated:     t,
+		}
+	}
+	return oapi.ListFiles200JSONResponse{
+		Files:        files,
+		Updated:      manifest.Updated,
+		StorageBytes: tenant.SiteStorageBytes,
+		StorageLimit: tenant.SiteStorageLimit,
+	}, nil
 }
 
-// HandleGetFile downloads a specific file.
+// GetFile downloads a specific file.
 // GET /api/platform/sites/{slug}/files/{path...}
-func (sh *SiteHandlers) HandleGetFile(w http.ResponseWriter, r *http.Request) {
-	slug, filePath, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok || filePath == "" {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
+func (h *Handlers) GetFile(ctx context.Context, request oapi.GetFileRequestObject) (oapi.GetFileResponseObject, error) {
+	if request.Path == "" {
+		return oapi.GetFile400JSONResponse{Error: "invalid path"}, nil
 	}
-	if _, err := sh.authenticateOwner(r, slug); err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+	if _, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug); errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.GetFile401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.GetFile404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.GetFile403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	filePath, err := sanitizePath(filePath)
+	filePath, err := sanitizePath(request.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return oapi.GetFile400JSONResponse{Error: err.Error()}, nil
 	}
 
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.GetFile500JSONResponse{Error: "storage unavailable"}, nil
 	}
-	obj, err := client.GetObject(r.Context(), sh.R2Bucket, r2Key(slug, filePath), minio.GetObjectOptions{})
+	obj, err := client.GetObject(ctx, h.R2Bucket, r2Key(request.Slug, filePath), minio.GetObjectOptions{})
 	if err != nil {
-		http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
-		return
+		return oapi.GetFile404JSONResponse{Error: "file not found"}, nil
 	}
-	defer func() { _ = obj.Close() }()
 
 	info, err := obj.Stat()
 	if err != nil {
-		http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)
-		return
+		_ = obj.Close()
+		return oapi.GetFile404JSONResponse{Error: "file not found"}, nil
 	}
 
-	w.Header().Set("Content-Type", info.ContentType)
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size))
-	if _, err := io.Copy(w, obj); err != nil {
-		log.Printf("error streaming file %s/%s: %v", slug, filePath, err) // #nosec G706 -- slug is validated before use
-	}
+	return oapi.GetFile200ApplicationoctetStreamResponse{
+		Body:          obj,
+		ContentLength: info.Size,
+		Headers: oapi.GetFile200ResponseHeaders{
+			ContentType:   info.ContentType,
+			ContentLength: fmt.Sprintf("%d", info.Size),
+		},
+	}, nil
 }
 
-// HandlePutFile creates or updates a file.
+// PutFile creates or updates a file.
 // PUT /api/platform/sites/{slug}/files/{path...}
-func (sh *SiteHandlers) HandlePutFile(w http.ResponseWriter, r *http.Request) {
-	slug, filePath, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok || filePath == "" {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
+func (h *Handlers) PutFile(ctx context.Context, request oapi.PutFileRequestObject) (oapi.PutFileResponseObject, error) {
+	if request.Path == "" {
+		return oapi.PutFile400JSONResponse{Error: "invalid path"}, nil
 	}
-	tenant, err := sh.authenticateOwner(r, slug)
-	if err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+	tenant, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug)
+	if errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.PutFile401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.PutFile404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.PutFile403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	filePath, err = sanitizePath(filePath)
+	filePath, err := sanitizePath(request.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return oapi.PutFile400JSONResponse{Error: err.Error()}, nil
 	}
 
-	// Read body with size limit
-	body := http.MaxBytesReader(w, r.Body, maxFileSize)
-	data, err := io.ReadAll(body)
+	// Read body with size limit (request.Body is already r.Body from strict handler)
+	limited := io.LimitReader(request.Body, maxFileSize+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "file too large (max 5MB)"})
-		return
+		return oapi.PutFile413JSONResponse{Error: "file too large (max 5MB)"}, nil
+	}
+	if int64(len(data)) > maxFileSize {
+		return oapi.PutFile413JSONResponse{Error: "file too large (max 5MB)"}, nil
 	}
 
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.PutFile500JSONResponse{Error: "storage unavailable"}, nil
 	}
 
 	// Load manifest and check quota
-	manifest, err := sh.loadManifest(r.Context(), client, slug)
+	manifest, err := h.loadManifest(ctx, client, request.Slug)
 	if err != nil {
-		http.Error(w, `{"error":"failed to load manifest"}`, http.StatusInternalServerError)
-		return
+		return oapi.PutFile500JSONResponse{Error: "failed to load manifest"}, nil
 	}
 
 	newSize := int64(len(data))
@@ -369,8 +331,7 @@ func (sh *SiteHandlers) HandlePutFile(w http.ResponseWriter, r *http.Request) {
 		currentUsage -= old.Size
 	}
 	if currentUsage+newSize > tenant.SiteStorageLimit {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "storage quota exceeded"})
-		return
+		return oapi.PutFile413JSONResponse{Error: "storage quota exceeded"}, nil
 	}
 
 	// Determine content type
@@ -385,13 +346,12 @@ func (sh *SiteHandlers) HandlePutFile(w http.ResponseWriter, r *http.Request) {
 	etag := hex.EncodeToString(hash[:])
 
 	// Upload to R2
-	_, err = client.PutObject(r.Context(), sh.R2Bucket, r2Key(slug, filePath), bytes.NewReader(data), newSize, minio.PutObjectOptions{
+	_, err = client.PutObject(ctx, h.R2Bucket, r2Key(request.Slug, filePath), bytes.NewReader(data), newSize, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
-		log.Printf("R2 upload error for %s/%s: %v", slug, filePath, err) // #nosec G706 -- slug is validated before use
-		http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
-		return
+		log.Printf("R2 upload error for %s/%s: %v", request.Slug, filePath, err) // #nosec G706 -- slug is validated before use
+		return oapi.PutFile500JSONResponse{Error: "upload failed"}, nil
 	}
 
 	// Update manifest
@@ -402,253 +362,280 @@ func (sh *SiteHandlers) HandlePutFile(w http.ResponseWriter, r *http.Request) {
 		Updated:     time.Now().UTC().Format(time.RFC3339),
 	}
 	// Update DB first (easier to recover if manifest save fails)
-	if err := sh.updateSiteState(r.Context(), slug, manifest); err != nil {
-		log.Printf("failed to update site state for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.updateSiteState(ctx, request.Slug, manifest); err != nil {
+		log.Printf("failed to update site state for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
-	if err := sh.saveManifest(r.Context(), client, slug, manifest); err != nil {
-		log.Printf("failed to save manifest for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.saveManifest(ctx, client, request.Slug, manifest); err != nil {
+		log.Printf("failed to save manifest for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
 	// Invalidate cache
-	if sh.SiteCache != nil {
-		sh.SiteCache.Invalidate(slug, filePath)
+	if h.SiteCache != nil {
+		h.SiteCache.Invalidate(request.Slug, filePath)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
-		"path": filePath,
-		"etag": etag,
-		"size": fmt.Sprintf("%d", newSize),
-	})
+	return oapi.PutFile200JSONResponse{
+		Path: filePath,
+		Etag: etag,
+		Size: fmt.Sprintf("%d", newSize),
+	}, nil
 }
 
-// HandleDeleteFile deletes a file from the custom site.
+// DeleteFile deletes a file from the custom site.
 // DELETE /api/platform/sites/{slug}/files/{path...}
-func (sh *SiteHandlers) HandleDeleteFile(w http.ResponseWriter, r *http.Request) {
-	slug, filePath, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok || filePath == "" {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
+func (h *Handlers) DeleteFile(ctx context.Context, request oapi.DeleteFileRequestObject) (oapi.DeleteFileResponseObject, error) {
+	if request.Path == "" {
+		return oapi.DeleteFile400JSONResponse{Error: "invalid path"}, nil
 	}
-	if _, err := sh.authenticateOwner(r, slug); err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+	if _, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug); errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.DeleteFile401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.DeleteFile404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.DeleteFile403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	filePath, err := sanitizePath(filePath)
+	filePath, err := sanitizePath(request.Path)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return oapi.DeleteFile400JSONResponse{Error: err.Error()}, nil
 	}
 
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.DeleteFile500JSONResponse{Error: "storage unavailable"}, nil
 	}
 
 	// Delete from R2
-	if err := client.RemoveObject(r.Context(), sh.R2Bucket, r2Key(slug, filePath), minio.RemoveObjectOptions{}); err != nil {
-		log.Printf("R2 delete error for %s/%s: %v", slug, filePath, err) // #nosec G706 -- slug is validated before use
+	if err := client.RemoveObject(ctx, h.R2Bucket, r2Key(request.Slug, filePath), minio.RemoveObjectOptions{}); err != nil {
+		log.Printf("R2 delete error for %s/%s: %v", request.Slug, filePath, err) // #nosec G706 -- slug is validated before use
 	}
 
 	// Update manifest
-	manifest, _ := sh.loadManifest(r.Context(), client, slug)
+	manifest, _ := h.loadManifest(ctx, client, request.Slug)
 	delete(manifest.Files, filePath)
-	if err := sh.saveManifest(r.Context(), client, slug, manifest); err != nil {
-		log.Printf("failed to save manifest for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.saveManifest(ctx, client, request.Slug, manifest); err != nil {
+		log.Printf("failed to save manifest for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
 	// Update DB state
-	if err := sh.updateSiteState(r.Context(), slug, manifest); err != nil {
-		log.Printf("failed to update site state for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.updateSiteState(ctx, request.Slug, manifest); err != nil {
+		log.Printf("failed to update site state for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
 	// Invalidate cache
-	if sh.SiteCache != nil {
-		sh.SiteCache.Invalidate(slug, filePath)
+	if h.SiteCache != nil {
+		h.SiteCache.Invalidate(request.Slug, filePath)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"deleted": filePath})
+	return oapi.DeleteFile200JSONResponse{Deleted: filePath}, nil
 }
 
-// HandleMultipartUpload handles drag-and-drop multipart file uploads.
+// MultipartUpload handles drag-and-drop multipart file uploads.
 // POST /api/platform/sites/{slug}/upload
-func (sh *SiteHandlers) HandleMultipartUpload(w http.ResponseWriter, r *http.Request) {
-	slug, _, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
-	}
-	tenant, err := sh.authenticateOwner(r, slug)
-	if err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+func (h *Handlers) MultipartUpload(ctx context.Context, request oapi.MultipartUploadRequestObject) (oapi.MultipartUploadResponseObject, error) {
+	tenant, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug)
+	if errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.MultipartUpload401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.MultipartUpload404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.MultipartUpload403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	// 10MB in-memory buffer for multipart (individual files capped at 5MB)
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request too large"})
-		return
-	}
-
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.MultipartUpload500JSONResponse{Error: "storage unavailable"}, nil
 	}
 
-	manifest, err := sh.loadManifest(r.Context(), client, slug)
+	manifest, err := h.loadManifest(ctx, client, request.Slug)
 	if err != nil {
-		http.Error(w, `{"error":"failed to load manifest"}`, http.StatusInternalServerError)
-		return
+		return oapi.MultipartUpload500JSONResponse{Error: "failed to load manifest"}, nil
 	}
 
 	currentUsage := tenant.SiteStorageBytes
 	var uploaded []string
 	var errors []string
 
-	for _, headers := range r.MultipartForm.File {
-		for _, header := range headers {
-			// Use the "path" form field or fall back to filename
-			filePath := header.Filename
-			filePath, err := sanitizePath(filePath)
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("%s: %s", header.Filename, err.Error()))
-				continue
-			}
+	// request.Body is a *multipart.Reader provided by the strict handler
+	for {
+		part, err := request.Body.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("read part error: %s", err.Error()))
+			break
+		}
 
-			if header.Size > maxFileSize {
-				errors = append(errors, fmt.Sprintf("%s: file too large (max 5MB)", filePath))
-				continue
-			}
+		filename := part.FileName()
+		if filename == "" {
+			_ = part.Close()
+			continue
+		}
 
-			// Check quota
-			oldSize := int64(0)
-			if old, exists := manifest.Files[filePath]; exists {
-				oldSize = old.Size
-			}
-			if currentUsage-oldSize+header.Size > tenant.SiteStorageLimit {
-				errors = append(errors, fmt.Sprintf("%s: storage quota exceeded", filePath))
-				continue
-			}
+		filePath, err := sanitizePath(filename)
+		if err != nil {
+			_ = part.Close()
+			errors = append(errors, fmt.Sprintf("%s: %s", filename, err.Error()))
+			continue
+		}
 
-			file, err := header.Open()
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("%s: failed to open", filePath))
-				continue
-			}
+		// Read with size limit
+		limited := io.LimitReader(part, maxFileSize+1)
+		data, err := io.ReadAll(limited)
+		_ = part.Close()
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: failed to read", filePath))
+			continue
+		}
+		if int64(len(data)) > maxFileSize {
+			errors = append(errors, fmt.Sprintf("%s: file too large (max 5MB)", filePath))
+			continue
+		}
 
-			data, err := io.ReadAll(file)
-			_ = file.Close()
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("%s: failed to read", filePath))
-				continue
-			}
+		// Check quota
+		oldSize := int64(0)
+		if old, exists := manifest.Files[filePath]; exists {
+			oldSize = old.Size
+		}
+		if currentUsage-oldSize+int64(len(data)) > tenant.SiteStorageLimit {
+			errors = append(errors, fmt.Sprintf("%s: storage quota exceeded", filePath))
+			continue
+		}
 
-			ext := path.Ext(filePath)
-			contentType := extToContentType[ext]
-			if contentType == "" {
-				contentType = "application/octet-stream"
-			}
+		ext := path.Ext(filePath)
+		contentType := extToContentType[ext]
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
 
-			_, err = client.PutObject(r.Context(), sh.R2Bucket, r2Key(slug, filePath), bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
-				ContentType: contentType,
-			})
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("%s: upload failed", filePath))
-				continue
-			}
+		_, err = client.PutObject(ctx, h.R2Bucket, r2Key(request.Slug, filePath), bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+			ContentType: contentType,
+		})
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: upload failed", filePath))
+			continue
+		}
 
-			hash := md5.Sum(data) // #nosec G401 -- md5 used for content hash (ETags), not security
-			manifest.Files[filePath] = siteFileEntry{
-				Size:        int64(len(data)),
-				ContentType: contentType,
-				ETag:        hex.EncodeToString(hash[:]),
-				Updated:     time.Now().UTC().Format(time.RFC3339),
-			}
-			currentUsage = currentUsage - oldSize + int64(len(data))
-			uploaded = append(uploaded, filePath)
+		hash := md5.Sum(data) // #nosec G401 -- md5 used for content hash (ETags), not security
+		manifest.Files[filePath] = siteFileEntry{
+			Size:        int64(len(data)),
+			ContentType: contentType,
+			ETag:        hex.EncodeToString(hash[:]),
+			Updated:     time.Now().UTC().Format(time.RFC3339),
+		}
+		currentUsage = currentUsage - oldSize + int64(len(data))
+		uploaded = append(uploaded, filePath)
 
-			if sh.SiteCache != nil {
-				sh.SiteCache.Invalidate(slug, filePath)
-			}
+		if h.SiteCache != nil {
+			h.SiteCache.Invalidate(request.Slug, filePath)
 		}
 	}
 
-	if err := sh.saveManifest(r.Context(), client, slug, manifest); err != nil {
-		log.Printf("failed to save manifest for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.saveManifest(ctx, client, request.Slug, manifest); err != nil {
+		log.Printf("failed to save manifest for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
-	if err := sh.updateSiteState(r.Context(), slug, manifest); err != nil {
-		log.Printf("failed to update site state for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.updateSiteState(ctx, request.Slug, manifest); err != nil {
+		log.Printf("failed to update site state for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"uploaded": uploaded,
-		"errors":   errors,
-	})
+	if uploaded == nil {
+		uploaded = []string{}
+	}
+	if errors == nil {
+		errors = []string{}
+	}
+
+	return oapi.MultipartUpload200JSONResponse{
+		Uploaded: uploaded,
+		Errors:   errors,
+	}, nil
 }
 
-// HandleReset deletes all custom files and reverts to default SPA.
+// ResetSite deletes all custom files and reverts to default SPA.
 // POST /api/platform/sites/{slug}/reset
-func (sh *SiteHandlers) HandleReset(w http.ResponseWriter, r *http.Request) {
-	slug, _, ok := extractSlugAndPath(r.URL.Path, "/api/platform/sites")
-	if !ok {
-		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
-		return
-	}
-	if _, err := sh.authenticateOwner(r, slug); err != nil {
-		status := http.StatusForbidden
-		if err.Error() == "authentication required" {
-			status = http.StatusUnauthorized
-		} else if err.Error() == "forum not found" {
-			status = http.StatusNotFound
+func (h *Handlers) ResetSite(ctx context.Context, request oapi.ResetSiteRequestObject) (oapi.ResetSiteResponseObject, error) {
+	if _, errMsg, status := h.authenticateOwnerCtx(ctx, request.Slug); errMsg != "" {
+		switch status {
+		case http.StatusUnauthorized:
+			return oapi.ResetSite401JSONResponse{Error: errMsg}, nil
+		case http.StatusNotFound:
+			return oapi.ResetSite404JSONResponse{Error: errMsg}, nil
+		default:
+			return oapi.ResetSite403JSONResponse{Error: errMsg}, nil
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
 	}
 
-	client, err := sh.r2Client()
+	client, err := h.r2Client()
 	if err != nil {
-		http.Error(w, `{"error":"storage unavailable"}`, http.StatusInternalServerError)
-		return
+		return oapi.ResetSite500JSONResponse{Error: "storage unavailable"}, nil
 	}
 
-	manifest, _ := sh.loadManifest(r.Context(), client, slug)
+	manifest, _ := h.loadManifest(ctx, client, request.Slug)
 
 	// Delete all files from R2
 	for filePath := range manifest.Files {
-		if err := client.RemoveObject(r.Context(), sh.R2Bucket, r2Key(slug, filePath), minio.RemoveObjectOptions{}); err != nil {
-			log.Printf("R2 delete error during reset for %s/%s: %v", slug, filePath, err) // #nosec G706 -- slug is validated before use
+		if err := client.RemoveObject(ctx, h.R2Bucket, r2Key(request.Slug, filePath), minio.RemoveObjectOptions{}); err != nil {
+			log.Printf("R2 delete error during reset for %s/%s: %v", request.Slug, filePath, err) // #nosec G706 -- slug is validated before use
 		}
-		if sh.SiteCache != nil {
-			sh.SiteCache.Invalidate(slug, filePath)
+		if h.SiteCache != nil {
+			h.SiteCache.Invalidate(request.Slug, filePath)
 		}
 	}
 
 	// Delete manifest
-	if err := client.RemoveObject(r.Context(), sh.R2Bucket, r2MetaKey(slug), minio.RemoveObjectOptions{}); err != nil {
-		log.Printf("R2 delete manifest error for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := client.RemoveObject(ctx, h.R2Bucket, r2MetaKey(request.Slug), minio.RemoveObjectOptions{}); err != nil {
+		log.Printf("R2 delete manifest error for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
 	// Update DB
 	emptyManifest := &siteManifest{Files: make(map[string]siteFileEntry)}
-	if err := sh.updateSiteState(r.Context(), slug, emptyManifest); err != nil {
-		log.Printf("failed to update site state for %s: %v", slug, err) // #nosec G706 -- slug is validated before use
+	if err := h.updateSiteState(ctx, request.Slug, emptyManifest); err != nil {
+		log.Printf("failed to update site state for %s: %v", request.Slug, err) // #nosec G706 -- slug is validated before use
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "reset complete"})
+	return oapi.ResetSite200JSONResponse{Status: oapi.ResetComplete}, nil
+}
+
+// RegisterRoutes registers all platform API routes on the given mux.
+//
+// We don't use oapi.HandlerFromMux directly because the generated code registers
+// file routes as {path} (single segment) instead of {path...} (wildcard). Since
+// file paths can contain subdirectories (e.g. css/style.css), we need the
+// catch-all pattern. This function registers the correct patterns.
+func RegisterRoutes(mux *http.ServeMux, si oapi.StrictServerInterface) {
+	// Wrap the strict implementation as a ServerInterface via the generated adapter.
+	// ForumlineIDMiddleware injects X-Forumline-ID into the context so strict handlers
+	// can retrieve it without touching *http.Request directly.
+	wrapper := oapi.ServerInterfaceWrapper{
+		Handler: oapi.NewStrictHandler(si, nil),
+		HandlerMiddlewares: []oapi.MiddlewareFunc{
+			ForumlineIDMiddleware,
+		},
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		},
+	}
+
+	// Routes without path params — identical to generated code
+	mux.HandleFunc("GET /api/platform/forums", wrapper.ListForums)
+	mux.HandleFunc("POST /api/platform/forums", wrapper.ProvisionForum)
+	mux.HandleFunc("GET /api/platform/forums/{slug}/export", wrapper.ExportForum)
+	mux.HandleFunc("GET /api/platform/owned-sites", wrapper.ListOwnedSites)
+	mux.HandleFunc("GET /api/platform/sites/{slug}/files", wrapper.ListFiles)
+	mux.HandleFunc("POST /api/platform/sites/{slug}/reset", wrapper.ResetSite)
+	mux.HandleFunc("POST /api/platform/sites/{slug}/upload", wrapper.MultipartUpload)
+
+	// File routes need {path...} for subdirectory support (e.g. css/style.css).
+	// The generated code uses {path} which only matches a single segment.
+	mux.HandleFunc("DELETE /api/platform/sites/{slug}/files/{path...}", wrapper.DeleteFile)
+	mux.HandleFunc("GET /api/platform/sites/{slug}/files/{path...}", wrapper.GetFile)
+	mux.HandleFunc("PUT /api/platform/sites/{slug}/files/{path...}", wrapper.PutFile)
 }

@@ -4,37 +4,37 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListVoiceRooms returns all voice rooms ordered by name.
-func (s *Store) ListVoiceRooms(ctx context.Context) ([]model.VoiceRoom, error) {
+func (s *Store) ListVoiceRooms(ctx context.Context) ([]oapi.VoiceRoom, error) {
 	rows, err := s.Q.ListVoiceRooms(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rooms := make([]model.VoiceRoom, 0, len(rows))
+	rooms := make([]oapi.VoiceRoom, 0, len(rows))
 	for _, r := range rows {
-		rooms = append(rooms, model.VoiceRoom{
-			ID:        uuidStr(r.ID),
+		rooms = append(rooms, oapi.VoiceRoom{
+			Id:        pgUUID2OapiUUID(r.ID),
 			Name:      r.Name,
 			Slug:      r.Slug,
-			CreatedAt: tsStr(r.CreatedAt),
+			CreatedAt: tsTime(r.CreatedAt),
 		})
 	}
 	return rooms, nil
 }
 
 // ListVoicePresence returns all voice presence entries with profile.
-func (s *Store) ListVoicePresence(ctx context.Context) ([]model.VoicePresence, error) {
+func (s *Store) ListVoicePresence(ctx context.Context) ([]oapi.VoicePresence, error) {
 	rows, err := s.Q.ListVoicePresence(ctx)
 	if err != nil {
 		return nil, err
 	}
-	presence := make([]model.VoicePresence, 0, len(rows))
+	presence := make([]oapi.VoicePresence, 0, len(rows))
 	for _, r := range rows {
-		presence = append(presence, voicePresenceRowToModel(r))
+		presence = append(presence, voicePresenceRowToOapi(r))
 	}
 	return presence, nil
 }

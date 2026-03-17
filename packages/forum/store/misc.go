@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
@@ -38,15 +38,15 @@ func (s *Store) RemoveChannelFollow(ctx context.Context, userID, categoryID stri
 }
 
 // ListNotificationPrefs returns a user's notification preferences.
-func (s *Store) ListNotificationPrefs(ctx context.Context, userID string) ([]model.NotificationPreference, error) {
+func (s *Store) ListNotificationPrefs(ctx context.Context, userID string) ([]oapi.NotificationPreference, error) {
 	rows, err := s.Q.ListNotificationPrefs(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
-	prefs := make([]model.NotificationPreference, 0, len(rows))
+	prefs := make([]oapi.NotificationPreference, 0, len(rows))
 	for _, r := range rows {
-		prefs = append(prefs, model.NotificationPreference{
-			Category: r.Category,
+		prefs = append(prefs, oapi.NotificationPreference{
+			Category: oapi.NotificationPreferenceCategory(r.Category),
 			Enabled:  r.Enabled,
 		})
 	}
@@ -64,8 +64,8 @@ func (s *Store) UpsertNotificationPref(ctx context.Context, userID, category str
 }
 
 // GetAdminStats returns admin dashboard statistics.
-func (s *Store) GetAdminStats(ctx context.Context) (model.AdminStats, error) {
-	var stats model.AdminStats
+func (s *Store) GetAdminStats(ctx context.Context) (oapi.AdminStats, error) {
+	var stats oapi.AdminStats
 	var err error
 
 	users, err := s.Q.CountProfiles(ctx)

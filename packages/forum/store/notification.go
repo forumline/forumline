@@ -3,58 +3,58 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListNotifications returns notifications for a user (data provider format).
-func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]model.Notification, error) {
+func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]oapi.Notification, error) {
 	rows, err := s.Q.ListNotifications(ctx, sqlcdb.ListNotificationsParams{
 		UserID: pgUUID(userID),
-		Limit:  int32(min(limit, 1000)),  //nolint:gosec // limit is bounded
+		Limit:  int32(min(limit, 1000)), //nolint:gosec // limit is bounded
 	})
 	if err != nil {
 		return nil, err
 	}
-	notifications := make([]model.Notification, 0, len(rows))
+	notifications := make([]oapi.Notification, 0, len(rows))
 	for _, r := range rows {
-		notifications = append(notifications, model.Notification{
-			ID:        uuidStr(r.ID),
-			UserID:    uuidStr(r.UserID),
+		notifications = append(notifications, oapi.Notification{
+			Id:        pgUUID2OapiUUID(r.ID),
+			UserId:    pgUUID2OapiUUID(r.UserID),
 			Type:      r.Type,
 			Title:     r.Title,
 			Message:   r.Message,
 			Link:      pgtextPtr(r.Link),
 			Read:      r.Read,
-			CreatedAt: tsStr(r.CreatedAt),
+			CreatedAt: tsTime(r.CreatedAt),
 		})
 	}
 	return notifications, nil
 }
 
 // ListForumlineNotifications returns notifications in the forumline protocol format.
-func (s *Store) ListForumlineNotifications(ctx context.Context, userID string, limit int, forumDomain string) ([]model.ForumlineNotification, error) {
+func (s *Store) ListForumlineNotifications(ctx context.Context, userID string, limit int, forumDomain string) ([]oapi.ForumlineNotification, error) {
 	rows, err := s.Q.ListForumlineNotifications(ctx, sqlcdb.ListForumlineNotificationsParams{
 		UserID: pgUUID(userID),
-		Limit:  int32(min(limit, 1000)),  //nolint:gosec // limit is bounded
+		Limit:  int32(min(limit, 1000)), //nolint:gosec // limit is bounded
 	})
 	if err != nil {
 		return nil, err
 	}
-	notifications := make([]model.ForumlineNotification, 0, len(rows))
+	notifications := make([]oapi.ForumlineNotification, 0, len(rows))
 	for _, r := range rows {
 		link := "/"
 		if r.Link.Valid {
 			link = r.Link.String
 		}
-		notifications = append(notifications, model.ForumlineNotification{
-			ID:          uuidStr(r.ID),
+		notifications = append(notifications, oapi.ForumlineNotification{
+			Id:          pgUUID2OapiUUID(r.ID),
 			Type:        r.Type,
 			Title:       r.Title,
 			Body:        r.Message,
 			Link:        link,
 			Read:        r.Read,
-			Timestamp:   tsStr(r.CreatedAt),
+			Timestamp:   tsTime(r.CreatedAt),
 			ForumDomain: forumDomain,
 		})
 	}

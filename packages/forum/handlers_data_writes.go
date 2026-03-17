@@ -1,291 +1,289 @@
 package forum
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 
 	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/service"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // ============================================================================
 // Thread writes
 // ============================================================================
 
-// HandleCreateThread handles POST /api/threads
-func (h *Handlers) HandleCreateThread(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// CreateThread handles POST /api/threads
+func (h *Handlers) CreateThread(ctx context.Context, request oapi.CreateThreadRequestObject) (oapi.CreateThreadResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		CategoryID string  `json:"category_id"`
-		Title      string  `json:"title"`
-		Slug       string  `json:"slug"`
-		Content    *string `json:"content"`
-		ImageURL   *string `json:"image_url"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+	var content *string
+	if body.Content != nil {
+		content = body.Content
 	}
 
-	id, err := h.ThreadSvc.Create(r.Context(), userID, service.CreateThreadInput{
-		CategoryID: body.CategoryID,
+	id, err := h.ThreadSvc.Create(ctx, userID, service.CreateThreadInput{
+		CategoryID: body.CategoryId.String(),
 		Title:      body.Title,
 		Slug:       body.Slug,
-		Content:    body.Content,
-		ImageURL:   body.ImageURL,
+		Content:    content,
+		ImageURL:   body.ImageUrl,
 	})
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.CreateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.CreateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
+
+	// Parse the returned string ID into a UUID
+	var idUUID openapi_types.UUID
+	if err := idUUID.UnmarshalText([]byte(id)); err != nil {
+		return oapi.CreateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "invalid id returned"}}, nil
+	}
+	return oapi.CreateThread201JSONResponse{Id: &idUUID}, nil
 }
 
-// HandleUpdateThread handles PATCH /api/threads/{id}
-func (h *Handlers) HandleUpdateThread(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	threadID := r.PathValue("id")
+// UpdateThread handles PATCH /api/threads/{id}
+func (h *Handlers) UpdateThread(ctx context.Context, request oapi.UpdateThreadRequestObject) (oapi.UpdateThreadResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		ImageURL   *string `json:"image_url,omitempty"`
-		LastPostAt *string `json:"last_post_at,omitempty"`
-		PostCount  *int    `json:"post_count,omitempty"`
-		IsPinned   *bool   `json:"is_pinned,omitempty"`
-		IsLocked   *bool   `json:"is_locked,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+	// Convert *time.Time to *string for the service layer
+	var lastPostAt *string
+	if body.LastPostAt != nil {
+		s := body.LastPostAt.Format("2006-01-02T15:04:05Z07:00")
+		lastPostAt = &s
 	}
 
-	err := h.ThreadSvc.Update(r.Context(), userID, threadID, service.UpdateThreadInput{
-		ImageURL:   body.ImageURL,
-		LastPostAt: body.LastPostAt,
+	err := h.ThreadSvc.Update(ctx, userID, request.Id.String(), service.UpdateThreadInput{
+		ImageURL:   body.ImageUrl,
+		LastPostAt: lastPostAt,
 		PostCount:  body.PostCount,
 		IsPinned:   body.IsPinned,
 		IsLocked:   body.IsLocked,
 	})
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.UpdateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		case http.StatusForbidden:
+			return oapi.UpdateThread403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
+		case http.StatusNotFound:
+			return oapi.UpdateThread404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.UpdateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.UpdateThread200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
 // ============================================================================
 // Post writes
 // ============================================================================
 
-// HandleCreatePost handles POST /api/posts
-func (h *Handlers) HandleCreatePost(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// CreatePost handles POST /api/posts
+func (h *Handlers) CreatePost(ctx context.Context, request oapi.CreatePostRequestObject) (oapi.CreatePostResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		ThreadID  string  `json:"thread_id"`
-		Content   string  `json:"content"`
-		ReplyToID *string `json:"reply_to_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+	var replyToID *string
+	if body.ReplyToId != nil {
+		s := body.ReplyToId.String()
+		replyToID = &s
 	}
 
-	id, err := h.PostSvc.Create(r.Context(), userID, service.CreatePostInput{
-		ThreadID:  body.ThreadID,
+	id, err := h.PostSvc.Create(ctx, userID, service.CreatePostInput{
+		ThreadID:  body.ThreadId.String(),
 		Content:   body.Content,
-		ReplyToID: body.ReplyToID,
+		ReplyToID: replyToID,
 	})
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.CreatePost400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.CreatePost400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
+
+	var idUUID openapi_types.UUID
+	if err := idUUID.UnmarshalText([]byte(id)); err != nil {
+		return oapi.CreatePost400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "invalid id returned"}}, nil
+	}
+	return oapi.CreatePost201JSONResponse{Id: &idUUID}, nil
 }
 
 // ============================================================================
 // Chat writes
 // ============================================================================
 
-// HandleSendChatMessage handles POST /api/channels/{slug}/messages
-func (h *Handlers) HandleSendChatMessage(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	slug := r.PathValue("slug")
+// SendChatMessage handles POST /api/channels/{slug}/messages
+func (h *Handlers) SendChatMessage(ctx context.Context, request oapi.SendChatMessageRequestObject) (oapi.SendChatMessageResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		Content string `json:"content"`
+	if err := h.ChatSvc.SendMessage(ctx, userID, request.Slug, body.Content); err != nil {
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.SendChatMessage400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		case http.StatusNotFound:
+			return oapi.SendChatMessage404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.SendChatMessage400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	if err := h.ChatSvc.SendMessage(r.Context(), userID, slug, body.Content); err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]bool{"success": true})
+	t := true
+	return oapi.SendChatMessage201JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleSendChatMessageByID handles POST /api/channels/_by-id/{id}/messages
-func (h *Handlers) HandleSendChatMessageByID(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	channelID := r.PathValue("id")
+// SendChatMessageByID handles POST /api/channels/_by-id/{id}/messages
+func (h *Handlers) SendChatMessageByID(ctx context.Context, request oapi.SendChatMessageByIDRequestObject) (oapi.SendChatMessageByIDResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		Content string `json:"content"`
+	if err := h.ChatSvc.SendMessageByID(ctx, userID, request.Id.String(), body.Content); err != nil {
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.SendChatMessageByID400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.SendChatMessageByID400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	if err := h.ChatSvc.SendMessageByID(r.Context(), userID, channelID, body.Content); err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]bool{"success": true})
+	t := true
+	return oapi.SendChatMessageByID201JSONResponse(oapi.Success{Success: &t}), nil
 }
 
 // ============================================================================
 // Bookmark writes
 // ============================================================================
 
-// HandleAddBookmark handles POST /api/bookmarks
-func (h *Handlers) HandleAddBookmark(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// AddBookmark handles POST /api/bookmarks
+func (h *Handlers) AddBookmark(ctx context.Context, request oapi.AddBookmarkRequestObject) (oapi.AddBookmarkResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	var body struct {
-		ThreadID string `json:"thread_id"`
+	if err := h.Store.AddBookmark(ctx, userID, request.Body.ThreadId.String()); err != nil {
+		return oapi.AddBookmark400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: err.Error()}}, nil
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ThreadID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "thread_id is required"})
-		return
-	}
-
-	if err := h.Store.AddBookmark(r.Context(), userID, body.ThreadID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]bool{"success": true})
+	t := true
+	return oapi.AddBookmark201JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleRemoveBookmark handles DELETE /api/bookmarks/{threadId}
-func (h *Handlers) HandleRemoveBookmark(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	threadID := r.PathValue("threadId")
+// RemoveBookmark handles DELETE /api/bookmarks/{threadId}
+func (h *Handlers) RemoveBookmark(ctx context.Context, request oapi.RemoveBookmarkRequestObject) (oapi.RemoveBookmarkResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.Store.RemoveBookmark(r.Context(), userID, threadID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	if err := h.Store.RemoveBookmark(ctx, userID, request.ThreadId.String()); err != nil {
+		return oapi.RemoveBookmark500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.RemoveBookmark200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleRemoveBookmarkByID handles DELETE /api/bookmarks/by-id/{id}
-func (h *Handlers) HandleRemoveBookmarkByID(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	bookmarkID := r.PathValue("id")
+// RemoveBookmarkById handles DELETE /api/bookmarks/by-id/{id}
+func (h *Handlers) RemoveBookmarkById(ctx context.Context, request oapi.RemoveBookmarkByIdRequestObject) (oapi.RemoveBookmarkByIdResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.Store.RemoveBookmarkByID(r.Context(), userID, bookmarkID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	if err := h.Store.RemoveBookmarkByID(ctx, userID, request.Id.String()); err != nil {
+		return oapi.RemoveBookmarkById500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.RemoveBookmarkById200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
 // ============================================================================
 // Notification writes
 // ============================================================================
 
-// HandleMarkAllNotificationsRead handles POST /api/notifications/read-all
-func (h *Handlers) HandleMarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// MarkAllNotificationsRead handles POST /api/notifications/read-all
+func (h *Handlers) MarkAllNotificationsRead(ctx context.Context, _ oapi.MarkAllNotificationsReadRequestObject) (oapi.MarkAllNotificationsReadResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.Store.MarkAllNotificationsRead(r.Context(), userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	if err := h.Store.MarkAllNotificationsRead(ctx, userID); err != nil {
+		return oapi.MarkAllNotificationsRead500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.MarkAllNotificationsRead200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
 // ============================================================================
 // Profile writes
 // ============================================================================
 
-// HandleUpsertProfile handles PUT /api/profiles/{id}
-func (h *Handlers) HandleUpsertProfile(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	profileID := r.PathValue("id")
+// UpsertProfile handles PUT /api/profiles/{id}
+func (h *Handlers) UpsertProfile(ctx context.Context, request oapi.UpsertProfileRequestObject) (oapi.UpsertProfileResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
+	body := request.Body
 
-	var body struct {
-		Username    *string `json:"username"`
-		DisplayName *string `json:"display_name"`
-		AvatarURL   *string `json:"avatar_url"`
-		Bio         *string `json:"bio"`
-		Website     *string `json:"website"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	err := h.ProfileSvc.Upsert(r.Context(), userID, profileID, service.UpdateProfileInput{
+	err := h.ProfileSvc.Upsert(ctx, userID, request.Id.String(), service.UpdateProfileInput{
 		Username:    body.Username,
 		DisplayName: body.DisplayName,
-		AvatarURL:   body.AvatarURL,
+		AvatarURL:   body.AvatarUrl,
 		Bio:         body.Bio,
 		Website:     body.Website,
 	})
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		status, msg := serviceErrStatus(err)
+		switch status {
+		case http.StatusBadRequest:
+			return oapi.UpsertProfile400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		case http.StatusForbidden:
+			return oapi.UpsertProfile403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
+		default:
+			return oapi.UpsertProfile400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: msg}}, nil
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.UpsertProfile200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleClearForumlineID handles DELETE /api/profiles/{id}/forumline-id
-func (h *Handlers) HandleClearForumlineID(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	profileID := r.PathValue("id")
+// ClearForumlineId handles DELETE /api/profiles/{id}/forumline-id
+func (h *Handlers) ClearForumlineId(ctx context.Context, request oapi.ClearForumlineIdRequestObject) (oapi.ClearForumlineIdResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.ProfileSvc.ClearForumlineID(r.Context(), userID, profileID); err != nil {
-		writeServiceError(w, err)
-		return
+	if err := h.ProfileSvc.ClearForumlineID(ctx, userID, request.Id.String()); err != nil {
+		status, msg := serviceErrStatus(err)
+		if status == http.StatusForbidden {
+			return oapi.ClearForumlineId403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
+		}
+		return oapi.ClearForumlineId403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.ClearForumlineId200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
 // ============================================================================
 // Voice presence writes
 // ============================================================================
 
-// HandleSetVoicePresence handles PUT /api/voice-presence
-func (h *Handlers) HandleSetVoicePresence(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// SetVoicePresence handles PUT /api/voice-presence
+func (h *Handlers) SetVoicePresence(ctx context.Context, request oapi.SetVoicePresenceRequestObject) (oapi.SetVoicePresenceResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	var body struct {
-		RoomSlug string `json:"room_slug"`
+	if err := h.Store.SetVoicePresence(ctx, userID, request.Body.RoomSlug); err != nil {
+		return oapi.SetVoicePresence500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RoomSlug == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "room_slug is required"})
-		return
-	}
-
-	if err := h.Store.SetVoicePresence(r.Context(), userID, body.RoomSlug); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.SetVoicePresence200JSONResponse(oapi.Success{Success: &t}), nil
 }
 
-// HandleClearVoicePresence handles DELETE /api/voice-presence
-func (h *Handlers) HandleClearVoicePresence(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
+// ClearVoicePresence handles DELETE /api/voice-presence
+func (h *Handlers) ClearVoicePresence(ctx context.Context, _ oapi.ClearVoicePresenceRequestObject) (oapi.ClearVoicePresenceResponseObject, error) {
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.Store.ClearVoicePresence(r.Context(), userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	if err := h.Store.ClearVoicePresence(ctx, userID); err != nil {
+		return oapi.ClearVoicePresence500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	t := true
+	return oapi.ClearVoicePresence200JSONResponse(oapi.Success{Success: &t}), nil
 }

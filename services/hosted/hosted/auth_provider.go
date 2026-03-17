@@ -14,7 +14,6 @@ import (
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/forum"
-	"github.com/forumline/forumline/forum/model"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -178,7 +177,7 @@ func (p *ForumlineAuthProvider) CreateOrLinkUser(ctx context.Context, identity *
 		return existingID, nil
 	}
 
-	fIdentity := &model.ForumlineIdentity{
+	fIdentity := &store.ForumlineIdentity{
 		ForumlineID: identity.ProviderID,
 		Username:    identity.Username,
 		DisplayName: identity.DisplayName,

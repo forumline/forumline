@@ -2,43 +2,24 @@ package forum
 
 import (
 	"context"
-	"encoding/json"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
 	fauth "github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
-// HandleLiveKitToken handles POST /api/livekit — generates an access token for joining a room.
-func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	var body struct {
-		RoomName        string `json:"roomName"`
-		ParticipantName string `json:"participantName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if body.RoomName == "" || body.ParticipantName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "roomName and participantName are required"})
-		return
-	}
-
-	userID := fauth.UserIDFromContext(r.Context())
+// GetLiveKitToken handles POST /api/livekit -- generates an access token for joining a room.
+func (h *Handlers) GetLiveKitToken(ctx context.Context, request oapi.GetLiveKitTokenRequestObject) (oapi.GetLiveKitTokenResponseObject, error) {
+	body := request.Body
+	userID := fauth.UserIDFromContext(ctx)
 
 	if h.Config.LiveKit == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "LiveKit not configured"})
-		return
+		return oapi.GetLiveKitToken500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: "LiveKit not configured"}}, nil
 	}
 	apiKey := h.Config.LiveKit.APIKey
 	apiSecret := h.Config.LiveKit.APISecret
@@ -48,17 +29,17 @@ func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
 	httpHost := strings.Replace(strings.Replace(livekitURL, "wss://", "https://", 1), "ws://", "http://", 1)
 	roomClient := lksdk.NewRoomServiceClient(httpHost, apiKey, apiSecret)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	rooms, err := roomClient.ListRooms(ctx, &livekit.ListRoomsRequest{})
+	rooms, err := roomClient.ListRooms(timeoutCtx, &livekit.ListRoomsRequest{})
 	if err == nil && rooms != nil {
 		for _, room := range rooms.Rooms {
-			_, removeErr := roomClient.RemoveParticipant(ctx, &livekit.RoomParticipantIdentity{
+			_, removeErr := roomClient.RemoveParticipant(timeoutCtx, &livekit.RoomParticipantIdentity{
 				Room:     room.Name,
 				Identity: userID,
 			})
-			_ = removeErr // Not in this room — ignore
+			_ = removeErr // Not in this room -- ignore
 		}
 	}
 
@@ -78,25 +59,20 @@ func (h *Handlers) HandleLiveKitToken(w http.ResponseWriter, r *http.Request) {
 	token, err := at.ToJWT()
 	if err != nil {
 		log.Printf("[LiveKit] Failed to generate token: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to generate token"})
-		return
+		return oapi.GetLiveKitToken500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: "Failed to generate token"}}, nil
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+	return oapi.GetLiveKitToken200JSONResponse{Token: &token}, nil
 }
 
-// HandleLiveKitParticipants handles GET /api/livekit — lists participants.
-func (h *Handlers) HandleLiveKitParticipants(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
-		return
-	}
-
-	_ = fauth.UserIDFromContext(r.Context()) // not required for this endpoint
+// GetLiveKitParticipants handles GET /api/livekit -- lists participants.
+func (h *Handlers) GetLiveKitParticipants(ctx context.Context, request oapi.GetLiveKitParticipantsRequestObject) (oapi.GetLiveKitParticipantsResponseObject, error) {
+	empty := oapi.GetLiveKitParticipants200JSONResponse{}
 
 	if h.Config.LiveKit == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"participants": []interface{}{}})
-		return
+		participants := []oapi.LiveKitParticipant{}
+		empty.Participants = &participants
+		return empty, nil
 	}
 	apiKey := h.Config.LiveKit.APIKey
 	apiSecret := h.Config.LiveKit.APISecret
@@ -105,57 +81,39 @@ func (h *Handlers) HandleLiveKitParticipants(w http.ResponseWriter, r *http.Requ
 	httpHost := strings.Replace(strings.Replace(livekitURL, "wss://", "https://", 1), "ws://", "http://", 1)
 	roomClient := lksdk.NewRoomServiceClient(httpHost, apiKey, apiSecret)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	roomName := r.URL.Query().Get("room")
-	if roomName != "" {
+	if request.Params.Room != nil && *request.Params.Room != "" {
 		// Single room participants
-		resp, err := roomClient.ListParticipants(ctx, &livekit.ListParticipantsRequest{Room: roomName})
-		if err != nil {
-			writeJSON(w, http.StatusOK, map[string]interface{}{"participants": []interface{}{}})
-			return
-		}
-
-		type participant struct {
-			Identity string `json:"identity"`
-			Name     string `json:"name"`
-		}
-		var participants []participant
-		for _, p := range resp.Participants {
-			name := p.Name
-			if name == "" {
-				name = p.Identity
+		resp, err := roomClient.ListParticipants(timeoutCtx, &livekit.ListParticipantsRequest{Room: *request.Params.Room})
+		participants := []oapi.LiveKitParticipant{}
+		if err == nil {
+			for _, p := range resp.Participants {
+				name := p.Name
+				if name == "" {
+					name = p.Identity
+				}
+				participants = append(participants, oapi.LiveKitParticipant{Identity: p.Identity, Name: name})
 			}
-			participants = append(participants, participant{Identity: p.Identity, Name: name})
 		}
-		if participants == nil {
-			participants = []participant{}
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"participants": participants})
-		return
+		return oapi.GetLiveKitParticipants200JSONResponse{Participants: &participants}, nil
 	}
 
-	// All rooms' participants
-	roomsResp, err := roomClient.ListRooms(ctx, &livekit.ListRoomsRequest{})
+	// All rooms
+	roomsResp, err := roomClient.ListRooms(timeoutCtx, &livekit.ListRoomsRequest{})
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"rooms": map[string]interface{}{}})
-		return
+		rooms := map[string]oapi.LiveKitRoomInfo{}
+		return oapi.GetLiveKitParticipants200JSONResponse{Rooms: &rooms}, nil
 	}
 
-	type roomInfo struct {
-		Count      int      `json:"count"`
-		Names      []string `json:"names"`
-		Identities []string `json:"identities"`
-	}
-	result := make(map[string]roomInfo)
-
+	rooms := make(map[string]oapi.LiveKitRoomInfo)
 	for _, room := range roomsResp.Rooms {
-		pResp, err := roomClient.ListParticipants(ctx, &livekit.ListParticipantsRequest{Room: room.Name})
+		pResp, err := roomClient.ListParticipants(timeoutCtx, &livekit.ListParticipantsRequest{Room: room.Name})
 		if err != nil || len(pResp.Participants) == 0 {
 			continue
 		}
-		info := roomInfo{Count: len(pResp.Participants)}
+		info := oapi.LiveKitRoomInfo{Count: len(pResp.Participants)}
 		for _, p := range pResp.Participants {
 			name := p.Name
 			if name == "" {
@@ -164,10 +122,9 @@ func (h *Handlers) HandleLiveKitParticipants(w http.ResponseWriter, r *http.Requ
 			info.Names = append(info.Names, name)
 			info.Identities = append(info.Identities, p.Identity)
 		}
-		result[room.Name] = info
+		rooms[room.Name] = info
 	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{"rooms": result})
+	return oapi.GetLiveKitParticipants200JSONResponse{Rooms: &rooms}, nil
 }
 
 func boolPtr(b bool) *bool {

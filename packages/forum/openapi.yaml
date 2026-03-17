@@ -1,0 +1,2360 @@
+openapi: 3.0.3
+info:
+  title: Forumline Forum Engine
+  version: 1.0.0
+  description: |
+    The Forumline Forum Engine SDK is a reusable Go package (`packages/forum/`) that powers
+    every forum in the Forumline network. It provides ~86 HTTP endpoints covering threads,
+    posts, chat, voice, profiles, bookmarks, notifications, and admin functionality.
+
+    The engine is pluggable: authentication, file storage, and the database connection are
+    injected via interfaces, so the same code runs in hosted multi-tenant mode (on
+    `*.forumline.net`) or as a standalone single-tenant forum with any OIDC provider.
+
+    ## Authentication
+
+    Session-based authentication via cookies. Two login flows:
+
+    1. **Redirect flow** — user visits `/api/forumline/auth`, gets redirected to the identity
+       provider, and returns via `/api/forumline/auth/callback` with a session cookie set.
+    2. **Token exchange (iframe)** — an embedding app sends a JWT via `postMessage`, the forum
+       exchanges it at `POST /api/forumline/auth/token-exchange` and returns session credentials.
+
+    Authenticated endpoints require the `forumline_session` cookie (or an `Authorization: Bearer`
+    header / `access_token` query parameter). Unauthenticated requests receive `401`.
+
+    ## Rate Limiting
+
+    Rate limits are enforced per-user (authenticated) or per-IP (auth endpoints) via Valkey/Redis.
+    When a limit is exceeded the server returns `429 Too Many Requests` with a `Retry-After` header.
+
+    | Tier     | Limit         | Applies to                              |
+    |----------|---------------|-----------------------------------------|
+    | auth     | 20 req/min    | Auth endpoints (per IP)                 |
+    | write    | 20 req/min    | Thread/post/bookmark/profile creates    |
+    | chat     | 60 msg/min    | Chat message sends                      |
+    | upload   | 5 req/min     | Avatar/image uploads                    |
+    | import   | 3 req/min     | Data imports                            |
+
+    ## Realtime (SSE)
+
+    Several endpoints return `text/event-stream` responses for realtime updates powered by
+    Postgres `LISTEN/NOTIFY`. These streams send a `:connected` comment on open, periodic
+    `:heartbeat` comments every 30 seconds, and `data: {...}\n\n` frames for each event.
+  contact:
+    name: Forumline
+    url: https://forumline.net
+  license:
+    name: Proprietary
+    url: https://forumline.net
+
+servers:
+  - url: https://{subdomain}.forumline.net
+    description: Hosted forum instance
+    variables:
+      subdomain:
+        default: testforum
+        description: The forum's subdomain
+
+security:
+  - cookieAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication and session management (5 endpoints)
+  - name: Config
+    description: Forum configuration, categories, channels, and discovery (5 endpoints)
+  - name: Threads
+    description: Forum threads — list, get, search, create, update (7 endpoints)
+  - name: Posts
+    description: Forum posts — list, search, create, and realtime stream (5 endpoints)
+  - name: Chat
+    description: Chat messages — list, send, and realtime stream (4 endpoints)
+  - name: Profiles
+    description: User profiles — get, batch, upsert (5 endpoints)
+  - name: Bookmarks
+    description: Thread bookmarks — list, check, add, remove (5 endpoints)
+  - name: Channel Follows
+    description: Category/channel follow subscriptions (3 endpoints)
+  - name: Notifications
+    description: Notifications — list, read, unread counts, preferences, and streams (8 endpoints)
+  - name: Voice & LiveKit
+    description: Voice rooms, presence, LiveKit tokens, and realtime streams (7 endpoints)
+  - name: Avatars
+    description: Avatar and image uploads (1 endpoint)
+  - name: Admin
+    description: Admin dashboard stats, user list, and data import (3 endpoints)
+
+paths:
+  # ===========================================================================
+  # Auth
+  # ===========================================================================
+  /api/forumline/auth:
+    get:
+      operationId: startLogin
+      summary: Start login flow
+      description: |
+        Redirects the user to the identity provider's authorization endpoint to begin
+        the OAuth/OIDC login flow. After authentication the provider redirects back to
+        the callback endpoint.
+      tags: [Auth]
+      security: []
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: ip
+      parameters:
+        - name: redirect_uri
+          in: query
+          schema:
+            type: string
+          description: URL to redirect to after login completes
+      responses:
+        "302":
+          description: Redirect to identity provider
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/forumline/auth/callback:
+    get:
+      operationId: authCallback
+      summary: OAuth callback
+      description: |
+        Handles the OAuth/OIDC callback from the identity provider. Validates the state
+        parameter, exchanges the authorization code for tokens, creates or links the local
+        forum profile, sets a session cookie, and redirects the user back to the forum.
+      tags: [Auth]
+      security: []
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: ip
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from the identity provider
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: CSRF state parameter
+      responses:
+        "302":
+          description: Redirect to forum with session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Session cookie
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/forumline/auth/token-exchange:
+    post:
+      operationId: tokenExchange
+      summary: Exchange JWT for session (iframe flow)
+      description: |
+        Validates a JWT sent via `postMessage` from an embedding app (the "invisible handshake"
+        for iframe-based browsing). Returns user info and a local session without a redirect flow.
+        If the forum is not embedded in an app, may return `501 Not Implemented`.
+      tags: [Auth]
+      security: []
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: ip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: JWT from the embedding Forumline app
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: Session token
+                  local_user_id:
+                    type: string
+                    description: Local forum user ID
+                  user:
+                    $ref: "#/components/schemas/Profile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          description: Token exchange not supported (forum not embedded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/forumline/auth/session:
+    get:
+      operationId: getSession
+      summary: Get current session
+      description: |
+        Returns the current session info from cookies. If the user is not logged in,
+        returns `null` or an empty session object.
+      tags: [Auth]
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Current session (or null if not authenticated)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: logout
+      summary: Log out
+      description: Clears the session cookie and returns success.
+      tags: [Auth]
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+
+  # ===========================================================================
+  # Config
+  # ===========================================================================
+  /api/config:
+    get:
+      operationId: getConfig
+      summary: Get forum configuration
+      description: |
+        Returns the forum's public configuration used by the frontend for discovery
+        and initialization. Includes the forum name, hosted mode flag, icon URL, and
+        optionally the LiveKit server URL.
+      tags: [Config]
+      security: []
+      responses:
+        "200":
+          description: Forum configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumConfig"
+
+  /api/categories:
+    get:
+      operationId: listCategories
+      summary: List all categories
+      description: Returns all forum categories ordered by `sort_order`.
+      tags: [Config]
+      security: []
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/categories/{slug}:
+    get:
+      operationId: getCategoryBySlug
+      summary: Get category by slug
+      description: Returns a single category by its URL slug.
+      tags: [Config]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CategorySlug"
+      responses:
+        "200":
+          description: Category details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/channels:
+    get:
+      operationId: listChannels
+      summary: List all chat channels
+      description: Returns all chat channels.
+      tags: [Config]
+      security: []
+      responses:
+        "200":
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /.well-known/forumline-manifest.json:
+    get:
+      operationId: getManifest
+      summary: Forumline discovery manifest
+      description: |
+        Returns the Forumline manifest for forum discovery. Other services in the Forumline
+        network use this to discover a forum's capabilities, API base URL, and identity.
+      tags: [Config]
+      security: []
+      responses:
+        "200":
+          description: Forum manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumlineManifest"
+
+  # ===========================================================================
+  # Threads
+  # ===========================================================================
+  /api/threads:
+    get:
+      operationId: listThreads
+      summary: List threads
+      description: |
+        Returns threads ordered by pinned status and last post time (most recent first).
+        Supports pagination via a `limit` query parameter.
+      tags: [Threads]
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Maximum number of threads to return
+      responses:
+        "200":
+          description: List of threads with embedded author and category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Thread"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createThread
+      summary: Create a thread
+      description: Creates a new forum thread. Requires authentication.
+      tags: [Threads]
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThreadRequest"
+      responses:
+        "201":
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: ID of the newly created thread
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/threads/{id}:
+    get:
+      operationId: getThread
+      summary: Get thread by ID
+      description: Returns a single thread with its embedded author and category.
+      tags: [Threads]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      responses:
+        "200":
+          description: Thread details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateThread
+      summary: Update a thread
+      description: |
+        Updates a thread's fields. Only the thread author or a forum admin can update a thread.
+        All fields are optional — only provided fields are updated.
+      tags: [Threads]
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: user
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateThreadRequest"
+      responses:
+        "200":
+          description: Thread updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/categories/{slug}/threads:
+    get:
+      operationId: listThreadsByCategory
+      summary: List threads by category
+      description: Returns all threads in a given category, identified by slug.
+      tags: [Threads]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CategorySlug"
+      responses:
+        "200":
+          description: List of threads in the category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Thread"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/users/{id}/threads:
+    get:
+      operationId: listUserThreads
+      summary: List threads by user
+      description: Returns all threads authored by the specified user.
+      tags: [Threads]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: List of user's threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Thread"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/search/threads:
+    get:
+      operationId: searchThreads
+      summary: Search threads
+      description: Searches threads by title using case-insensitive LIKE matching.
+      tags: [Threads]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query (matched against thread titles)
+      responses:
+        "200":
+          description: Matching threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Thread"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Posts
+  # ===========================================================================
+  /api/threads/{id}/posts:
+    get:
+      operationId: listPostsByThread
+      summary: List posts in a thread
+      description: Returns all posts in a thread, ordered by creation time.
+      tags: [Posts]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      responses:
+        "200":
+          description: List of posts with embedded author
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/threads/{id}/stream:
+    get:
+      operationId: streamPosts
+      summary: Stream new posts (SSE)
+      description: |
+        Server-Sent Events stream for realtime new posts in a thread. Each event contains
+        a post object enriched with the author profile. Sends `:connected` on open and
+        `:heartbeat` every 30 seconds.
+      tags: [Posts]
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      responses:
+        "200":
+          description: SSE stream of new posts
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/posts:
+    post:
+      operationId: createPost
+      summary: Create a post
+      description: |
+        Creates a new post in a thread. Automatically updates the thread's post count and
+        `last_post_at` timestamp, and triggers notifications for thread participants.
+      tags: [Posts]
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostRequest"
+      responses:
+        "201":
+          description: Post created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: ID of the newly created post
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/users/{id}/posts:
+    get:
+      operationId: listUserPosts
+      summary: List posts by user
+      description: Returns all posts authored by the specified user.
+      tags: [Posts]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: List of user's posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/search/posts:
+    get:
+      operationId: searchPosts
+      summary: Search posts
+      description: Searches posts by content using case-insensitive LIKE matching.
+      tags: [Posts]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query (matched against post content)
+      responses:
+        "200":
+          description: Matching posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Chat
+  # ===========================================================================
+  /api/channels/{slug}/messages:
+    get:
+      operationId: listChatMessages
+      summary: List chat messages
+      description: Returns recent chat messages for a channel, identified by slug.
+      tags: [Chat]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ChannelSlug"
+      responses:
+        "200":
+          description: List of chat messages with embedded author
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: sendChatMessage
+      summary: Send a chat message
+      description: Sends a message to a chat channel identified by slug.
+      tags: [Chat]
+      x-rate-limit:
+        limit: 60
+        window: 60s
+        scope: user
+      parameters:
+        - $ref: "#/components/parameters/ChannelSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendChatMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/channels/_by-id/{id}/messages:
+    post:
+      operationId: sendChatMessageByID
+      summary: Send a chat message by channel ID
+      description: Sends a message to a chat channel identified by its UUID.
+      tags: [Chat]
+      x-rate-limit:
+        limit: 60
+        window: 60s
+        scope: user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendChatMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/channels/{slug}/stream:
+    get:
+      operationId: streamChatMessages
+      summary: Stream chat messages (SSE)
+      description: |
+        Server-Sent Events stream for realtime chat messages in a channel. Each event
+        contains a chat message object enriched with the author profile. Sends `:connected`
+        on open and `:heartbeat` every 30 seconds.
+      tags: [Chat]
+      parameters:
+        - $ref: "#/components/parameters/ChannelSlug"
+      responses:
+        "200":
+          description: SSE stream of new chat messages
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ===========================================================================
+  # Profiles
+  # ===========================================================================
+  /api/profiles/{id}:
+    get:
+      operationId: getProfile
+      summary: Get profile by ID
+      description: Returns a user profile by its UUID.
+      tags: [Profiles]
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Profile UUID
+      responses:
+        "200":
+          description: Profile details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: upsertProfile
+      summary: Create or update profile
+      description: |
+        Creates or updates the user's own profile. The path `{id}` must match the
+        authenticated user's ID. All fields are optional for partial updates; if
+        `username` is provided the full profile is upserted.
+      tags: [Profiles]
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Profile UUID (must match authenticated user)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/profiles/by-username/{username}:
+    get:
+      operationId: getProfileByUsername
+      summary: Get profile by username
+      description: Returns a user profile by its unique username.
+      tags: [Profiles]
+      security: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Username
+      responses:
+        "200":
+          description: Profile details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/profiles/batch:
+    get:
+      operationId: getProfilesBatch
+      summary: Get profiles in batch
+      description: |
+        Returns multiple profiles by their IDs. Pass a comma-separated list of UUIDs.
+        Returns an empty array if no IDs are provided.
+      tags: [Profiles]
+      security: []
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated list of profile UUIDs
+          example: "abc-123,def-456,ghi-789"
+      responses:
+        "200":
+          description: List of profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/profiles/{id}/forumline-id:
+    delete:
+      operationId: clearForumlineId
+      summary: Clear Forumline ID link
+      description: |
+        Removes the `forumline_id` association from the user's profile. The path `{id}` must
+        match the authenticated user's ID. This disconnects the local forum profile from the
+        Forumline network identity.
+      tags: [Profiles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Profile UUID (must match authenticated user)
+      responses:
+        "200":
+          description: Forumline ID cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ===========================================================================
+  # Bookmarks
+  # ===========================================================================
+  /api/bookmarks:
+    get:
+      operationId: listBookmarks
+      summary: List bookmarks
+      description: Returns all bookmarked threads for the authenticated user.
+      tags: [Bookmarks]
+      responses:
+        "200":
+          description: List of bookmarks with embedded threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bookmark"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: addBookmark
+      summary: Bookmark a thread
+      description: Adds a thread to the authenticated user's bookmarks.
+      tags: [Bookmarks]
+      x-rate-limit:
+        limit: 20
+        window: 60s
+        scope: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id]
+              properties:
+                thread_id:
+                  type: string
+                  format: uuid
+                  description: ID of the thread to bookmark
+      responses:
+        "201":
+          description: Bookmark added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/bookmarks/{threadId}/status:
+    get:
+      operationId: getBookmarkStatus
+      summary: Check bookmark status
+      description: |
+        Checks whether a specific thread is bookmarked by the authenticated user.
+        Returns `bookmarked: true` with the bookmark `id` if it exists, or `bookmarked: false`.
+      tags: [Bookmarks]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Thread UUID
+      responses:
+        "200":
+          description: Bookmark status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmarked:
+                    type: boolean
+                  id:
+                    type: string
+                    format: uuid
+                    description: Bookmark ID (only present if bookmarked)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/bookmarks/{threadId}:
+    delete:
+      operationId: removeBookmark
+      summary: Remove bookmark by thread ID
+      description: Removes a thread from the authenticated user's bookmarks.
+      tags: [Bookmarks]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Thread UUID
+      responses:
+        "200":
+          description: Bookmark removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/bookmarks/by-id/{id}:
+    delete:
+      operationId: removeBookmarkById
+      summary: Remove bookmark by bookmark ID
+      description: Removes a bookmark by its own UUID.
+      tags: [Bookmarks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Bookmark UUID
+      responses:
+        "200":
+          description: Bookmark removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Channel Follows
+  # ===========================================================================
+  /api/channel-follows:
+    get:
+      operationId: listChannelFollows
+      summary: List followed categories
+      description: Returns the list of category IDs the authenticated user follows.
+      tags: [Channel Follows]
+      responses:
+        "200":
+          description: List of followed category IDs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: followChannel
+      summary: Follow a category
+      description: Subscribes the authenticated user to notifications for a category.
+      tags: [Channel Follows]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id]
+              properties:
+                category_id:
+                  type: string
+                  format: uuid
+                  description: Category ID to follow
+      responses:
+        "200":
+          description: Follow added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: unfollowChannel
+      summary: Unfollow a category
+      description: Unsubscribes the authenticated user from notifications for a category.
+      tags: [Channel Follows]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id]
+              properties:
+                category_id:
+                  type: string
+                  format: uuid
+                  description: Category ID to unfollow
+      responses:
+        "200":
+          description: Follow removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Notifications
+  # ===========================================================================
+  /api/notifications:
+    get:
+      operationId: listNotifications
+      summary: List notifications
+      description: Returns the 20 most recent notifications for the authenticated user.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark all notifications as read
+      description: Marks all notifications for the authenticated user as read.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/forumline/notifications:
+    get:
+      operationId: listForumlineNotifications
+      summary: List Forumline-format notifications
+      description: |
+        Returns the 50 most recent notifications in Forumline protocol format (with `forum_domain`,
+        `body` instead of `message`, `timestamp` instead of `created_at`). Used by the Forumline
+        app to aggregate notifications across forums.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: List of Forumline-format notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ForumlineNotification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/forumline/notifications/read:
+    post:
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      description: Marks a single notification as read by its ID.
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  description: Notification ID to mark as read
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/forumline/unread:
+    get:
+      operationId: getUnreadCounts
+      summary: Get unread counts
+      description: Returns unread notification, chat mention, and DM counts for the authenticated user.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: Unread counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCounts"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/forumline/notifications/stream:
+    get:
+      operationId: streamNotifications
+      summary: Stream notifications (SSE)
+      description: |
+        Server-Sent Events stream for realtime notifications. Events are in Forumline protocol
+        format (with `forum_domain`, `body`, `timestamp`). Sends `:connected` on open and
+        `:heartbeat` every 30 seconds. Only delivers notifications belonging to the authenticated user.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: SSE stream of notifications
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ForumlineNotification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/notification-preferences:
+    get:
+      operationId: listNotificationPreferences
+      summary: List notification preferences
+      description: Returns the authenticated user's notification preferences by category.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: List of notification preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationPreference"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: updateNotificationPreference
+      summary: Update a notification preference
+      description: |
+        Creates or updates a notification preference for a specific category.
+        Valid categories: `reply`, `mention`, `chat_mention`, `dm`, `new_thread`.
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, enabled]
+              properties:
+                category:
+                  type: string
+                  enum: [reply, mention, chat_mention, dm, new_thread]
+                  description: Notification category
+                enabled:
+                  type: boolean
+                  description: Whether notifications for this category are enabled
+      responses:
+        "200":
+          description: Preference updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Voice & LiveKit
+  # ===========================================================================
+  /api/voice-rooms:
+    get:
+      operationId: listVoiceRooms
+      summary: List voice rooms
+      description: Returns all configured voice rooms.
+      tags: [Voice & LiveKit]
+      security: []
+      responses:
+        "200":
+          description: List of voice rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoiceRoom"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/livekit:
+    post:
+      operationId: getLiveKitToken
+      summary: Get LiveKit access token
+      description: |
+        Generates a LiveKit access token for joining a voice room. Before generating
+        the token, removes the user from any existing rooms to enforce one-room-at-a-time.
+        Returns `500` if LiveKit is not configured.
+      tags: [Voice & LiveKit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roomName, participantName]
+              properties:
+                roomName:
+                  type: string
+                  description: Name of the LiveKit room to join
+                participantName:
+                  type: string
+                  description: Display name for the participant
+      responses:
+        "200":
+          description: LiveKit access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT access token for LiveKit
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: getLiveKitParticipants
+      summary: List LiveKit participants
+      description: |
+        Lists participants in LiveKit voice rooms. If a `room` query parameter is provided,
+        returns participants for that specific room. Otherwise returns a map of all rooms
+        with their participant counts, names, and identities.
+      tags: [Voice & LiveKit]
+      parameters:
+        - name: room
+          in: query
+          schema:
+            type: string
+          description: Optional room name to filter by
+      responses:
+        "200":
+          description: |
+            Participants data. When `room` is provided, `participants` is populated.
+            When `room` is omitted, `rooms` is populated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveKitParticipantsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/voice-presence:
+    get:
+      operationId: listVoicePresence
+      summary: List voice presence
+      description: Returns all users currently in voice rooms with their profile data.
+      tags: [Voice & LiveKit]
+      security: []
+      responses:
+        "200":
+          description: List of voice presence entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoicePresence"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: setVoicePresence
+      summary: Set voice presence
+      description: Records the authenticated user as present in a voice room.
+      tags: [Voice & LiveKit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [room_slug]
+              properties:
+                room_slug:
+                  type: string
+                  description: Slug of the voice room to join
+      responses:
+        "200":
+          description: Presence set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: clearVoicePresence
+      summary: Clear voice presence
+      description: Removes the authenticated user's voice presence from all rooms.
+      tags: [Voice & LiveKit]
+      responses:
+        "200":
+          description: Presence cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/voice-presence/stream:
+    get:
+      operationId: streamVoicePresence
+      summary: Stream voice presence changes (SSE)
+      description: |
+        Server-Sent Events stream for realtime voice presence changes (join, leave, update).
+        Each event contains voice presence data enriched with the user's profile. Sends
+        `:connected` on open and `:heartbeat` every 30 seconds.
+      tags: [Voice & LiveKit]
+      responses:
+        "200":
+          description: SSE stream of voice presence changes
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/VoicePresence"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ===========================================================================
+  # Avatars
+  # ===========================================================================
+  /api/avatars/upload:
+    post:
+      operationId: uploadAvatar
+      summary: Upload an avatar or image
+      description: |
+        Accepts a multipart file upload (max 5 MB, images only) and stores it via
+        the configured FileStorage backend. The `path` field controls the storage key;
+        if omitted it defaults to `user/{userId}/custom.png`. Users can only upload to
+        their own `user/{id}/` prefix or to `thread/` paths.
+      tags: [Avatars]
+      x-rate-limit:
+        limit: 5
+        window: 60s
+        scope: user
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (max 5 MB, must have image/* content type)
+                path:
+                  type: string
+                  description: |
+                    Storage path override. Must start with `user/{your-id}/` or `thread/`.
+                    Defaults to `user/{userId}/custom.png`.
+                  example: "user/abc-123/custom.png"
+      responses:
+        "200":
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    description: Public URL of the uploaded image
+        "400":
+          description: Invalid file (too large, not an image, or missing)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Invalid upload path
+          content:
+            text/plain:
+              schema:
+                type: string
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: File uploads not configured
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ===========================================================================
+  # Admin
+  # ===========================================================================
+  /api/admin/stats:
+    get:
+      operationId: getAdminStats
+      summary: Get admin statistics
+      description: |
+        Returns dashboard statistics (total users, threads, posts). Requires admin privileges.
+      tags: [Admin]
+      responses:
+        "200":
+          description: Admin statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: List all users (admin)
+      description: Returns up to 50 user profiles. Requires admin privileges.
+      tags: [Admin]
+      responses:
+        "200":
+          description: List of all user profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/import:
+    post:
+      operationId: importData
+      summary: Import forum data
+      description: |
+        Imports forum data from a Forumline export file. The import is additive — it uses
+        `ON CONFLICT DO NOTHING` to avoid duplicating data if run multiple times. Preserves
+        original UUIDs and timestamps. Requires admin privileges.
+      tags: [Admin]
+      x-rate-limit:
+        limit: 3
+        window: 60s
+        scope: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportData"
+      responses:
+        "200":
+          description: Import completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  forum:
+                    $ref: "#/components/schemas/ForumMeta"
+                  message:
+                    type: string
+                    example: "import complete"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: forumline_session
+      description: Session cookie set after login via the auth flow
+
+  parameters:
+    ThreadId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Thread UUID
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: User UUID
+    CategorySlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Category URL slug
+    ChannelSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Channel URL slug
+
+  schemas:
+    # -------------------------------------------------------------------------
+    # Core models
+    # -------------------------------------------------------------------------
+    Profile:
+      type: object
+      required: [id, username, is_admin, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+          format: uri
+        bio:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+          format: uri
+        is_admin:
+          type: boolean
+        forumline_id:
+          type: string
+          nullable: true
+          description: Linked Forumline network user ID
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      required: [id, name, slug, sort_order, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Thread:
+      type: object
+      required: [id, category_id, author_id, title, slug, is_pinned, is_locked, view_count, post_count, created_at, updated_at, author, category]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        content:
+          type: string
+          nullable: true
+          description: Optional body/description for the thread
+        image_url:
+          type: string
+          nullable: true
+          format: uri
+        is_pinned:
+          type: boolean
+        is_locked:
+          type: boolean
+        view_count:
+          type: integer
+        post_count:
+          type: integer
+        last_post_at:
+          type: string
+          nullable: true
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/Profile"
+        category:
+          $ref: "#/components/schemas/Category"
+
+    Post:
+      type: object
+      required: [id, thread_id, author_id, content, created_at, updated_at, author]
+      properties:
+        id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        reply_to_id:
+          type: string
+          nullable: true
+          format: uuid
+          description: ID of the post this is a reply to
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/Profile"
+
+    Channel:
+      type: object
+      required: [id, name, slug, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    VoiceRoom:
+      type: object
+      required: [id, name, slug, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChatMessage:
+      type: object
+      required: [id, channel_id, author_id, content, created_at, author]
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/Profile"
+
+    VoicePresence:
+      type: object
+      required: [id, user_id, room_slug, joined_at, profile]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        room_slug:
+          type: string
+        joined_at:
+          type: string
+          format: date-time
+        profile:
+          $ref: "#/components/schemas/Profile"
+
+    Bookmark:
+      type: object
+      required: [id, created_at, thread]
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        thread:
+          $ref: "#/components/schemas/Thread"
+
+    Notification:
+      type: object
+      required: [id, user_id, type, title, message, read, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: "Notification type (e.g. reply, mention, chat_mention, dm, new_thread)"
+        title:
+          type: string
+        message:
+          type: string
+        link:
+          type: string
+          nullable: true
+        read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ForumlineNotification:
+      type: object
+      required: [id, type, title, body, link, read, timestamp, forum_domain]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+        read:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        forum_domain:
+          type: string
+          description: Domain of the forum that generated this notification
+
+    NotificationPreference:
+      type: object
+      required: [category, enabled]
+      properties:
+        category:
+          type: string
+          enum: [reply, mention, chat_mention, dm, new_thread]
+        enabled:
+          type: boolean
+
+    AdminStats:
+      type: object
+      required: [totalUsers, totalThreads, totalPosts]
+      properties:
+        totalUsers:
+          type: integer
+        totalThreads:
+          type: integer
+        totalPosts:
+          type: integer
+
+    # -------------------------------------------------------------------------
+    # Config & discovery
+    # -------------------------------------------------------------------------
+    ForumConfig:
+      type: object
+      required: [name, hosted_mode]
+      properties:
+        name:
+          type: string
+          description: Forum display name
+        hosted_mode:
+          type: boolean
+          description: Whether this forum runs on the Forumline hosted platform
+        icon_url:
+          type: string
+          format: uri
+          description: Forum icon/logo URL
+        livekit_url:
+          type: string
+          format: uri
+          description: LiveKit server WebSocket URL (only present if voice is enabled)
+
+    ForumlineManifest:
+      type: object
+      required: [forumline_version, name, domain, api_base, web_base, capabilities]
+      properties:
+        forumline_version:
+          type: string
+          example: "1"
+        name:
+          type: string
+        domain:
+          type: string
+        icon_url:
+          type: string
+          format: uri
+        api_base:
+          type: string
+          format: uri
+          description: Base URL for Forumline protocol API endpoints
+        web_base:
+          type: string
+          format: uri
+          description: Base URL for the forum's web UI
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [threads, chat, voice, notifications]
+
+    Session:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        is_admin:
+          type: boolean
+
+    # -------------------------------------------------------------------------
+    # Request bodies
+    # -------------------------------------------------------------------------
+    CreateThreadRequest:
+      type: object
+      required: [category_id, title, slug]
+      properties:
+        category_id:
+          type: string
+          format: uuid
+          description: Category to create the thread in
+        title:
+          type: string
+          description: Thread title
+        slug:
+          type: string
+          description: URL-friendly slug for the thread
+        content:
+          type: string
+          nullable: true
+          description: Optional thread body/description
+        image_url:
+          type: string
+          nullable: true
+          format: uri
+          description: Optional header image URL
+
+    UpdateThreadRequest:
+      type: object
+      description: All fields are optional. Only provided fields are updated.
+      properties:
+        image_url:
+          type: string
+          nullable: true
+          format: uri
+        last_post_at:
+          type: string
+          format: date-time
+        post_count:
+          type: integer
+        is_pinned:
+          type: boolean
+        is_locked:
+          type: boolean
+
+    CreatePostRequest:
+      type: object
+      required: [thread_id, content]
+      properties:
+        thread_id:
+          type: string
+          format: uuid
+          description: Thread to post in
+        content:
+          type: string
+          description: Post content (supports Markdown)
+        reply_to_id:
+          type: string
+          nullable: true
+          format: uuid
+          description: Optional ID of the post being replied to
+
+    SendChatMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Message content
+
+    UpsertProfileRequest:
+      type: object
+      description: |
+        All fields are optional for partial updates. If `username` is provided, the full
+        profile is upserted (create or replace).
+      properties:
+        username:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+          format: uri
+        bio:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+          format: uri
+
+    UnreadCounts:
+      type: object
+      required: [notifications, chat_mentions, dms]
+      properties:
+        notifications:
+          type: integer
+          description: Unread notification count
+        chat_mentions:
+          type: integer
+          description: Unread chat mention count
+        dms:
+          type: integer
+          description: Unread direct message count (currently always 0)
+
+    # -------------------------------------------------------------------------
+    # Import/Export
+    # -------------------------------------------------------------------------
+    ForumMeta:
+      type: object
+      required: [slug, name, domain]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        domain:
+          type: string
+        description:
+          type: string
+
+    ExportData:
+      type: object
+      required: [forumline_version, exported_at, forum]
+      description: Portable format for importing/exporting forum data.
+      properties:
+        forumline_version:
+          type: string
+          enum: ["1"]
+        exported_at:
+          type: string
+          format: date-time
+        forum:
+          $ref: "#/components/schemas/ForumMeta"
+        categories:
+          type: array
+          items: {}
+        profiles:
+          type: array
+          items: {}
+        threads:
+          type: array
+          items: {}
+        posts:
+          type: array
+          items: {}
+        chat_channels:
+          type: array
+          items: {}
+        chat_messages:
+          type: array
+          items: {}
+        voice_rooms:
+          type: array
+          items: {}
+        bookmarks:
+          type: array
+          items: {}
+        notifications:
+          type: array
+          items: {}
+        channel_follows:
+          type: array
+          items: {}
+        notification_preferences:
+          type: array
+          items: {}
+
+    # -------------------------------------------------------------------------
+    # LiveKit types
+    # -------------------------------------------------------------------------
+    LiveKitParticipantsResponse:
+      type: object
+      description: |
+        Response for GET /api/livekit. Exactly one of `participants` or `rooms`
+        is populated depending on whether the `room` query parameter was provided.
+      properties:
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveKitParticipant"
+          description: Participants in the requested room (when `room` param provided).
+        rooms:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/LiveKitRoomInfo"
+          description: All active rooms with participant info (when no `room` param).
+
+    LiveKitParticipant:
+      type: object
+      required: [identity, name]
+      properties:
+        identity:
+          type: string
+          description: User ID
+        name:
+          type: string
+          description: Display name
+
+    LiveKitRoomInfo:
+      type: object
+      required: [count, names, identities]
+      properties:
+        count:
+          type: integer
+          description: Number of participants
+        names:
+          type: array
+          items:
+            type: string
+          description: Display names of participants
+        identities:
+          type: array
+          items:
+            type: string
+          description: User IDs of participants
+
+    # -------------------------------------------------------------------------
+    # Common
+    # -------------------------------------------------------------------------
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+  responses:
+    BadRequest:
+      description: Invalid request (missing required fields, malformed body)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Authentication required (missing or invalid session)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

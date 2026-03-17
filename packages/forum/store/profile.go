@@ -7,12 +7,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // GetProfile returns a profile by ID.
-func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, error) {
+func (s *Store) GetProfile(ctx context.Context, id string) (*oapi.Profile, error) {
 	row, err := s.Q.GetProfile(ctx, pgUUID(id))
 	if err != nil {
 		return nil, err
@@ -22,7 +22,7 @@ func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, erro
 }
 
 // GetProfileByUsername returns a profile by username.
-func (s *Store) GetProfileByUsername(ctx context.Context, username string) (*model.Profile, error) {
+func (s *Store) GetProfileByUsername(ctx context.Context, username string) (*oapi.Profile, error) {
 	row, err := s.Q.GetProfileByUsername(ctx, username)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (s *Store) GetProfileByUsername(ctx context.Context, username string) (*mod
 }
 
 // GetProfilesByIDs returns profiles for the given IDs.
-func (s *Store) GetProfilesByIDs(ctx context.Context, ids []string) ([]model.Profile, error) {
+func (s *Store) GetProfilesByIDs(ctx context.Context, ids []string) ([]oapi.Profile, error) {
 	pgIDs := make([]pgtype.UUID, len(ids))
 	for i, id := range ids {
 		pgIDs[i] = pgUUID(id)
@@ -41,7 +41,7 @@ func (s *Store) GetProfilesByIDs(ctx context.Context, ids []string) ([]model.Pro
 	if err != nil {
 		return nil, err
 	}
-	profiles := make([]model.Profile, 0, len(rows))
+	profiles := make([]oapi.Profile, 0, len(rows))
 	for _, row := range rows {
 		profiles = append(profiles, profileFromSqlc(row))
 	}
@@ -49,7 +49,7 @@ func (s *Store) GetProfilesByIDs(ctx context.Context, ids []string) ([]model.Pro
 }
 
 // GetProfileByForumlineID returns a profile by forumline_id.
-func (s *Store) GetProfileByForumlineID(ctx context.Context, forumlineID string) (*model.Profile, error) {
+func (s *Store) GetProfileByForumlineID(ctx context.Context, forumlineID string) (*oapi.Profile, error) {
 	id, err := s.Q.GetProfileIDByForumlineID(ctx, textToPgtext(forumlineID))
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (s *Store) SetForumlineID(ctx context.Context, userID, forumlineID string) 
 }
 
 // EnsureProfileWithForumlineID creates or updates a profile with the forumline_id set.
-func (s *Store) EnsureProfileWithForumlineID(ctx context.Context, userID string, identity *model.ForumlineIdentity) error {
+func (s *Store) EnsureProfileWithForumlineID(ctx context.Context, userID string, identity *ForumlineIdentity) error {
 	return s.Q.EnsureProfileWithForumlineID(ctx, sqlcdb.EnsureProfileWithForumlineIDParams{
 		ID:          pgUUID(userID),
 		Username:    identity.Username,
@@ -144,12 +144,12 @@ func (s *Store) IsAdmin(ctx context.Context, userID string) (bool, error) {
 }
 
 // ListProfiles returns profiles ordered by created_at desc.
-func (s *Store) ListProfiles(ctx context.Context, limit int) ([]model.Profile, error) {
+func (s *Store) ListProfiles(ctx context.Context, limit int) ([]oapi.Profile, error) {
 	rows, err := s.Q.ListProfiles(ctx, int32(min(limit, 1000))) //nolint:gosec // bounded
 	if err != nil {
 		return nil, err
 	}
-	profiles := make([]model.Profile, 0, len(rows))
+	profiles := make([]oapi.Profile, 0, len(rows))
 	for _, row := range rows {
 		profiles = append(profiles, profileFromSqlc(row))
 	}
@@ -198,7 +198,7 @@ func (s *Store) CreateProfileSimple(ctx context.Context, id, username, displayNa
 
 // CreateProfileHosted creates a profile for hosted mode with a generated UUID
 // and stores the forumline_id for identity linking.
-func (s *Store) CreateProfileHosted(ctx context.Context, identity *model.ForumlineIdentity) (string, error) {
+func (s *Store) CreateProfileHosted(ctx context.Context, identity *ForumlineIdentity) (string, error) {
 	id := uuid.New().String()
 	err := s.Q.CreateProfileHosted(ctx, sqlcdb.CreateProfileHostedParams{
 		ID:          pgUUID(id),
@@ -208,4 +208,14 @@ func (s *Store) CreateProfileHosted(ctx context.Context, identity *model.Forumli
 		ForumlineID: textToPgtext(identity.ForumlineID),
 	})
 	return id, err
+}
+
+// ForumlineIdentity represents identity data from the Forumline auth service,
+// used when creating or syncing profiles in hosted mode.
+type ForumlineIdentity struct {
+	ForumlineID string
+	Username    string
+	DisplayName string
+	AvatarURL   string
+	Bio         string
 }

@@ -3,24 +3,24 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListChannels returns all chat channels ordered by name.
-func (s *Store) ListChannels(ctx context.Context) ([]model.Channel, error) {
+func (s *Store) ListChannels(ctx context.Context) ([]oapi.Channel, error) {
 	rows, err := s.Q.ListChannels(ctx)
 	if err != nil {
 		return nil, err
 	}
-	channels := make([]model.Channel, 0, len(rows))
+	channels := make([]oapi.Channel, 0, len(rows))
 	for _, r := range rows {
-		channels = append(channels, model.Channel{
-			ID:          uuidStr(r.ID),
+		channels = append(channels, oapi.Channel{
+			Id:          pgUUID2OapiUUID(r.ID),
 			Name:        r.Name,
 			Slug:        r.Slug,
 			Description: pgtextPtr(r.Description),
-			CreatedAt:   tsStr(r.CreatedAt),
+			CreatedAt:   tsTime(r.CreatedAt),
 		})
 	}
 	return channels, nil
@@ -36,14 +36,14 @@ func (s *Store) GetChannelIDBySlug(ctx context.Context, slug string) (string, er
 }
 
 // ListChatMessages returns chat messages for a channel slug (with author profile).
-func (s *Store) ListChatMessages(ctx context.Context, slug string) ([]model.ChatMessage, error) {
+func (s *Store) ListChatMessages(ctx context.Context, slug string) ([]oapi.ChatMessage, error) {
 	rows, err := s.Q.ListChatMessages(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
-	messages := make([]model.ChatMessage, 0, len(rows))
+	messages := make([]oapi.ChatMessage, 0, len(rows))
 	for _, r := range rows {
-		messages = append(messages, chatMessageRowToModel(r))
+		messages = append(messages, chatMessageRowToOapi(r))
 	}
 	return messages, nil
 }

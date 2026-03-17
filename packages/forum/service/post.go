@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -21,19 +21,19 @@ func NewPostService(s *store.Store, notifSvc *NotificationService) *PostService 
 }
 
 // ListByThread returns posts for a thread.
-func (ps *PostService) ListByThread(ctx context.Context, threadID string) ([]model.Post, error) {
+func (ps *PostService) ListByThread(ctx context.Context, threadID string) ([]oapi.Post, error) {
 	return ps.Store.ListPostsByThread(ctx, threadID)
 }
 
 // ListByUser returns posts authored by a user.
-func (ps *PostService) ListByUser(ctx context.Context, userID string) ([]model.Post, error) {
+func (ps *PostService) ListByUser(ctx context.Context, userID string) ([]oapi.Post, error) {
 	return ps.Store.ListUserPosts(ctx, userID)
 }
 
 // Search searches posts by content.
-func (ps *PostService) Search(ctx context.Context, query string) ([]model.Post, error) {
+func (ps *PostService) Search(ctx context.Context, query string) ([]oapi.Post, error) {
 	if query == "" {
-		return []model.Post{}, nil
+		return []oapi.Post{}, nil
 	}
 	return ps.Store.SearchPosts(ctx, "%"+query+"%")
 }

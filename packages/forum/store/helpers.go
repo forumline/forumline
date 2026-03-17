@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
@@ -28,6 +29,20 @@ func uuidStr(u pgtype.UUID) string {
 	b := u.Bytes
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// pgUUID2OapiUUID converts pgtype.UUID to openapi_types.UUID ([16]byte).
+func pgUUID2OapiUUID(u pgtype.UUID) openapi_types.UUID {
+	return openapi_types.UUID(u.Bytes)
+}
+
+// uuidPtrToOapi converts a nullable pgtype.UUID to *openapi_types.UUID.
+func uuidPtrToOapi(u pgtype.UUID) *openapi_types.UUID {
+	if !u.Valid {
+		return nil
+	}
+	v := openapi_types.UUID(u.Bytes)
+	return &v
 }
 
 // pgtextPtr converts pgtype.Text to *string.
@@ -73,72 +88,86 @@ func tsStrPtr(t pgtype.Timestamptz) *string {
 	return &s
 }
 
-// profileFromSqlc converts a sqlcdb.Profile to a model.Profile.
-func profileFromSqlc(p sqlcdb.Profile) model.Profile {
-	return model.Profile{
-		ID:          uuidStr(p.ID),
+// tsTime converts pgtype.Timestamptz to time.Time.
+func tsTime(t pgtype.Timestamptz) time.Time {
+	return t.Time
+}
+
+// tsTimePtr converts pgtype.Timestamptz to *time.Time (nil if invalid or zero).
+func tsTimePtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid || t.Time.IsZero() {
+		return nil
+	}
+	v := t.Time
+	return &v
+}
+
+// profileFromSqlc converts a sqlcdb.Profile to an oapi.Profile.
+func profileFromSqlc(p sqlcdb.Profile) oapi.Profile {
+	return oapi.Profile{
+		Id:          pgUUID2OapiUUID(p.ID),
 		Username:    p.Username,
 		DisplayName: pgtextPtr(p.DisplayName),
-		AvatarURL:   pgtextPtr(p.AvatarUrl),
+		AvatarUrl:   pgtextPtr(p.AvatarUrl),
 		Bio:         pgtextPtr(p.Bio),
 		Website:     pgtextPtr(p.Website),
 		IsAdmin:     p.IsAdmin,
-		ForumlineID: pgtextPtr(p.ForumlineID),
-		CreatedAt:   tsStr(p.CreatedAt),
-		UpdatedAt:   tsStr(p.UpdatedAt),
+		ForumlineId: pgtextPtr(p.ForumlineID),
+		CreatedAt:   tsTime(p.CreatedAt),
+		UpdatedAt:   tsTime(p.UpdatedAt),
 	}
 }
 
-// authorProfileFromThread extracts a model.Profile from thread row author fields.
+// authorProfileFromThreadRow extracts an oapi.Profile from thread row author fields.
 func authorProfileFromThreadRow(
 	id pgtype.UUID, username string, displayName, avatarURL, bio, website pgtype.Text,
 	isAdmin bool, forumlineID pgtype.Text, createdAt, updatedAt pgtype.Timestamptz,
-) model.Profile {
-	return model.Profile{
-		ID:          uuidStr(id),
+) oapi.Profile {
+	return oapi.Profile{
+		Id:          pgUUID2OapiUUID(id),
 		Username:    username,
 		DisplayName: pgtextPtr(displayName),
-		AvatarURL:   pgtextPtr(avatarURL),
+		AvatarUrl:   pgtextPtr(avatarURL),
 		Bio:         pgtextPtr(bio),
 		Website:     pgtextPtr(website),
 		IsAdmin:     isAdmin,
-		ForumlineID: pgtextPtr(forumlineID),
-		CreatedAt:   tsStr(createdAt),
-		UpdatedAt:   tsStr(updatedAt),
+		ForumlineId: pgtextPtr(forumlineID),
+		CreatedAt:   tsTime(createdAt),
+		UpdatedAt:   tsTime(updatedAt),
 	}
 }
 
-// categoryFromThreadRow extracts a model.Category from thread row category fields.
+// categoryFromThreadRow extracts an oapi.Category from thread row category fields.
 func categoryFromThreadRow(
 	id pgtype.UUID, name, slug string, description pgtype.Text, sortOrder int32, createdAt pgtype.Timestamptz,
-) model.Category {
-	return model.Category{
-		ID:          uuidStr(id),
+) oapi.Category {
+	return oapi.Category{
+		Id:          pgUUID2OapiUUID(id),
 		Name:        name,
 		Slug:        slug,
 		Description: pgtextPtr(description),
 		SortOrder:   int(sortOrder),
-		CreatedAt:   tsStr(createdAt),
+		CreatedAt:   tsTime(createdAt),
 	}
 }
 
-// threadRowToModel converts a GetThreadRow to model.Thread.
-func threadRowToModel(r sqlcdb.GetThreadRow) model.Thread {
-	return model.Thread{
-		ID:         uuidStr(r.ID),
-		CategoryID: uuidStr(r.CategoryID),
-		AuthorID:   uuidStr(r.AuthorID),
+// threadRowToOapi converts a GetThreadRow to oapi.Thread.
+func threadRowToOapi(r sqlcdb.GetThreadRow) oapi.Thread {
+	return oapi.Thread{
+		Id:         pgUUID2OapiUUID(r.ID),
+		CategoryId: pgUUID2OapiUUID(r.CategoryID),
+		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
-		ImageURL:   pgtextPtr(r.ImageUrl),
+		ImageUrl:   pgtextPtr(r.ImageUrl),
 		IsPinned:   r.IsPinned,
 		IsLocked:   r.IsLocked,
 		ViewCount:  int(r.ViewCount),
 		PostCount:  int(r.PostCount),
-		LastPostAt: tsStrPtr(r.LastPostAt),
-		CreatedAt:  tsStr(r.CreatedAt),
-		UpdatedAt:  tsStr(r.UpdatedAt),
+		LastPostAt: tsTimePtr(r.LastPostAt),
+		CreatedAt:  tsTime(r.CreatedAt),
+		UpdatedAt:  tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -150,23 +179,23 @@ func threadRowToModel(r sqlcdb.GetThreadRow) model.Thread {
 	}
 }
 
-// listThreadsRowToModel converts a ListThreadsRow to model.Thread.
-func listThreadsRowToModel(r sqlcdb.ListThreadsRow) model.Thread {
-	return model.Thread{
-		ID:         uuidStr(r.ID),
-		CategoryID: uuidStr(r.CategoryID),
-		AuthorID:   uuidStr(r.AuthorID),
+// listThreadsRowToOapi converts a ListThreadsRow to oapi.Thread.
+func listThreadsRowToOapi(r sqlcdb.ListThreadsRow) oapi.Thread {
+	return oapi.Thread{
+		Id:         pgUUID2OapiUUID(r.ID),
+		CategoryId: pgUUID2OapiUUID(r.CategoryID),
+		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
-		ImageURL:   pgtextPtr(r.ImageUrl),
+		ImageUrl:   pgtextPtr(r.ImageUrl),
 		IsPinned:   r.IsPinned,
 		IsLocked:   r.IsLocked,
 		ViewCount:  int(r.ViewCount),
 		PostCount:  int(r.PostCount),
-		LastPostAt: tsStrPtr(r.LastPostAt),
-		CreatedAt:  tsStr(r.CreatedAt),
-		UpdatedAt:  tsStr(r.UpdatedAt),
+		LastPostAt: tsTimePtr(r.LastPostAt),
+		CreatedAt:  tsTime(r.CreatedAt),
+		UpdatedAt:  tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -178,23 +207,23 @@ func listThreadsRowToModel(r sqlcdb.ListThreadsRow) model.Thread {
 	}
 }
 
-// listThreadsByCategoryRowToModel converts a ListThreadsByCategoryRow to model.Thread.
-func listThreadsByCategoryRowToModel(r sqlcdb.ListThreadsByCategoryRow) model.Thread {
-	return model.Thread{
-		ID:         uuidStr(r.ID),
-		CategoryID: uuidStr(r.CategoryID),
-		AuthorID:   uuidStr(r.AuthorID),
+// listThreadsByCategoryRowToOapi converts a ListThreadsByCategoryRow to oapi.Thread.
+func listThreadsByCategoryRowToOapi(r sqlcdb.ListThreadsByCategoryRow) oapi.Thread {
+	return oapi.Thread{
+		Id:         pgUUID2OapiUUID(r.ID),
+		CategoryId: pgUUID2OapiUUID(r.CategoryID),
+		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
-		ImageURL:   pgtextPtr(r.ImageUrl),
+		ImageUrl:   pgtextPtr(r.ImageUrl),
 		IsPinned:   r.IsPinned,
 		IsLocked:   r.IsLocked,
 		ViewCount:  int(r.ViewCount),
 		PostCount:  int(r.PostCount),
-		LastPostAt: tsStrPtr(r.LastPostAt),
-		CreatedAt:  tsStr(r.CreatedAt),
-		UpdatedAt:  tsStr(r.UpdatedAt),
+		LastPostAt: tsTimePtr(r.LastPostAt),
+		CreatedAt:  tsTime(r.CreatedAt),
+		UpdatedAt:  tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -206,23 +235,23 @@ func listThreadsByCategoryRowToModel(r sqlcdb.ListThreadsByCategoryRow) model.Th
 	}
 }
 
-// listUserThreadsRowToModel converts a ListUserThreadsRow to model.Thread.
-func listUserThreadsRowToModel(r sqlcdb.ListUserThreadsRow) model.Thread {
-	return model.Thread{
-		ID:         uuidStr(r.ID),
-		CategoryID: uuidStr(r.CategoryID),
-		AuthorID:   uuidStr(r.AuthorID),
+// listUserThreadsRowToOapi converts a ListUserThreadsRow to oapi.Thread.
+func listUserThreadsRowToOapi(r sqlcdb.ListUserThreadsRow) oapi.Thread {
+	return oapi.Thread{
+		Id:         pgUUID2OapiUUID(r.ID),
+		CategoryId: pgUUID2OapiUUID(r.CategoryID),
+		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
-		ImageURL:   pgtextPtr(r.ImageUrl),
+		ImageUrl:   pgtextPtr(r.ImageUrl),
 		IsPinned:   r.IsPinned,
 		IsLocked:   r.IsLocked,
 		ViewCount:  int(r.ViewCount),
 		PostCount:  int(r.PostCount),
-		LastPostAt: tsStrPtr(r.LastPostAt),
-		CreatedAt:  tsStr(r.CreatedAt),
-		UpdatedAt:  tsStr(r.UpdatedAt),
+		LastPostAt: tsTimePtr(r.LastPostAt),
+		CreatedAt:  tsTime(r.CreatedAt),
+		UpdatedAt:  tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -234,23 +263,23 @@ func listUserThreadsRowToModel(r sqlcdb.ListUserThreadsRow) model.Thread {
 	}
 }
 
-// searchThreadsRowToModel converts a SearchThreadsRow to model.Thread.
-func searchThreadsRowToModel(r sqlcdb.SearchThreadsRow) model.Thread {
-	return model.Thread{
-		ID:         uuidStr(r.ID),
-		CategoryID: uuidStr(r.CategoryID),
-		AuthorID:   uuidStr(r.AuthorID),
+// searchThreadsRowToOapi converts a SearchThreadsRow to oapi.Thread.
+func searchThreadsRowToOapi(r sqlcdb.SearchThreadsRow) oapi.Thread {
+	return oapi.Thread{
+		Id:         pgUUID2OapiUUID(r.ID),
+		CategoryId: pgUUID2OapiUUID(r.CategoryID),
+		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
-		ImageURL:   pgtextPtr(r.ImageUrl),
+		ImageUrl:   pgtextPtr(r.ImageUrl),
 		IsPinned:   r.IsPinned,
 		IsLocked:   r.IsLocked,
 		ViewCount:  int(r.ViewCount),
 		PostCount:  int(r.PostCount),
-		LastPostAt: tsStrPtr(r.LastPostAt),
-		CreatedAt:  tsStr(r.CreatedAt),
-		UpdatedAt:  tsStr(r.UpdatedAt),
+		LastPostAt: tsTimePtr(r.LastPostAt),
+		CreatedAt:  tsTime(r.CreatedAt),
+		UpdatedAt:  tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -262,16 +291,16 @@ func searchThreadsRowToModel(r sqlcdb.SearchThreadsRow) model.Thread {
 	}
 }
 
-// postRowToModel converts a ListPostsByThreadRow to model.Post.
-func postRowToModel(r sqlcdb.ListPostsByThreadRow) model.Post {
-	return model.Post{
-		ID:        uuidStr(r.ID),
-		ThreadID:  uuidStr(r.ThreadID),
-		AuthorID:  uuidStr(r.AuthorID),
+// postRowToOapi converts a ListPostsByThreadRow to oapi.Post.
+func postRowToOapi(r sqlcdb.ListPostsByThreadRow) oapi.Post {
+	return oapi.Post{
+		Id:        pgUUID2OapiUUID(r.ID),
+		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
+		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
 		Content:   r.Content,
-		ReplyToID: pgtextPtr(pgtype.Text{String: uuidStr(r.ReplyToID), Valid: r.ReplyToID.Valid}),
-		CreatedAt: tsStr(r.CreatedAt),
-		UpdatedAt: tsStr(r.UpdatedAt),
+		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		CreatedAt: tsTime(r.CreatedAt),
+		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -280,16 +309,16 @@ func postRowToModel(r sqlcdb.ListPostsByThreadRow) model.Post {
 	}
 }
 
-// listUserPostsRowToModel converts a ListUserPostsRow to model.Post.
-func listUserPostsRowToModel(r sqlcdb.ListUserPostsRow) model.Post {
-	return model.Post{
-		ID:        uuidStr(r.ID),
-		ThreadID:  uuidStr(r.ThreadID),
-		AuthorID:  uuidStr(r.AuthorID),
+// listUserPostsRowToOapi converts a ListUserPostsRow to oapi.Post.
+func listUserPostsRowToOapi(r sqlcdb.ListUserPostsRow) oapi.Post {
+	return oapi.Post{
+		Id:        pgUUID2OapiUUID(r.ID),
+		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
+		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
 		Content:   r.Content,
-		ReplyToID: pgtextPtr(pgtype.Text{String: uuidStr(r.ReplyToID), Valid: r.ReplyToID.Valid}),
-		CreatedAt: tsStr(r.CreatedAt),
-		UpdatedAt: tsStr(r.UpdatedAt),
+		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		CreatedAt: tsTime(r.CreatedAt),
+		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -298,16 +327,16 @@ func listUserPostsRowToModel(r sqlcdb.ListUserPostsRow) model.Post {
 	}
 }
 
-// searchPostsRowToModel converts a SearchPostsRow to model.Post.
-func searchPostsRowToModel(r sqlcdb.SearchPostsRow) model.Post {
-	return model.Post{
-		ID:        uuidStr(r.ID),
-		ThreadID:  uuidStr(r.ThreadID),
-		AuthorID:  uuidStr(r.AuthorID),
+// searchPostsRowToOapi converts a SearchPostsRow to oapi.Post.
+func searchPostsRowToOapi(r sqlcdb.SearchPostsRow) oapi.Post {
+	return oapi.Post{
+		Id:        pgUUID2OapiUUID(r.ID),
+		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
+		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
 		Content:   r.Content,
-		ReplyToID: pgtextPtr(pgtype.Text{String: uuidStr(r.ReplyToID), Valid: r.ReplyToID.Valid}),
-		CreatedAt: tsStr(r.CreatedAt),
-		UpdatedAt: tsStr(r.UpdatedAt),
+		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		CreatedAt: tsTime(r.CreatedAt),
+		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -316,26 +345,26 @@ func searchPostsRowToModel(r sqlcdb.SearchPostsRow) model.Post {
 	}
 }
 
-// bookmarkRowToModel converts a ListBookmarksRow to model.Bookmark.
-func bookmarkRowToModel(r sqlcdb.ListBookmarksRow) model.Bookmark {
-	return model.Bookmark{
-		ID:        uuidStr(r.ID),
-		CreatedAt: tsStr(r.BookmarkCreatedAt),
-		Thread: model.Thread{
-			ID:         uuidStr(r.ThreadID),
-			CategoryID: uuidStr(r.CategoryID),
-			AuthorID:   uuidStr(r.AuthorID),
+// bookmarkRowToOapi converts a ListBookmarksRow to oapi.Bookmark.
+func bookmarkRowToOapi(r sqlcdb.ListBookmarksRow) oapi.Bookmark {
+	return oapi.Bookmark{
+		Id:        pgUUID2OapiUUID(r.ID),
+		CreatedAt: tsTime(r.BookmarkCreatedAt),
+		Thread: oapi.Thread{
+			Id:         pgUUID2OapiUUID(r.ThreadID),
+			CategoryId: pgUUID2OapiUUID(r.CategoryID),
+			AuthorId:   pgUUID2OapiUUID(r.AuthorID),
 			Title:      r.Title,
 			Slug:       r.Slug,
 			Content:    pgtextPtr(r.Content),
-			ImageURL:   pgtextPtr(r.ImageUrl),
+			ImageUrl:   pgtextPtr(r.ImageUrl),
 			IsPinned:   r.IsPinned,
 			IsLocked:   r.IsLocked,
 			ViewCount:  int(r.ViewCount),
 			PostCount:  int(r.PostCount),
-			LastPostAt: tsStrPtr(r.LastPostAt),
-			CreatedAt:  tsStr(r.ThreadCreatedAt),
-			UpdatedAt:  tsStr(r.ThreadUpdatedAt),
+			LastPostAt: tsTimePtr(r.LastPostAt),
+			CreatedAt:  tsTime(r.ThreadCreatedAt),
+			UpdatedAt:  tsTime(r.ThreadUpdatedAt),
 			Author: authorProfileFromThreadRow(
 				r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 				r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -348,14 +377,14 @@ func bookmarkRowToModel(r sqlcdb.ListBookmarksRow) model.Bookmark {
 	}
 }
 
-// chatMessageRowToModel converts a ListChatMessagesRow to model.ChatMessage.
-func chatMessageRowToModel(r sqlcdb.ListChatMessagesRow) model.ChatMessage {
-	return model.ChatMessage{
-		ID:        uuidStr(r.ID),
-		ChannelID: uuidStr(r.ChannelID),
-		AuthorID:  uuidStr(r.AuthorID),
+// chatMessageRowToOapi converts a ListChatMessagesRow to oapi.ChatMessage.
+func chatMessageRowToOapi(r sqlcdb.ListChatMessagesRow) oapi.ChatMessage {
+	return oapi.ChatMessage{
+		Id:        pgUUID2OapiUUID(r.ID),
+		ChannelId: pgUUID2OapiUUID(r.ChannelID),
+		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
 		Content:   r.Content,
-		CreatedAt: tsStr(r.CreatedAt),
+		CreatedAt: tsTime(r.CreatedAt),
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
@@ -364,13 +393,13 @@ func chatMessageRowToModel(r sqlcdb.ListChatMessagesRow) model.ChatMessage {
 	}
 }
 
-// voicePresenceRowToModel converts a ListVoicePresenceRow to model.VoicePresence.
-func voicePresenceRowToModel(r sqlcdb.ListVoicePresenceRow) model.VoicePresence {
-	return model.VoicePresence{
-		ID:       uuidStr(r.ID),
-		UserID:   uuidStr(r.UserID),
+// voicePresenceRowToOapi converts a ListVoicePresenceRow to oapi.VoicePresence.
+func voicePresenceRowToOapi(r sqlcdb.ListVoicePresenceRow) oapi.VoicePresence {
+	return oapi.VoicePresence{
+		Id:       pgUUID2OapiUUID(r.ID),
+		UserId:   pgUUID2OapiUUID(r.UserID),
 		RoomSlug: r.RoomSlug,
-		JoinedAt: tsStr(r.JoinedAt),
+		JoinedAt: tsTime(r.JoinedAt),
 		Profile: authorProfileFromThreadRow(
 			r.ProfileID, r.ProfileUsername, r.ProfileDisplayName, r.ProfileAvatarUrl,
 			r.ProfileBio, r.ProfileWebsite, r.ProfileIsAdmin, r.ProfileForumlineID,

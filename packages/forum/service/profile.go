@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -19,7 +19,7 @@ func NewProfileService(s *store.Store) *ProfileService {
 }
 
 // Get returns a profile by ID.
-func (ps *ProfileService) Get(ctx context.Context, id string) (*model.Profile, error) {
+func (ps *ProfileService) Get(ctx context.Context, id string) (*oapi.Profile, error) {
 	p, err := ps.Store.GetProfile(ctx, id)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "profile not found"}
@@ -28,7 +28,7 @@ func (ps *ProfileService) Get(ctx context.Context, id string) (*model.Profile, e
 }
 
 // GetByUsername returns a profile by username.
-func (ps *ProfileService) GetByUsername(ctx context.Context, username string) (*model.Profile, error) {
+func (ps *ProfileService) GetByUsername(ctx context.Context, username string) (*oapi.Profile, error) {
 	p, err := ps.Store.GetProfileByUsername(ctx, username)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "profile not found"}
@@ -37,9 +37,9 @@ func (ps *ProfileService) GetByUsername(ctx context.Context, username string) (*
 }
 
 // GetBatch returns profiles for the given IDs.
-func (ps *ProfileService) GetBatch(ctx context.Context, ids []string) ([]model.Profile, error) {
+func (ps *ProfileService) GetBatch(ctx context.Context, ids []string) ([]oapi.Profile, error) {
 	if len(ids) == 0 {
-		return []model.Profile{}, nil
+		return []oapi.Profile{}, nil
 	}
 	return ps.Store.GetProfilesByIDs(ctx, ids)
 }

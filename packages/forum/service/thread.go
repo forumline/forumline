@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	"github.com/forumline/forumline/forum/model"
+	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -18,7 +18,7 @@ func NewThreadService(s *store.Store) *ThreadService {
 }
 
 // List returns threads ordered by pinned + last_post_at.
-func (ts *ThreadService) List(ctx context.Context, limit int) ([]model.Thread, error) {
+func (ts *ThreadService) List(ctx context.Context, limit int) ([]oapi.Thread, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -26,7 +26,7 @@ func (ts *ThreadService) List(ctx context.Context, limit int) ([]model.Thread, e
 }
 
 // Get returns a single thread by ID.
-func (ts *ThreadService) Get(ctx context.Context, id string) (*model.Thread, error) {
+func (ts *ThreadService) Get(ctx context.Context, id string) (*oapi.Thread, error) {
 	t, err := ts.Store.GetThread(ctx, id)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "thread not found"}
@@ -35,19 +35,19 @@ func (ts *ThreadService) Get(ctx context.Context, id string) (*model.Thread, err
 }
 
 // ListByCategory returns threads for a category slug.
-func (ts *ThreadService) ListByCategory(ctx context.Context, slug string) ([]model.Thread, error) {
+func (ts *ThreadService) ListByCategory(ctx context.Context, slug string) ([]oapi.Thread, error) {
 	return ts.Store.ListThreadsByCategory(ctx, slug)
 }
 
 // ListByUser returns threads authored by a user.
-func (ts *ThreadService) ListByUser(ctx context.Context, userID string) ([]model.Thread, error) {
+func (ts *ThreadService) ListByUser(ctx context.Context, userID string) ([]oapi.Thread, error) {
 	return ts.Store.ListUserThreads(ctx, userID)
 }
 
 // Search searches threads by title.
-func (ts *ThreadService) Search(ctx context.Context, query string) ([]model.Thread, error) {
+func (ts *ThreadService) Search(ctx context.Context, query string) ([]oapi.Thread, error) {
 	if query == "" {
-		return []model.Thread{}, nil
+		return []oapi.Thread{}, nil
 	}
 	return ts.Store.SearchThreads(ctx, "%"+query+"%")
 }

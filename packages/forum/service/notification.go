@@ -12,11 +12,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/forumline/forumline/forum/model"
 	"github.com/forumline/forumline/forum/store"
 )
 
 var mentionRe = regexp.MustCompile(`@(\w+)`)
+
+// pushItem holds a notification to be pushed to the Forumline app.
+type pushItem struct {
+	ForumlineUserID string
+	Type            string
+	Title           string
+	Body            string
+	Link            string
+}
 
 // NotificationConfig holds config needed for notification push.
 type NotificationConfig struct {
@@ -56,7 +64,7 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 	notified := map[string]bool{authorID: true} // don't notify the post author
 
 	// Collect forumline push items
-	var pushItems []model.ForumlinePushItem
+	var pushItems []pushItem
 
 	// helper: insert local notification and queue forumline push
 	notifyUser := func(userID, notifType, title, body, link string) {
@@ -68,7 +76,7 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 		// Look up forumline_id for push
 		forumlineID, _ := ns.Store.GetForumlineID(ctx, userID)
 		if forumlineID != nil && *forumlineID != "" {
-			pushItems = append(pushItems, model.ForumlinePushItem{
+			pushItems = append(pushItems, pushItem{
 				ForumlineUserID: *forumlineID,
 				Type:            notifType,
 				Title:           title,
@@ -118,7 +126,7 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 
 // pushToForumline sends a batch of notifications to the forumline API webhook.
 // Authenticates using the ZITADEL_SERVICE_USER_PAT service key.
-func (ns *NotificationService) pushToForumline(items []model.ForumlinePushItem) {
+func (ns *NotificationService) pushToForumline(items []pushItem) {
 	if ns.Config.ForumlineURL == "" || ns.Config.ServiceKey == "" {
 		return
 	}
