@@ -41,6 +41,11 @@ packages/frontend/server-sdk/src/**/*.js
 packages/frontend/server-sdk/src/**/*.d.ts
 packages/frontend/server-sdk/src/**/*.d.ts.map
 packages/frontend/server-sdk/src/**/*.js.map
+packages/frontend/client-sdk/src/**/*.js
+packages/frontend/client-sdk/src/**/*.d.ts
+packages/frontend/client-sdk/src/**/*.d.ts.map
+packages/frontend/client-sdk/src/**/*.js.map
+packages/frontend/client-sdk/docs/
 
 # Supabase CLI temp
 **/supabase/.temp/

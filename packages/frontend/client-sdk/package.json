@@ -1,22 +1,68 @@
 {
   "name": "@forumline/client-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Forumline client SDK — API client, auth, real-time, and state management",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./client": "./src/client.js",
-    "./auth": "./src/auth.js",
-    "./event-stream": "./src/event-stream.js",
-    "./dm-store": "./src/dm-store.js",
-    "./presence": "./src/presence.js",
-    "./identity": "./src/identity.js",
-    "./push": "./src/push.js",
-    "./forum-discovery": "./src/forum-discovery.js",
-    "./native-bridge": "./src/native-bridge.js",
-    "./calls": "./src/calls.js",
-    "./forum-store": "./src/forum-store.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./event-stream": {
+      "types": "./dist/event-stream.d.ts",
+      "default": "./dist/event-stream.js"
+    },
+    "./dm-store": {
+      "types": "./dist/dm-store.d.ts",
+      "default": "./dist/dm-store.js"
+    },
+    "./presence": {
+      "types": "./dist/presence.d.ts",
+      "default": "./dist/presence.js"
+    },
+    "./identity": {
+      "types": "./dist/identity.d.ts",
+      "default": "./dist/identity.js"
+    },
+    "./push": {
+      "types": "./dist/push.d.ts",
+      "default": "./dist/push.js"
+    },
+    "./forum-discovery": {
+      "types": "./dist/forum-discovery.d.ts",
+      "default": "./dist/forum-discovery.js"
+    },
+    "./native-bridge": {
+      "types": "./dist/native-bridge.d.ts",
+      "default": "./dist/native-bridge.js"
+    },
+    "./calls": {
+      "types": "./dist/calls.d.ts",
+      "default": "./dist/calls.js"
+    },
+    "./forum-store": {
+      "types": "./dist/forum-store.d.ts",
+      "default": "./dist/forum-store.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
+  },
+  "dependencies": {
+    "@forumline/protocol": "workspace:*"
   },
   "peerDependencies": {
     "livekit-client": ">=2.0.0"
@@ -26,8 +72,12 @@
       "optional": true
     }
   },
+  "devDependencies": {
+    "typedoc": "^0.28.17",
+    "typescript": "^5.9.3"
+  },
   "files": [
-    "src"
+    "dist"
   ],
   "repository": {
     "type": "git",

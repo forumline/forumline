@@ -1,33 +1,101 @@
-// ========== FORUM STORE (Data & API Layer) ==========
-// Manages forum memberships, sync, and CRUD.
-// Server is the source of truth; localStorage is a cache.
-// Webview/DOM rendering is handled by the consuming application.
+/**
+ * @module forum-store
+ *
+ * Reactive store for the user's forum memberships. Server is the source of truth;
+ * localStorage serves as a fast cache for instant sidebar rendering on app load.
+ *
+ * @example
+ * ```ts
+ * ForumStore.loadCache();
+ * await ForumStore.syncFromServer(accessToken);
+ * ForumStore.subscribe((store) => renderSidebar(store.forums));
+ * ```
+ */
 
+import type { ForumCapability } from '@forumline/protocol';
+
+/** A forum the user is a member of, with local UI state (unread counts, active state). */
+export interface ForumMembership {
+  /** Forum's canonical domain. */
+  domain: string;
+  /** Human-readable forum name. */
+  name: string;
+  /** Forum icon URL. */
+  icon_url: string;
+  /** Base URL for the forum's web UI (loaded in iframe). */
+  web_base: string;
+  /** Base URL for the forum's API endpoints. */
+  api_base: string;
+  /** Features this forum supports (threads, chat, voice, notifications). */
+  capabilities: ForumCapability[];
+  /** ISO timestamp of when the user joined. */
+  added_at: string;
+  /** Local unique ID for keying in UI lists. */
+  id: string;
+  /** Seed value for DiceBear avatar generation. */
+  seed: string;
+  /** Approximate member count. */
+  members: number;
+  /** Aggregated unread count (notifications + chat mentions + DMs). */
+  unread: number;
+  /** Thread count (reserved for future use). */
+  threads: number;
+  /** Always `true` for server-synced memberships. */
+  isReal: boolean;
+  /** Whether notifications from this forum are muted. */
+  muted?: boolean;
+}
+
+/** Per-forum unread counts received from the forum's `/unread` endpoint. */
+export interface ForumUnreadCounts {
+  /** Unread notification count. */
+  notifications?: number;
+  /** Unread chat mention count. */
+  chat_mentions?: number;
+  /** Unread DM count. */
+  dms?: number;
+}
+
+type ForumStoreSubscriber = (store: typeof ForumStore) => void;
+type Unsubscribe = () => void;
+
+/**
+ * Reactive forum membership store. Manages the list of forums the user
+ * has joined, syncs with the server, and caches in localStorage.
+ */
 export const ForumStore = {
-  _accessToken: null,
-  _forums: [],
-  _activeForum: null,
+  _accessToken: null as string | null,
+  _forums: [] as ForumMembership[],
+  _activeForum: null as ForumMembership | null,
   _activePath: '',
-  _unreadCounts: {},
-  _subscribers: [],
+  _unreadCounts: {} as Record<string, ForumUnreadCounts>,
+  _subscribers: [] as ForumStoreSubscriber[],
 
-  get forums() {
+  /** The user's current forum memberships. */
+  get forums(): ForumMembership[] {
     return this._forums;
   },
-  get activeForum() {
+  /** The currently selected forum (shown in the main content area), or `null` for home. */
+  get activeForum(): ForumMembership | null {
     return this._activeForum;
   },
-  get activePath() {
+  /** The current path within the active forum's iframe. */
+  get activePath(): string {
     return this._activePath;
   },
 
-  subscribe(fn) {
+  /**
+   * Subscribe to store changes. Fires on membership list updates,
+   * active forum changes, and unread count updates.
+   * @returns Unsubscribe function.
+   */
+  subscribe(fn: ForumStoreSubscriber): Unsubscribe {
     this._subscribers.push(fn);
     return () => {
       this._subscribers = this._subscribers.filter(f => f !== fn);
     };
   },
-  _notify() {
+  _notify(): void {
     for (const fn of this._subscribers) {
       try {
         fn(this);
@@ -37,7 +105,12 @@ export const ForumStore = {
     }
   },
 
-  async syncFromServer(accessToken) {
+  /**
+   * Fetch the user's forum memberships from the server and update the store.
+   * Optionally accepts an access token (useful on first call after login).
+   * @param accessToken - If provided, updates the stored token.
+   */
+  async syncFromServer(accessToken?: string): Promise<void> {
     if (accessToken) this._accessToken = accessToken;
     if (!this._accessToken) return;
     try {
@@ -45,7 +118,16 @@ export const ForumStore = {
         headers: { Authorization: `Bearer ${this._accessToken}` },
       });
       if (!res.ok) return;
-      const memberships = await res.json();
+      const memberships: Array<{
+        forum_domain: string;
+        forum_name: string;
+        forum_icon_url?: string;
+        web_base: string;
+        api_base: string;
+        capabilities?: ForumCapability[];
+        joined_at: string;
+        member_count?: number;
+      }> = await res.json();
       this._forums = (memberships || []).map(m => ({
         domain: m.forum_domain,
         name: m.forum_name,
@@ -63,24 +145,30 @@ export const ForumStore = {
       }));
       try {
         localStorage.setItem('forumline-memberships', JSON.stringify(this._forums));
-      } catch (e) {}
+      } catch {}
       this._notify();
     } catch (e) {
       console.warn('Failed to sync memberships:', e);
     }
   },
 
-  loadCache() {
+  /** Load cached memberships from localStorage for instant UI rendering. */
+  loadCache(): void {
     try {
       const c = localStorage.getItem('forumline-memberships');
       if (c) {
         this._forums = JSON.parse(c);
         this._notify();
       }
-    } catch (e) {}
+    } catch {}
   },
 
-  async fetchManifest(url) {
+  /**
+   * Fetch and validate a forum's manifest from its well-known URL.
+   * @param url - Forum URL or domain (protocol optional).
+   * @throws {Error} If the forum doesn't serve a valid manifest.
+   */
+  async fetchManifest(url: string): Promise<{ forumline_version: string; [key: string]: unknown }> {
     let n = url.trim();
     if (!/^https?:\/\//i.test(n)) n = 'https://' + n;
     const mu = n.includes('/.well-known/forumline-manifest.json')
@@ -93,9 +181,14 @@ export const ForumStore = {
     return m;
   },
 
-  async addForum(url) {
-    // Extract domain from URL input (strip protocol, path, trailing slash)
-    let domain = url
+  /**
+   * Join a forum by URL or domain. Calls the server-side join endpoint
+   * which validates the forum's manifest internally (avoids CORS issues).
+   * @param url - Forum URL or bare domain (e.g. `"testforum.forumline.net"`).
+   * @throws {Error} If already joined, not authenticated, or the join fails.
+   */
+  async addForum(url: string): Promise<ForumMembership> {
+    const domain = url
       .trim()
       .replace(/^https?:\/\//i, '')
       .replace(/\/.*$/, '');
@@ -103,7 +196,6 @@ export const ForumStore = {
     if (this._forums.some(f => f.domain === domain)) throw new Error('Already joined this forum');
     if (!this._accessToken) throw new Error('You must be signed in to add a forum');
 
-    // Use the server-side join endpoint which fetches the manifest internally (no CORS issues)
     const res = await fetch('/api/memberships/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this._accessToken },
@@ -113,8 +205,17 @@ export const ForumStore = {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || 'Failed to add forum (HTTP ' + res.status + ')');
     }
-    const info = await res.json();
-    const mem = {
+    const info: {
+      domain: string;
+      name: string;
+      icon_url?: string;
+      web_base: string;
+      api_base: string;
+      capabilities?: ForumCapability[];
+      joined_at?: string;
+      member_count?: number;
+    } = await res.json();
+    const mem: ForumMembership = {
       domain: info.domain,
       name: info.name,
       icon_url: info.icon_url || '',
@@ -132,12 +233,21 @@ export const ForumStore = {
     this._forums.push(mem);
     try {
       localStorage.setItem('forumline-memberships', JSON.stringify(this._forums));
-    } catch (e) {}
+    } catch {}
     this._notify();
     return mem;
   },
 
-  async joinByDomain(domain, forumInfo) {
+  /**
+   * Join a forum by domain when you already have its info (e.g. from discovery results).
+   * @param domain - Forum domain to join.
+   * @param forumInfo - Optional pre-fetched forum metadata to avoid an extra lookup.
+   * @throws {Error} If already joined or not authenticated.
+   */
+  async joinByDomain(
+    domain: string,
+    forumInfo?: Partial<ForumMembership>,
+  ): Promise<ForumMembership> {
     if (this._forums.some(f => f.domain === domain)) throw new Error('Already joined');
     if (!this._accessToken) throw new Error('Not authenticated');
     const res = await fetch('/api/memberships/join', {
@@ -150,7 +260,7 @@ export const ForumStore = {
       throw new Error('Join failed: ' + (text || res.status));
     }
     const info = forumInfo || {};
-    const mem = {
+    const mem: ForumMembership = {
       domain: domain,
       name: info.name || domain,
       icon_url: info.icon_url || '',
@@ -160,7 +270,7 @@ export const ForumStore = {
       added_at: new Date().toISOString(),
       id: 'real_' + domain.replace(/[^a-z0-9]/g, '_'),
       seed: domain,
-      members: info.member_count || 0,
+      members: info.members || 0,
       unread: 0,
       threads: 0,
       isReal: true,
@@ -168,12 +278,16 @@ export const ForumStore = {
     this._forums.push(mem);
     try {
       localStorage.setItem('forumline-memberships', JSON.stringify(this._forums));
-    } catch (e) {}
+    } catch {}
     this._notify();
     return mem;
   },
 
-  async leaveForum(domain) {
+  /**
+   * Leave a forum. Removes the membership on the server and locally.
+   * If this was the active forum, switches back to home.
+   */
+  async leaveForum(domain: string): Promise<void> {
     if (this._accessToken) {
       try {
         await fetch('/api/memberships', {
@@ -184,7 +298,7 @@ export const ForumStore = {
           },
           body: JSON.stringify({ forum_domain: domain }),
         });
-      } catch (e) {}
+      } catch {}
     }
     this._forums = this._forums.filter(f => f.domain !== domain);
     if (this._activeForum && this._activeForum.domain === domain) {
@@ -192,11 +306,15 @@ export const ForumStore = {
     }
     try {
       localStorage.setItem('forumline-memberships', JSON.stringify(this._forums));
-    } catch (e) {}
+    } catch {}
     this._notify();
   },
 
-  async toggleMute(domain) {
+  /**
+   * Toggle notification mute for a forum.
+   * @param domain - Forum domain to mute/unmute.
+   */
+  async toggleMute(domain: string): Promise<void> {
     if (!this._accessToken) return;
     const forum = this._forums.find(f => f.domain === domain);
     const newMuted = forum ? !forum.muted : true;
@@ -210,10 +328,15 @@ export const ForumStore = {
         body: JSON.stringify({ forum_domain: domain, muted: newMuted }),
       });
       if (forum) forum.muted = newMuted;
-    } catch (e) {}
+    } catch {}
   },
 
-  switchForum(domain, path) {
+  /**
+   * Switch the active forum (loads its iframe in the main content area).
+   * @param domain - Forum domain to activate.
+   * @param path - Optional initial path within the forum.
+   */
+  switchForum(domain: string, path?: string): void {
     const forum = this._forums.find(f => f.domain === domain);
     if (!forum) return;
     this._activeForum = forum;
@@ -221,27 +344,33 @@ export const ForumStore = {
     this._notify();
   },
 
-  goHome() {
+  /** Deactivate the current forum and show the home view. */
+  goHome(): void {
     this._activeForum = null;
     this._activePath = '';
     this._notify();
   },
 
-  setUnreadCounts(domain, counts) {
+  /**
+   * Update a forum's unread counts (received from the forum's iframe via postMessage).
+   * Recalculates the aggregated `unread` badge count.
+   */
+  setUnreadCounts(domain: string, counts: ForumUnreadCounts): void {
     this._unreadCounts[domain] = counts;
     const f = this._forums.find(f => f.domain === domain);
     if (f) f.unread = (counts.notifications || 0) + (counts.chat_mentions || 0) + (counts.dms || 0);
     this._notify();
   },
 
-  clear() {
+  /** Clear all state (memberships, active forum, cache). Called on sign-out. */
+  clear(): void {
     this._accessToken = null;
     this._forums = [];
     this._activeForum = null;
     this._unreadCounts = {};
     try {
       localStorage.removeItem('forumline-memberships');
-    } catch (e) {}
+    } catch {}
     this._notify();
   },
 };

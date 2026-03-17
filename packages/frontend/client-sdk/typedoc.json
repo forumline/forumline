@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "@forumline/client-sdk",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": true,
+  "categorizeByGroup": false,
+  "navigationLinks": {
+    "GitHub": "https://github.com/forumline/forumline/tree/main/packages/frontend/client-sdk"
+  }
+}
