@@ -95,7 +95,6 @@ export function renderForumList() {
   }).join('');
 
   el.querySelectorAll('.forum-item').forEach(item => {
-    item.setAttribute('draggable', 'true');
     item.addEventListener('click', () => {
       const domain = item.dataset.domain;
       if (domain) {
@@ -212,9 +211,23 @@ export function renderDmList() {
 export function initDragAndDrop() {
   const forumItems = document.querySelectorAll('#forumList .forum-item');
   let draggedEl = null;
+  let holdTimer = null;
 
   forumItems.forEach(item => {
-    item.setAttribute('draggable', 'true');
+    // Start draggable only after a long press (200ms) so clicks work normally
+    item.addEventListener('mousedown', () => {
+      holdTimer = setTimeout(() => {
+        item.setAttribute('draggable', 'true');
+      }, 200);
+    });
+
+    item.addEventListener('mouseup', () => {
+      clearTimeout(holdTimer);
+    });
+
+    item.addEventListener('mouseleave', () => {
+      clearTimeout(holdTimer);
+    });
 
     item.addEventListener('dragstart', (e) => {
       draggedEl = item;
@@ -224,6 +237,7 @@ export function initDragAndDrop() {
 
     item.addEventListener('dragend', () => {
       item.classList.remove('dragging');
+      item.removeAttribute('draggable');
       document.querySelectorAll('.forum-item').forEach(i => i.classList.remove('drag-over'));
       draggedEl = null;
     });
