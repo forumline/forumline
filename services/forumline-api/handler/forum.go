@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -101,6 +105,19 @@ func (h *ForumHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If this is a hosted forum (*.forumline.net), provision it on the hosted platform.
+	// The hosted platform's callback to re-register will get a harmless 409.
+	if strings.HasSuffix(body.Domain, ".forumline.net") {
+		slug := strings.TrimSuffix(body.Domain, ".forumline.net")
+		desc := ""
+		if body.Description != nil {
+			desc = *body.Description
+		}
+		if err := provisionHostedForum(r.Context(), r.Header.Get("Authorization"), userID, slug, body.Name, desc); err != nil {
+			log.Printf("[Forums] hosted provisioning failed for %s: %v", body.Domain, err)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"forum_id": result.ForumID, "approved": result.Approved, "message": result.Message,
 	})
@@ -147,6 +164,47 @@ func (h *ForumHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[Forums] Forum deleted: domain=%s id=%s owner=%s members_removed=%d", body.ForumDomain, forumID, userID, memberCount)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "members_removed": memberCount})
+}
+
+// hostedPlatformURL is the base URL for the hosted platform provisioning API.
+// Set via HOSTED_PLATFORM_URL env var; defaults to production.
+var hostedPlatformURL string //nolint:gosec // Not a credential — this is a URL constant.
+
+func init() {
+	hostedPlatformURL = os.Getenv("HOSTED_PLATFORM_URL")
+	if hostedPlatformURL == "" {
+		hostedPlatformURL = "https://hosted.forumline.net"
+	}
+}
+
+// provisionHostedForum calls the hosted platform to create the actual forum tenant.
+func provisionHostedForum(ctx context.Context, authHeader, userID, slug, name, description string) error {
+	body := map[string]string{"slug": slug, "name": name, "description": description}
+	bodyJSON, _ := json.Marshal(body)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", hostedPlatformURL+"/api/platform/forums", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forumline-ID", userID)
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is from trusted env var, not user input.
+	if err != nil {
+		return fmt.Errorf("provision request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("hosted platform returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	log.Printf("[Forums] provisioned hosted forum: slug=%s", slug)
+	return nil
 }
 
 // --- Admin endpoints (service key auth) ---
