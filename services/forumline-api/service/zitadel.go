@@ -53,6 +53,47 @@ func initZitadelClient(ctx context.Context) (*ZitadelClient, error) {
 	return &ZitadelClient{api: api}, nil
 }
 
+// GetUser fetches a user's profile from Zitadel by ID.
+func (z *ZitadelClient) GetUser(ctx context.Context, userID string) (*ZitadelUserInfo, error) {
+	resp, err := z.api.UserServiceV2().GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	user := resp.GetUser()
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	info := &ZitadelUserInfo{
+		ID:       user.GetUserId(),
+		Username: user.GetUsername(),
+	}
+
+	if h := user.GetHuman(); h != nil {
+		if p := h.GetProfile(); p != nil {
+			info.DisplayName = p.GetDisplayName()
+			info.AvatarURL = p.GetAvatarUrl()
+		}
+	}
+
+	// Fallback: use username as display name
+	if info.DisplayName == "" {
+		info.DisplayName = info.Username
+	}
+
+	return info, nil
+}
+
+// ZitadelUserInfo holds basic user profile info from Zitadel.
+type ZitadelUserInfo struct {
+	ID          string
+	Username    string
+	DisplayName string
+	AvatarURL   string
+}
+
 // DeleteUser deletes a user from Zitadel.
 func (z *ZitadelClient) DeleteUser(ctx context.Context, userID string) error {
 	_, err := z.api.UserServiceV2().DeleteUser(ctx, &userv2.DeleteUserRequest{

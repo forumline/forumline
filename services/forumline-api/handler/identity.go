@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
@@ -24,9 +26,20 @@ func NewIdentityHandler(s *store.Store) *IdentityHandler {
 func (h *IdentityHandler) HandleGetIdentity(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
 	p, err := h.Store.GetProfile(r.Context(), userID)
-	if err != nil || p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Profile not found"})
+	if err != nil && p == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch profile"})
 		return
+	}
+
+	// Auto-create profile on first login: fetch user info from Zitadel
+	if p == nil {
+		p, err = h.provisionProfile(r.Context(), userID)
+		if err != nil {
+			log.Printf("[Identity] auto-provision failed for %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create profile"})
+			return
+		}
+		log.Printf("[Identity] auto-provisioned profile for user=%s username=%s", userID, strings.ReplaceAll(p.Username, "\n", ""))
 	}
 
 	avatarURL := ""
@@ -135,5 +148,35 @@ func (h *IdentityHandler) HandleSearchProfiles(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, profiles)
-	_ = fmt.Sprintf // suppress unused import if needed
+}
+
+// provisionProfile fetches user info from Zitadel and creates a local profile.
+func (h *IdentityHandler) provisionProfile(ctx context.Context, userID string) (*model.Profile, error) {
+	z, err := service.GetZitadelClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("zitadel client: %w", err)
+	}
+
+	info, err := z.GetUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch user from zitadel: %w", err)
+	}
+
+	username := info.Username
+	displayName := info.DisplayName
+	avatarURL := info.AvatarURL
+
+	// Deduplicate username if it already exists (case-insensitive clash)
+	if exists, _ := h.Store.UsernameExists(ctx, username); exists {
+		username = username + "_" + userID[len(userID)-4:]
+	}
+
+	if err := h.Store.CreateProfile(ctx, userID, username, displayName, avatarURL); err != nil {
+		return nil, fmt.Errorf("create profile: %w", err)
+	}
+
+	return &model.Profile{
+		ID: userID, Username: username, DisplayName: displayName,
+		StatusMessage: "", OnlineStatus: "online", ShowOnlineStatus: true,
+	}, nil
 }

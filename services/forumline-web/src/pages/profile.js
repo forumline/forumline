@@ -102,6 +102,13 @@ export function clearIdentityProfile() {
   _identityProfile = null;
 }
 
+/** Eagerly fetch/provision the identity profile (call on sign-in). */
+export function ensureIdentityProfile() {
+  Identity.getProfile().then(profile => {
+    if (profile) _identityProfile = profile;
+  }).catch(() => {});
+}
+
 function _renderApiProfileData(profile, currentUserId, profileKey, _isOwnProfile) {
   const userId = profile.forumline_id || currentUserId;
   const displayName = profile.display_name || profile.username || profileKey;

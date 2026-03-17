@@ -21,7 +21,7 @@ import { showForum, renderFilteredThreads, renderOnlineBar, initForum } from './
 import { showThread, renderPosts, initThread } from './pages/thread.js';
 import { showDm, renderMessages, initConversation } from './pages/conversation.js';
 import { showDiscover, renderDiscover, initDiscover } from './pages/discover.js';
-import { showProfile, initProfile, clearIdentityProfile } from './pages/profile.js';
+import { showProfile, initProfile, clearIdentityProfile, ensureIdentityProfile } from './pages/profile.js';
 import { showSettings, initSettings } from './pages/settings.js';
 import { showCreateForum, initCreateForum } from './pages/create-forum.js';
 import { showNewThread, initNewThread } from './pages/new-thread.js';
@@ -205,6 +205,9 @@ ForumlineAuth.onAuthStateChange((event, session) => {
         PushNotifications.registerServiceWorker((params) => handleDeepLinkParams(params));
         checkUrlParams({ showDm: wrappedShowDm, showForum: wrappedShowForum, ForumStore, DmStore });
       });
+
+      // Ensure profile exists in backend (auto-provisions on first login)
+      ensureIdentityProfile();
 
       if (event === 'SIGNED_IN') {
         showToast('Welcome back!');
