@@ -65,3 +65,4 @@ CLAUDE.md
 playwright-report/
 test-results/
 tests/auth/
+services/forumline-id/forumline-id
