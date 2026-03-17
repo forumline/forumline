@@ -2,11 +2,11 @@ pre-commit:
   parallel: true
   commands:
     lockfile-check:
-      run: bash .githooks/lockfile-check.sh
+      run: bash ci/hooks/lockfile-check.sh
       glob: "**/package.json"
 
     env-check:
-      run: bash .githooks/env-check.sh
+      run: bash ci/hooks/env-check.sh
       glob: "**/.env*"
 
     gitleaks:
@@ -63,7 +63,7 @@ pre-push:
   parallel: true
   commands:
     github-actions-status:
-      run: bash .githooks/pre-push
+      run: bash ci/hooks/pre-push
     validate-ci:
-      run: bash .githooks/validate-ci.sh
+      run: bash ci/hooks/validate-ci.sh
       glob: "{.github/workflows/*.yml,deploy/docker/Dockerfile.*,packages/frontend/**,packages/backend/**,packages/forum/**}"
