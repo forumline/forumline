@@ -49,7 +49,7 @@ for ENTRY in "${HOSTS[@]}"; do
     continue
   fi
 
-  if ! ssh "root@$LXC_IP" "cd /opt/logs-agent && docker compose pull && docker compose up -d --force-recreate --wait"; then
+  if ! ssh "root@$LXC_IP" "cd /opt/logs-agent && docker compose pull && docker compose up -d --force-recreate"; then
     echo "::warning::$HOST_LABEL: docker compose failed"
     FAILED+=("$HOST_LABEL")
     continue
