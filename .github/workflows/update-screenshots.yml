@@ -1,0 +1,24 @@
+name: Update Forum Screenshots
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # 6 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install script dependencies
+        run: cd .github/scripts && npm install && npx playwright install chromium
+
+      - name: Capture screenshots and update API
+        run: |
+          eval "$(ci/secrets.sh forumline-prod | grep '^ZITADEL_SERVICE_USER_PAT=')"
+          eval "$(ci/secrets.sh hosted-prod | grep -E '^R2_(ACCOUNT_ID|ACCESS_KEY_ID|SECRET_ACCESS_KEY|BUCKET_NAME|PUBLIC_URL)=')"
+          export FORUMLINE_SERVICE_KEY="$ZITADEL_SERVICE_USER_PAT"
+          node .github/scripts/update-forum-screenshots.js
+        env:
+          KEEPASS_PASSWORD: ${{ secrets.KEEPASS_PASSWORD }}
