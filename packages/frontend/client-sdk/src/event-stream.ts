@@ -14,6 +14,7 @@
  * ```
  */
 
+import { ForumlineAuth } from './auth.js';
 import { ForumlineAPI } from './client.js';
 
 /** SSE event payload for direct message activity. */
@@ -127,6 +128,16 @@ function connect(): void {
       const jitter = Math.random() * base * 0.3;
       reconnectAttempts++;
       notifyStatus(reconnectAttempts >= 3 ? 'degraded' : 'reconnecting');
+
+      // After 3 failures, token may be stale (e.g. server restarted during deploy).
+      // Refresh it before the next reconnect attempt so we don't loop on 401s forever.
+      if (reconnectAttempts === 3 && !ForumlineAuth.isRefreshing) {
+        void ForumlineAuth._refreshSession().then(() => {
+          reconnectTimer = setTimeout(connect, base + jitter);
+        });
+        return;
+      }
+
       reconnectTimer = setTimeout(connect, base + jitter);
     }
   };
