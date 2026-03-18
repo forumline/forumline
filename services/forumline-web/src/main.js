@@ -114,6 +114,7 @@ const wrappedShowThread = (id, opts) => {
 const wrappedShowDm = (id, opts) => {
   showDm(id);
   ForumStore.goHome();
+  if (navigator.clearAppBadge) navigator.clearAppBadge();
   if (!opts?.skipHistory) pushState({ view: 'dm', dmId: id });
 };
 
@@ -201,6 +202,7 @@ function _startDmStoreIfAuth() {
         ? (convo.members || []).find(m => m.id === event.sender_id)?.displayName || convo.name || 'Someone'
         : 'Someone';
       showToast(`${senderName} sent you a message`);
+      if (navigator.setAppBadge) navigator.setAppBadge();
     });
   }
 }
@@ -247,6 +249,14 @@ ForumlineAuth.onAuthStateChange((event, session) => {
         initCallUI();
         PushNotifications.registerServiceWorker(params => handleDeepLinkParams(params))
           .then(() => PushNotifications.subscribe());
+
+        // Handle push messages forwarded by service worker when app is "focused"
+        navigator.serviceWorker?.addEventListener('message', event => {
+          if (event.data?.type === 'push-message') {
+            showToast(event.data.body || event.data.title || 'New message');
+            if (navigator.setAppBadge) navigator.setAppBadge();
+          }
+        });
         checkUrlParams({ showDm: wrappedShowDm, showForum: wrappedShowForum, ForumStore, DmStore });
       });
 

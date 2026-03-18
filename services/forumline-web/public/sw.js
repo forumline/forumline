@@ -23,7 +23,8 @@ self.addEventListener('push', event => {
         return;
       }
 
-      // Tab not focused or closed — show OS notification
+      // Tab not focused or closed — show OS notification + badge
+      if (navigator.setAppBadge) navigator.setAppBadge();
       return self.registration.showNotification(title, {
         body,
         icon: '/icons/icon-192.png',
