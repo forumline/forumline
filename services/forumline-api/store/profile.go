@@ -8,7 +8,6 @@ import (
 	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, error) {
@@ -23,8 +22,8 @@ func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, erro
 		ID:               row.ID,
 		Username:         row.Username,
 		DisplayName:      row.DisplayName,
-		AvatarURL:        pgtextPtr(row.AvatarUrl),
-		Bio:              pgtextPtr(row.Bio),
+		AvatarURL:        row.AvatarUrl,
+		Bio:              row.Bio,
 		StatusMessage:    row.StatusMessage,
 		OnlineStatus:     row.OnlineStatus,
 		ShowOnlineStatus: row.ShowOnlineStatus,
@@ -32,11 +31,15 @@ func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, erro
 }
 
 func (s *Store) CreateProfile(ctx context.Context, id, username, displayName, avatarURL string) error {
+	var avatarPtr *string
+	if avatarURL != "" {
+		avatarPtr = &avatarURL
+	}
 	return s.Q.CreateProfile(ctx, sqlcdb.CreateProfileParams{
 		ID:          id,
 		Username:    username,
 		DisplayName: displayName,
-		AvatarUrl:   pgtype.Text{String: avatarURL, Valid: avatarURL != ""},
+		AvatarUrl:   avatarPtr,
 	})
 }
 
@@ -78,11 +81,15 @@ func (s *Store) SearchProfiles(ctx context.Context, query, excludeUserID string)
 	}
 	results := make([]model.ProfileSearchResult, len(rows))
 	for i, r := range rows {
+		var displayNamePtr *string
+		if r.DisplayName != "" {
+			displayNamePtr = &r.DisplayName
+		}
 		results[i] = model.ProfileSearchResult{
 			ID:          r.ID,
 			Username:    r.Username,
-			DisplayName: pgtextPtr(pgtype.Text{String: r.DisplayName, Valid: r.DisplayName != ""}),
-			AvatarURL:   pgtextPtr(r.AvatarUrl),
+			DisplayName: displayNamePtr,
+			AvatarURL:   r.AvatarUrl,
 		}
 	}
 	return results, nil
@@ -106,9 +113,8 @@ func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[strin
 			ID:          r.ID,
 			Username:    r.Username,
 			DisplayName: r.DisplayName,
-			AvatarURL:   pgtextPtr(r.AvatarUrl),
+			AvatarURL:   r.AvatarUrl,
 		}
 	}
 	return profiles, nil
 }
-

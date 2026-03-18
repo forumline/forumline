@@ -55,7 +55,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 			Body:        r.Body,
 			Link:        r.Link,
 			Read:        r.Read,
-			CreatedAt:   r.CreatedAt.Time.Format(time.RFC3339),
+			CreatedAt:   r.CreatedAt.Format(time.RFC3339),
 		})
 	}
 	if len(notifs) == 0 {

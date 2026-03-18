@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countUnreadChatMentions = `-- name: CountUnreadChatMentions :one
@@ -60,11 +60,11 @@ VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertNotificationParams struct {
-	UserID  uuid.UUID   `json:"user_id"`
-	Type    string      `json:"type"`
-	Title   string      `json:"title"`
-	Message string      `json:"message"`
-	Link    pgtype.Text `json:"link"`
+	UserID  uuid.UUID `json:"user_id"`
+	Type    string    `json:"type"`
+	Title   string    `json:"title"`
+	Message string    `json:"message"`
+	Link    *string   `json:"link"`
 }
 
 func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) error {
@@ -92,13 +92,13 @@ type ListForumlineNotificationsParams struct {
 }
 
 type ListForumlineNotificationsRow struct {
-	ID        uuid.UUID          `json:"id"`
-	Type      string             `json:"type"`
-	Title     string             `json:"title"`
-	Message   string             `json:"message"`
-	Link      pgtype.Text        `json:"link"`
-	Read      bool               `json:"read"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
+	Link      *string   `json:"link"`
+	Read      bool      `json:"read"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) ListForumlineNotifications(ctx context.Context, arg ListForumlineNotificationsParams) ([]ListForumlineNotificationsRow, error) {

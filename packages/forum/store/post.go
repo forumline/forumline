@@ -57,7 +57,7 @@ func (s *Store) CreatePost(ctx context.Context, threadID, authorID uuid.UUID, co
 		AuthorID:  authorID,
 		Content:   content,
 		ReplyToID: replyToID,
-		CreatedAt: pgTimestamp(now),
+		CreatedAt: now,
 	})
 	if err != nil {
 		return uuid.UUID{}, err

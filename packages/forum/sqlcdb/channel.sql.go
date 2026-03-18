@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getChannelIDBySlug = `-- name: GetChannelIDBySlug :one
@@ -84,21 +84,21 @@ LIMIT 100
 `
 
 type ListChatMessagesRow struct {
-	ID                uuid.UUID          `json:"id"`
-	ChannelID         uuid.UUID          `json:"channel_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Content           string             `json:"content"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
+	ID                uuid.UUID `json:"id"`
+	ChannelID         uuid.UUID `json:"channel_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Content           string    `json:"content"`
+	CreatedAt         time.Time `json:"created_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
 }
 
 func (q *Queries) ListChatMessages(ctx context.Context, slug string) ([]ListChatMessagesRow, error) {

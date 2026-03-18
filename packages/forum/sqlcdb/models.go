@@ -5,118 +5,119 @@
 package sqlcdb
 
 import (
+	"time"
+
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Bookmark struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	ThreadID  uuid.UUID          `json:"thread_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	ThreadID  uuid.UUID `json:"thread_id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Category struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description pgtype.Text        `json:"description"`
-	SortOrder   int32              `json:"sort_order"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description *string   `json:"description"`
+	SortOrder   int32     `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type ChannelFollow struct {
-	ID         uuid.UUID          `json:"id"`
-	UserID     uuid.UUID          `json:"user_id"`
-	CategoryID uuid.UUID          `json:"category_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type ChatChannel struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name"`
-	Slug        string             `json:"slug"`
-	Description pgtype.Text        `json:"description"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Description *string   `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type ChatMessage struct {
-	ID        uuid.UUID          `json:"id"`
-	ChannelID uuid.UUID          `json:"channel_id"`
-	AuthorID  uuid.UUID          `json:"author_id"`
-	Content   string             `json:"content"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	ChannelID uuid.UUID `json:"channel_id"`
+	AuthorID  uuid.UUID `json:"author_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Notification struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	Type      string             `json:"type"`
-	Title     string             `json:"title"`
-	Message   string             `json:"message"`
-	Link      pgtype.Text        `json:"link"`
-	Read      bool               `json:"read"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
+	Link      *string   `json:"link"`
+	Read      bool      `json:"read"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type NotificationPreference struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	Category  string             `json:"category"`
-	Enabled   bool               `json:"enabled"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Category  string    `json:"category"`
+	Enabled   bool      `json:"enabled"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Post struct {
-	ID        uuid.UUID          `json:"id"`
-	ThreadID  uuid.UUID          `json:"thread_id"`
-	AuthorID  uuid.UUID          `json:"author_id"`
-	Content   string             `json:"content"`
-	ReplyToID *uuid.UUID         `json:"reply_to_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID  `json:"id"`
+	ThreadID  uuid.UUID  `json:"thread_id"`
+	AuthorID  uuid.UUID  `json:"author_id"`
+	Content   string     `json:"content"`
+	ReplyToID *uuid.UUID `json:"reply_to_id"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type Profile struct {
-	ID          uuid.UUID          `json:"id"`
-	Username    string             `json:"username"`
-	DisplayName pgtype.Text        `json:"display_name"`
-	AvatarUrl   pgtype.Text        `json:"avatar_url"`
-	Bio         pgtype.Text        `json:"bio"`
-	Website     pgtype.Text        `json:"website"`
-	IsAdmin     bool               `json:"is_admin"`
-	ForumlineID pgtype.Text        `json:"forumline_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName *string   `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	Bio         *string   `json:"bio"`
+	Website     *string   `json:"website"`
+	IsAdmin     bool      `json:"is_admin"`
+	ForumlineID *string   `json:"forumline_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Thread struct {
-	ID         uuid.UUID          `json:"id"`
-	CategoryID uuid.UUID          `json:"category_id"`
-	AuthorID   uuid.UUID          `json:"author_id"`
-	Title      string             `json:"title"`
-	Slug       string             `json:"slug"`
-	Content    pgtype.Text        `json:"content"`
-	ImageUrl   pgtype.Text        `json:"image_url"`
-	IsPinned   bool               `json:"is_pinned"`
-	IsLocked   bool               `json:"is_locked"`
-	ViewCount  int32              `json:"view_count"`
-	PostCount  int32              `json:"post_count"`
-	LastPostAt pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID         uuid.UUID  `json:"id"`
+	CategoryID uuid.UUID  `json:"category_id"`
+	AuthorID   uuid.UUID  `json:"author_id"`
+	Title      string     `json:"title"`
+	Slug       string     `json:"slug"`
+	Content    *string    `json:"content"`
+	ImageUrl   *string    `json:"image_url"`
+	IsPinned   bool       `json:"is_pinned"`
+	IsLocked   bool       `json:"is_locked"`
+	ViewCount  int32      `json:"view_count"`
+	PostCount  int32      `json:"post_count"`
+	LastPostAt *time.Time `json:"last_post_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 type VoicePresence struct {
-	ID       uuid.UUID          `json:"id"`
-	UserID   uuid.UUID          `json:"user_id"`
-	RoomSlug string             `json:"room_slug"`
-	JoinedAt pgtype.Timestamptz `json:"joined_at"`
+	ID       uuid.UUID `json:"id"`
+	UserID   uuid.UUID `json:"user_id"`
+	RoomSlug string    `json:"room_slug"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 type VoiceRoom struct {
-	ID        uuid.UUID          `json:"id"`
-	Name      string             `json:"name"`
-	Slug      string             `json:"slug"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	CreatedAt time.Time `json:"created_at"`
 }

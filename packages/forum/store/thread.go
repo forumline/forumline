@@ -81,9 +81,9 @@ func (s *Store) CreateThread(ctx context.Context, categoryID, authorID uuid.UUID
 		AuthorID:   authorID,
 		Title:      title,
 		Slug:       slug,
-		Content:    optTextToPgtext(content),
-		ImageUrl:   optTextToPgtext(imageURL),
-		LastPostAt: pgTimestamp(now),
+		Content:    content,
+		ImageUrl:   imageURL,
+		LastPostAt: &now,
 	})
 	if err != nil {
 		return uuid.UUID{}, err
@@ -121,7 +121,7 @@ func (s *Store) UpdateThread(ctx context.Context, threadID uuid.UUID, setClauses
 func (s *Store) UpdateThreadStats(ctx context.Context, threadID uuid.UUID, now time.Time) error {
 	return s.Q.UpdateThreadStats(ctx, sqlcdb.UpdateThreadStatsParams{
 		ID:         threadID,
-		LastPostAt: pgTimestamp(now),
+		LastPostAt: &now,
 	})
 }
 

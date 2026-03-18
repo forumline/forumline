@@ -41,6 +41,9 @@ linters-settings:
         msg: "uuidStr() was deleted. Return uuid.UUID from store functions — don't convert back to string."
       - pattern: '\bformatUUID\('
         msg: "formatUUID() was deleted. Use uuid.UUID directly."
+      # pgtype text/timestamp conversion helpers were deleted in the text/timestamp migration.
+      - pattern: '\b(pgtextPtr|textToPgtext|optTextToPgtext|pgTimestamp|tsStr|tsStrPtr|tsTime|tsTimePtr)\('
+        msg: "pgtype conversion helpers were deleted. Use native string/*string/time.Time directly."
 
   goconst:
     # Flag strings repeated 3+ times — candidates for named constants.

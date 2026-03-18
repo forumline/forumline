@@ -5,106 +5,108 @@
 package sqlcdb
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ForumlineCall struct {
-	ID              uuid.UUID          `json:"id"`
-	ConversationID  uuid.UUID          `json:"conversation_id"`
-	CallerID        string             `json:"caller_id"`
-	CalleeID        string             `json:"callee_id"`
-	Status          string             `json:"status"`
-	StartedAt       pgtype.Timestamptz `json:"started_at"`
-	EndedAt         pgtype.Timestamptz `json:"ended_at"`
-	DurationSeconds pgtype.Int4        `json:"duration_seconds"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID              uuid.UUID   `json:"id"`
+	ConversationID  uuid.UUID   `json:"conversation_id"`
+	CallerID        string      `json:"caller_id"`
+	CalleeID        string      `json:"callee_id"`
+	Status          string      `json:"status"`
+	StartedAt       *time.Time  `json:"started_at"`
+	EndedAt         *time.Time  `json:"ended_at"`
+	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
+	CreatedAt       time.Time   `json:"created_at"`
 }
 
 type ForumlineConversation struct {
-	ID        uuid.UUID          `json:"id"`
-	IsGroup   bool               `json:"is_group"`
-	Name      pgtype.Text        `json:"name"`
-	CreatedBy pgtype.Text        `json:"created_by"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID `json:"id"`
+	IsGroup   bool      `json:"is_group"`
+	Name      *string   `json:"name"`
+	CreatedBy *string   `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ForumlineConversationMember struct {
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	UserID         string             `json:"user_id"`
-	JoinedAt       pgtype.Timestamptz `json:"joined_at"`
-	LastReadAt     pgtype.Timestamptz `json:"last_read_at"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	JoinedAt       time.Time `json:"joined_at"`
+	LastReadAt     time.Time `json:"last_read_at"`
 }
 
 type ForumlineDirectMessage struct {
-	ID             uuid.UUID          `json:"id"`
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	SenderID       string             `json:"sender_id"`
-	Content        string             `json:"content"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID             uuid.UUID `json:"id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	SenderID       string    `json:"sender_id"`
+	Content        string    `json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type ForumlineForum struct {
-	ID                  uuid.UUID          `json:"id"`
-	Domain              string             `json:"domain"`
-	Name                string             `json:"name"`
-	IconUrl             pgtype.Text        `json:"icon_url"`
-	ApiBase             string             `json:"api_base"`
-	WebBase             string             `json:"web_base"`
-	Capabilities        []string           `json:"capabilities"`
-	Description         pgtype.Text        `json:"description"`
-	OwnerID             pgtype.Text        `json:"owner_id"`
-	Approved            bool               `json:"approved"`
-	ScreenshotUrl       pgtype.Text        `json:"screenshot_url"`
-	Tags                []string           `json:"tags"`
-	MemberCount         int32              `json:"member_count"`
-	LastSeenAt          pgtype.Timestamptz `json:"last_seen_at"`
-	ConsecutiveFailures int32              `json:"consecutive_failures"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ID                  uuid.UUID  `json:"id"`
+	Domain              string     `json:"domain"`
+	Name                string     `json:"name"`
+	IconUrl             *string    `json:"icon_url"`
+	ApiBase             string     `json:"api_base"`
+	WebBase             string     `json:"web_base"`
+	Capabilities        []string   `json:"capabilities"`
+	Description         *string    `json:"description"`
+	OwnerID             *string    `json:"owner_id"`
+	Approved            bool       `json:"approved"`
+	ScreenshotUrl       *string    `json:"screenshot_url"`
+	Tags                []string   `json:"tags"`
+	MemberCount         int32      `json:"member_count"`
+	LastSeenAt          *time.Time `json:"last_seen_at"`
+	ConsecutiveFailures int32      `json:"consecutive_failures"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type ForumlineMembership struct {
-	ID                 uuid.UUID          `json:"id"`
-	UserID             string             `json:"user_id"`
-	ForumID            uuid.UUID          `json:"forum_id"`
-	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
-	NotificationsMuted bool               `json:"notifications_muted"`
-	ForumAuthedAt      pgtype.Timestamptz `json:"forum_authed_at"`
+	ID                 uuid.UUID  `json:"id"`
+	UserID             string     `json:"user_id"`
+	ForumID            uuid.UUID  `json:"forum_id"`
+	JoinedAt           time.Time  `json:"joined_at"`
+	NotificationsMuted bool       `json:"notifications_muted"`
+	ForumAuthedAt      *time.Time `json:"forum_authed_at"`
 }
 
 type ForumlineNotification struct {
-	ID          uuid.UUID          `json:"id"`
-	UserID      string             `json:"user_id"`
-	ForumDomain string             `json:"forum_domain"`
-	ForumName   string             `json:"forum_name"`
-	Type        string             `json:"type"`
-	Title       string             `json:"title"`
-	Body        string             `json:"body"`
-	Link        string             `json:"link"`
-	Read        bool               `json:"read"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	UserID      string    `json:"user_id"`
+	ForumDomain string    `json:"forum_domain"`
+	ForumName   string    `json:"forum_name"`
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	Link        string    `json:"link"`
+	Read        bool      `json:"read"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type ForumlineProfile struct {
-	ID               string             `json:"id"`
-	Username         string             `json:"username"`
-	DisplayName      string             `json:"display_name"`
-	AvatarUrl        pgtype.Text        `json:"avatar_url"`
-	Bio              pgtype.Text        `json:"bio"`
-	StatusMessage    string             `json:"status_message"`
-	OnlineStatus     string             `json:"online_status"`
-	ShowOnlineStatus bool               `json:"show_online_status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	ID               string    `json:"id"`
+	Username         string    `json:"username"`
+	DisplayName      string    `json:"display_name"`
+	AvatarUrl        *string   `json:"avatar_url"`
+	Bio              *string   `json:"bio"`
+	StatusMessage    string    `json:"status_message"`
+	OnlineStatus     string    `json:"online_status"`
+	ShowOnlineStatus bool      `json:"show_online_status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type PushSubscription struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    string             `json:"user_id"`
-	Endpoint  string             `json:"endpoint"`
-	P256dh    string             `json:"p256dh"`
-	Auth      string             `json:"auth"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	UserID    string    `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dh    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	CreatedAt time.Time `json:"created_at"`
 }

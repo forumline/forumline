@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const acceptCall = `-- name: AcceptCall :exec
@@ -47,12 +47,12 @@ type CreateCallParams struct {
 }
 
 type CreateCallRow struct {
-	ID             uuid.UUID          `json:"id"`
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	CallerID       string             `json:"caller_id"`
-	CalleeID       string             `json:"callee_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID             uuid.UUID `json:"id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	CallerID       string    `json:"caller_id"`
+	CalleeID       string    `json:"callee_id"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateCall(ctx context.Context, arg CreateCallParams) (CreateCallRow, error) {
@@ -118,10 +118,10 @@ type GetCallForEndParams struct {
 }
 
 type GetCallForEndRow struct {
-	CallerID  string             `json:"caller_id"`
-	CalleeID  string             `json:"callee_id"`
-	Status    string             `json:"status"`
-	StartedAt pgtype.Timestamptz `json:"started_at"`
+	CallerID  string     `json:"caller_id"`
+	CalleeID  string     `json:"callee_id"`
+	Status    string     `json:"status"`
+	StartedAt *time.Time `json:"started_at"`
 }
 
 func (q *Queries) GetCallForEnd(ctx context.Context, arg GetCallForEndParams) (GetCallForEndRow, error) {

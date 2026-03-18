@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 
-
 	"github.com/forumline/forumline/forum/oapi"
 )
 
@@ -19,9 +18,9 @@ func (s *Store) ListCategories(ctx context.Context) ([]oapi.Category, error) {
 			Id:          r.ID,
 			Name:        r.Name,
 			Slug:        r.Slug,
-			Description: pgtextPtr(r.Description),
+			Description: r.Description,
 			SortOrder:   int(r.SortOrder),
-			CreatedAt:   tsTime(r.CreatedAt),
+			CreatedAt:   r.CreatedAt,
 		})
 	}
 	return categories, nil
@@ -37,9 +36,9 @@ func (s *Store) GetCategoryBySlug(ctx context.Context, slug string) (*oapi.Categ
 		Id:          row.ID,
 		Name:        row.Name,
 		Slug:        row.Slug,
-		Description: pgtextPtr(row.Description),
+		Description: row.Description,
 		SortOrder:   int(row.SortOrder),
-		CreatedAt:   tsTime(row.CreatedAt),
+		CreatedAt:   row.CreatedAt,
 	}
 	return &c, nil
 }

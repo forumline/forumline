@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countUnreadNotifications = `-- name: CountUnreadNotifications :one
@@ -65,15 +65,15 @@ type ListNotificationsParams struct {
 }
 
 type ListNotificationsRow struct {
-	ID          uuid.UUID          `json:"id"`
-	ForumDomain string             `json:"forum_domain"`
-	ForumName   string             `json:"forum_name"`
-	Type        string             `json:"type"`
-	Title       string             `json:"title"`
-	Body        string             `json:"body"`
-	Link        string             `json:"link"`
-	Read        bool               `json:"read"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	ForumDomain string    `json:"forum_domain"`
+	ForumName   string    `json:"forum_name"`
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	Link        string    `json:"link"`
+	Read        bool      `json:"read"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error) {

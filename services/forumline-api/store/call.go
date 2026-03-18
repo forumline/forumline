@@ -40,7 +40,7 @@ func (s *Store) CreateCall(ctx context.Context, conversationID uuid.UUID, caller
 		CallerID:       row.CallerID,
 		CalleeID:       row.CalleeID,
 		Status:         row.Status,
-		CreatedAt:      row.CreatedAt.Time.Format(time.RFC3339),
+		CreatedAt:      row.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
@@ -77,7 +77,7 @@ func (s *Store) EndCall(ctx context.Context, callID uuid.UUID, userID string) (n
 		}
 	}
 
-	if row.Status == "active" && row.StartedAt.Valid {
+	if row.Status == "active" && row.StartedAt != nil {
 		err = s.Q.EndCallWithDuration(ctx, sqlcdb.EndCallWithDurationParams{
 			Status: newStatus,
 			ID:     callID,

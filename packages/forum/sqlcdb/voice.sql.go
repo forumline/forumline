@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearVoicePresence = `-- name: ClearVoicePresence :exec
@@ -32,20 +32,20 @@ JOIN profiles p ON p.id = vp.user_id
 `
 
 type ListVoicePresenceRow struct {
-	ID                 uuid.UUID          `json:"id"`
-	UserID             uuid.UUID          `json:"user_id"`
-	RoomSlug           string             `json:"room_slug"`
-	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
-	ProfileID          uuid.UUID          `json:"profile_id"`
-	ProfileUsername    string             `json:"profile_username"`
-	ProfileDisplayName pgtype.Text        `json:"profile_display_name"`
-	ProfileAvatarUrl   pgtype.Text        `json:"profile_avatar_url"`
-	ProfileBio         pgtype.Text        `json:"profile_bio"`
-	ProfileWebsite     pgtype.Text        `json:"profile_website"`
-	ProfileIsAdmin     bool               `json:"profile_is_admin"`
-	ProfileForumlineID pgtype.Text        `json:"profile_forumline_id"`
-	ProfileCreatedAt   pgtype.Timestamptz `json:"profile_created_at"`
-	ProfileUpdatedAt   pgtype.Timestamptz `json:"profile_updated_at"`
+	ID                 uuid.UUID `json:"id"`
+	UserID             uuid.UUID `json:"user_id"`
+	RoomSlug           string    `json:"room_slug"`
+	JoinedAt           time.Time `json:"joined_at"`
+	ProfileID          uuid.UUID `json:"profile_id"`
+	ProfileUsername    string    `json:"profile_username"`
+	ProfileDisplayName *string   `json:"profile_display_name"`
+	ProfileAvatarUrl   *string   `json:"profile_avatar_url"`
+	ProfileBio         *string   `json:"profile_bio"`
+	ProfileWebsite     *string   `json:"profile_website"`
+	ProfileIsAdmin     bool      `json:"profile_is_admin"`
+	ProfileForumlineID *string   `json:"profile_forumline_id"`
+	ProfileCreatedAt   time.Time `json:"profile_created_at"`
+	ProfileUpdatedAt   time.Time `json:"profile_updated_at"`
 }
 
 func (q *Queries) ListVoicePresence(ctx context.Context) ([]ListVoicePresenceRow, error) {
@@ -120,9 +120,9 @@ ON CONFLICT (user_id) DO UPDATE SET room_slug = $2, joined_at = $3
 `
 
 type SetVoicePresenceParams struct {
-	UserID   uuid.UUID          `json:"user_id"`
-	RoomSlug string             `json:"room_slug"`
-	JoinedAt pgtype.Timestamptz `json:"joined_at"`
+	UserID   uuid.UUID `json:"user_id"`
+	RoomSlug string    `json:"room_slug"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 func (q *Queries) SetVoicePresence(ctx context.Context, arg SetVoicePresenceParams) error {

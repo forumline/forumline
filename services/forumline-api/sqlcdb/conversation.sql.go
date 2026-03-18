@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addConversationMembers = `-- name: AddConversationMembers :exec
@@ -33,9 +33,9 @@ INSERT INTO forumline_conversations (is_group, name, created_by) VALUES ($1, $2,
 `
 
 type CreateConversationParams struct {
-	IsGroup   bool        `json:"is_group"`
-	Name      pgtype.Text `json:"name"`
-	CreatedBy pgtype.Text `json:"created_by"`
+	IsGroup   bool    `json:"is_group"`
+	Name      *string `json:"name"`
+	CreatedBy *string `json:"created_by"`
 }
 
 func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (uuid.UUID, error) {
@@ -53,11 +53,11 @@ WHERE cm.conversation_id = ANY($1::uuid[])
 `
 
 type FetchConversationMembersRow struct {
-	ConversationID uuid.UUID   `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
-	Username       string      `json:"username"`
-	DisplayName    string      `json:"display_name"`
-	AvatarUrl      pgtype.Text `json:"avatar_url"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	Username       string    `json:"username"`
+	DisplayName    string    `json:"display_name"`
+	AvatarUrl      *string   `json:"avatar_url"`
 }
 
 func (q *Queries) FetchConversationMembers(ctx context.Context, conversationIds []uuid.UUID) ([]FetchConversationMembersRow, error) {
@@ -127,12 +127,12 @@ type GetConversationParams struct {
 }
 
 type GetConversationRow struct {
-	ID              uuid.UUID          `json:"id"`
-	IsGroup         bool               `json:"is_group"`
-	Name            pgtype.Text        `json:"name"`
-	LastMessage     string             `json:"last_message"`
-	LastMessageTime pgtype.Timestamptz `json:"last_message_time"`
-	UnreadCount     int32              `json:"unread_count"`
+	ID              uuid.UUID `json:"id"`
+	IsGroup         bool      `json:"is_group"`
+	Name            *string   `json:"name"`
+	LastMessage     string    `json:"last_message"`
+	LastMessageTime time.Time `json:"last_message_time"`
+	UnreadCount     int32     `json:"unread_count"`
 }
 
 func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams) (GetConversationRow, error) {
@@ -323,12 +323,12 @@ LIMIT 100
 `
 
 type ListConversationsRow struct {
-	ID              uuid.UUID          `json:"id"`
-	IsGroup         bool               `json:"is_group"`
-	Name            pgtype.Text        `json:"name"`
-	LastMessage     string             `json:"last_message"`
-	LastMessageTime pgtype.Timestamptz `json:"last_message_time"`
-	UnreadCount     int32              `json:"unread_count"`
+	ID              uuid.UUID `json:"id"`
+	IsGroup         bool      `json:"is_group"`
+	Name            *string   `json:"name"`
+	LastMessage     string    `json:"last_message"`
+	LastMessageTime time.Time `json:"last_message_time"`
+	UnreadCount     int32     `json:"unread_count"`
 }
 
 func (q *Queries) ListConversations(ctx context.Context, userID string) ([]ListConversationsRow, error) {
@@ -426,8 +426,8 @@ UPDATE forumline_conversations SET name = $1 WHERE id = $2
 `
 
 type UpdateConversationNameParams struct {
-	Name pgtype.Text `json:"name"`
-	ID   uuid.UUID   `json:"id"`
+	Name *string   `json:"name"`
+	ID   uuid.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateConversationName(ctx context.Context, arg UpdateConversationNameParams) error {

@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearMembershipAuthed = `-- name: ClearMembershipAuthed :exec
@@ -54,14 +54,14 @@ type GetMembershipJoinDetailsParams struct {
 }
 
 type GetMembershipJoinDetailsRow struct {
-	Domain       string             `json:"domain"`
-	Name         string             `json:"name"`
-	IconUrl      pgtype.Text        `json:"icon_url"`
-	ApiBase      string             `json:"api_base"`
-	WebBase      string             `json:"web_base"`
-	Capabilities []string           `json:"capabilities"`
-	JoinedAt     pgtype.Timestamptz `json:"joined_at"`
-	MemberCount  int32              `json:"member_count"`
+	Domain       string    `json:"domain"`
+	Name         string    `json:"name"`
+	IconUrl      *string   `json:"icon_url"`
+	ApiBase      string    `json:"api_base"`
+	WebBase      string    `json:"web_base"`
+	Capabilities []string  `json:"capabilities"`
+	JoinedAt     time.Time `json:"joined_at"`
+	MemberCount  int32     `json:"member_count"`
 }
 
 func (q *Queries) GetMembershipJoinDetails(ctx context.Context, arg GetMembershipJoinDetailsParams) (GetMembershipJoinDetailsRow, error) {
@@ -126,17 +126,17 @@ ORDER BY m.joined_at DESC
 `
 
 type ListMembershipsRow struct {
-	ID                 uuid.UUID          `json:"id"`
-	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
-	ForumAuthedAt      pgtype.Timestamptz `json:"forum_authed_at"`
-	NotificationsMuted bool               `json:"notifications_muted"`
-	Domain             string             `json:"domain"`
-	Name               string             `json:"name"`
-	IconUrl            pgtype.Text        `json:"icon_url"`
-	ApiBase            string             `json:"api_base"`
-	WebBase            string             `json:"web_base"`
-	Capabilities       []string           `json:"capabilities"`
-	MemberCount        int32              `json:"member_count"`
+	ID                 uuid.UUID  `json:"id"`
+	JoinedAt           time.Time  `json:"joined_at"`
+	ForumAuthedAt      *time.Time `json:"forum_authed_at"`
+	NotificationsMuted bool       `json:"notifications_muted"`
+	Domain             string     `json:"domain"`
+	Name               string     `json:"name"`
+	IconUrl            *string    `json:"icon_url"`
+	ApiBase            string     `json:"api_base"`
+	WebBase            string     `json:"web_base"`
+	Capabilities       []string   `json:"capabilities"`
+	MemberCount        int32      `json:"member_count"`
 }
 
 func (q *Queries) ListMemberships(ctx context.Context, userID string) ([]ListMembershipsRow, error) {

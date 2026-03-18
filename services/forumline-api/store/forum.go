@@ -99,9 +99,9 @@ func (s *Store) ListRecommendedForums(ctx context.Context, userID string) ([]map
 	forums := make([]map[string]interface{}, 0, len(rows))
 	for _, r := range rows {
 		forums = append(forums, map[string]interface{}{
-			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": r.IconUrl,
 			"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
-			"description": pgtextPtr(r.Description), "screenshot_url": pgtextPtr(r.ScreenshotUrl),
+			"description": r.Description, "screenshot_url": r.ScreenshotUrl,
 			"tags": r.Tags, "member_count": int(r.MemberCount), "shared_member_count": int(r.SharedMemberCount),
 		})
 	}
@@ -135,8 +135,8 @@ func (s *Store) RegisterForum(ctx context.Context, domain, name, apiBase, webBas
 	capabilities []string, description *string, tags []string, ownerID string) (uuid.UUID, error) {
 	id, err := s.Q.RegisterForum(ctx, sqlcdb.RegisterForumParams{
 		Domain: domain, Name: name, ApiBase: apiBase, WebBase: webBase,
-		Capabilities: capabilities, Description: optTextToPgtext(description),
-		Tags: tags, OwnerID: textToPgtext(ownerID),
+		Capabilities: capabilities, Description: description,
+		Tags: tags, OwnerID: &ownerID,
 	})
 	if err != nil {
 		return uuid.UUID{}, err
@@ -146,7 +146,7 @@ func (s *Store) RegisterForum(ctx context.Context, domain, name, apiBase, webBas
 
 func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManifest, tags []string) (uuid.UUID, error) {
 	id, err := s.Q.UpsertForumFromManifest(ctx, sqlcdb.UpsertForumFromManifestParams{
-		Domain: m.Domain, Name: m.Name, IconUrl: textToPgtext(m.IconURL),
+		Domain: m.Domain, Name: m.Name, IconUrl: &m.IconURL,
 		ApiBase: m.APIBase, WebBase: m.WebBase, Capabilities: m.Capabilities, Tags: tags,
 	})
 	if err == pgx.ErrNoRows {
@@ -159,7 +159,7 @@ func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManif
 }
 
 func (s *Store) CountForumsByOwner(ctx context.Context, ownerID string) (int, error) {
-	count, err := s.Q.CountForumsByOwner(ctx, textToPgtext(ownerID))
+	count, err := s.Q.CountForumsByOwner(ctx, &ownerID)
 	return int(count), err
 }
 
@@ -168,7 +168,7 @@ func (s *Store) DomainExists(ctx context.Context, domain string) (bool, error) {
 }
 
 func (s *Store) ListOwnedForums(ctx context.Context, ownerID string) ([]map[string]interface{}, error) {
-	rows, err := s.Q.ListOwnedForums(ctx, textToPgtext(ownerID))
+	rows, err := s.Q.ListOwnedForums(ctx, &ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,13 +176,13 @@ func (s *Store) ListOwnedForums(ctx context.Context, ownerID string) ([]map[stri
 	forums := make([]map[string]interface{}, 0, len(rows))
 	for _, r := range rows {
 		forum := map[string]interface{}{
-			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": r.IconUrl,
 			"api_base": r.ApiBase, "web_base": r.WebBase, "approved": r.Approved,
 			"member_count": int(r.MemberCount), "consecutive_failures": int(r.ConsecutiveFailures),
-			"created_at": r.CreatedAt.Time.Format(time.RFC3339),
+			"created_at": r.CreatedAt.Format(time.RFC3339),
 		}
-		if r.LastSeenAt.Valid {
-			forum["last_seen_at"] = r.LastSeenAt.Time.Format(time.RFC3339)
+		if r.LastSeenAt != nil {
+			forum["last_seen_at"] = r.LastSeenAt.Format(time.RFC3339)
 		}
 		forums = append(forums, forum)
 	}
@@ -197,13 +197,13 @@ func (s *Store) GetForumOwner(ctx context.Context, forumID uuid.UUID) (*string, 
 	if err != nil {
 		return nil, err
 	}
-	return pgtextPtr(owner), nil
+	return owner, nil
 }
 
 func (s *Store) DeleteForum(ctx context.Context, forumID uuid.UUID, ownerID string) (int64, error) {
 	return s.Q.DeleteForum(ctx, sqlcdb.DeleteForumParams{
 		ID:      forumID,
-		OwnerID: textToPgtext(ownerID),
+		OwnerID: &ownerID,
 	})
 }
 
@@ -221,14 +221,14 @@ func (s *Store) CountForumMembers(ctx context.Context, forumID uuid.UUID) int {
 
 func (s *Store) UpdateForumScreenshot(ctx context.Context, domain, screenshotURL string) (int64, error) {
 	return s.Q.UpdateForumScreenshot(ctx, sqlcdb.UpdateForumScreenshotParams{
-		ScreenshotUrl: textToPgtext(screenshotURL),
+		ScreenshotUrl: &screenshotURL,
 		Domain:        domain,
 	})
 }
 
 func (s *Store) UpdateForumIcon(ctx context.Context, domain, iconURL string) (int64, error) {
 	return s.Q.UpdateForumIcon(ctx, sqlcdb.UpdateForumIconParams{
-		IconUrl: textToPgtext(iconURL),
+		IconUrl: &iconURL,
 		Domain:  domain,
 	})
 }
@@ -252,7 +252,7 @@ func (s *Store) IncrementForumFailures(ctx context.Context, domain string) (int,
 	if err != nil {
 		return 0, nil, err
 	}
-	return int(row.ConsecutiveFailures), pgtextPtr(row.OwnerID), nil
+	return int(row.ConsecutiveFailures), row.OwnerID, nil
 }
 
 func (s *Store) DelistForum(ctx context.Context, domain string) int64 {
@@ -274,13 +274,13 @@ func (s *Store) ListAllForums(ctx context.Context) ([]map[string]interface{}, er
 	forums := make([]map[string]interface{}, 0, len(rows))
 	for _, r := range rows {
 		forum := map[string]interface{}{
-			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+			"id": r.ID.String(), "domain": r.Domain, "name": r.Name, "icon_url": r.IconUrl,
 			"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
-			"approved": r.Approved, "has_owner": r.OwnerID.Valid,
+			"approved": r.Approved, "has_owner": r.OwnerID != nil,
 			"consecutive_failures": int(r.ConsecutiveFailures),
 		}
-		if r.LastSeenAt.Valid {
-			forum["last_seen_at"] = r.LastSeenAt.Time.Format(time.RFC3339)
+		if r.LastSeenAt != nil {
+			forum["last_seen_at"] = r.LastSeenAt.Format(time.RFC3339)
 		}
 		forums = append(forums, forum)
 	}

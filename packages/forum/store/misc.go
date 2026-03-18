@@ -53,7 +53,7 @@ func (s *Store) UpsertNotificationPref(ctx context.Context, userID uuid.UUID, ca
 		UserID:    userID,
 		Category:  category,
 		Enabled:   enabled,
-		UpdatedAt: pgTimestamp(time.Now().UTC()),
+		UpdatedAt: time.Now().UTC(),
 	})
 }
 

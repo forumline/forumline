@@ -5,111 +5,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
-
-// --- pgtextPtr / textToPgtext / optTextToPgtext ---
-
-func TestTextToPgtext(t *testing.T) {
-	pt := textToPgtext("hello")
-	if !pt.Valid || pt.String != "hello" {
-		t.Errorf("got Valid=%v String=%q", pt.Valid, pt.String)
-	}
-}
-
-func TestPgtextPtr_Valid(t *testing.T) {
-	pt := pgtype.Text{String: "world", Valid: true}
-	got := pgtextPtr(pt)
-	if got == nil || *got != "world" {
-		t.Errorf("expected pointer to %q, got %v", "world", got)
-	}
-}
-
-func TestPgtextPtr_Invalid_ReturnsNil(t *testing.T) {
-	pt := pgtype.Text{}
-	if pgtextPtr(pt) != nil {
-		t.Error("expected nil for invalid text")
-	}
-}
-
-func TestOptTextToPgtext_Nil(t *testing.T) {
-	pt := optTextToPgtext(nil)
-	if pt.Valid {
-		t.Error("expected Valid=false for nil input")
-	}
-}
-
-func TestOptTextToPgtext_NonNil(t *testing.T) {
-	s := "test"
-	pt := optTextToPgtext(&s)
-	if !pt.Valid || pt.String != "test" {
-		t.Errorf("got Valid=%v String=%q", pt.Valid, pt.String)
-	}
-}
-
-// --- Timestamp helpers ---
-
-func TestPgTimestamp_RoundTrip(t *testing.T) {
-	now := time.Date(2025, 6, 15, 12, 30, 0, 0, time.UTC)
-	ts := pgTimestamp(now)
-	got := tsStr(ts)
-	want := "2025-06-15T12:30:00Z"
-	if got != want {
-		t.Errorf("tsStr = %q, want %q", got, want)
-	}
-}
-
-func TestTsStr_Invalid(t *testing.T) {
-	var ts pgtype.Timestamptz
-	if got := tsStr(ts); got != "" {
-		t.Errorf("expected empty, got %q", got)
-	}
-}
-
-func TestTsStrPtr_Valid(t *testing.T) {
-	ts := pgTimestamp(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
-	got := tsStrPtr(ts)
-	if got == nil {
-		t.Fatal("expected non-nil")
-	}
-	if *got != "2025-01-01T00:00:00Z" {
-		t.Errorf("got %q", *got)
-	}
-}
-
-func TestTsStrPtr_Invalid(t *testing.T) {
-	var ts pgtype.Timestamptz
-	if tsStrPtr(ts) != nil {
-		t.Error("expected nil for invalid timestamp")
-	}
-}
-
-func TestTsStrPtr_Zero(t *testing.T) {
-	ts := pgTimestamp(time.Time{})
-	// Valid=true but time is zero
-	if tsStrPtr(ts) != nil {
-		t.Error("expected nil for zero time")
-	}
-}
 
 // --- profileFromSqlc ---
 
 func TestProfileFromSqlc(t *testing.T) {
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
-	now := pgTimestamp(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
-	displayName := pgtype.Text{String: "Test User", Valid: true}
+	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	displayName := "Test User"
+	forumlineID := "fl-123"
 
 	row := sqlcdb.Profile{
 		ID:          id,
 		Username:    "testuser",
-		DisplayName: displayName,
-		AvatarUrl:   pgtype.Text{},
-		Bio:         pgtype.Text{},
-		Website:     pgtype.Text{},
+		DisplayName: &displayName,
+		AvatarUrl:   nil,
+		Bio:         nil,
+		Website:     nil,
 		IsAdmin:     true,
-		ForumlineID: pgtype.Text{String: "fl-123", Valid: true},
+		ForumlineID: &forumlineID,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -141,10 +57,10 @@ func TestProfileFromSqlc(t *testing.T) {
 
 func TestCategoryFromThreadRow(t *testing.T) {
 	id := uuid.MustParse("660e8400-e29b-41d4-a716-446655440000")
-	now := pgTimestamp(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC))
-	desc := pgtype.Text{String: "A category", Valid: true}
+	now := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
+	desc := "A category"
 
-	cat := categoryFromThreadRow(id, "General", "general", desc, 5, now)
+	cat := categoryFromThreadRow(id, "General", "general", &desc, 5, now)
 
 	if cat.Name != "General" {
 		t.Errorf("Name = %q", cat.Name)

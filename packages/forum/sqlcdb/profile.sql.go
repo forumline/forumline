@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearForumlineID = `-- name: ClearForumlineID :exec
@@ -28,11 +28,11 @@ ON CONFLICT (id) DO UPDATE SET forumline_id = $5, display_name = $3
 `
 
 type CreateProfileHostedParams struct {
-	ID          uuid.UUID   `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName pgtype.Text `json:"display_name"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
-	ForumlineID pgtype.Text `json:"forumline_id"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName *string   `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	ForumlineID *string   `json:"forumline_id"`
 }
 
 func (q *Queries) CreateProfileHosted(ctx context.Context, arg CreateProfileHostedParams) error {
@@ -53,9 +53,9 @@ ON CONFLICT (id) DO UPDATE SET username = $2, display_name = $3
 `
 
 type CreateProfileSimpleParams struct {
-	ID          uuid.UUID   `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName pgtype.Text `json:"display_name"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName *string   `json:"display_name"`
 }
 
 func (q *Queries) CreateProfileSimple(ctx context.Context, arg CreateProfileSimpleParams) error {
@@ -70,10 +70,10 @@ ON CONFLICT (id) DO UPDATE SET forumline_id = $4, display_name = $3
 `
 
 type EnsureProfileWithForumlineIDParams struct {
-	ID          uuid.UUID   `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName pgtype.Text `json:"display_name"`
-	ForumlineID pgtype.Text `json:"forumline_id"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName *string   `json:"display_name"`
+	ForumlineID *string   `json:"forumline_id"`
 }
 
 func (q *Queries) EnsureProfileWithForumlineID(ctx context.Context, arg EnsureProfileWithForumlineIDParams) error {
@@ -90,9 +90,9 @@ const getForumlineID = `-- name: GetForumlineID :one
 SELECT forumline_id FROM profiles WHERE id = $1
 `
 
-func (q *Queries) GetForumlineID(ctx context.Context, id uuid.UUID) (pgtype.Text, error) {
+func (q *Queries) GetForumlineID(ctx context.Context, id uuid.UUID) (*string, error) {
 	row := q.db.QueryRow(ctx, getForumlineID, id)
-	var forumline_id pgtype.Text
+	var forumline_id *string
 	err := row.Scan(&forumline_id)
 	return forumline_id, err
 }
@@ -147,7 +147,7 @@ const getProfileIDByForumlineID = `-- name: GetProfileIDByForumlineID :one
 SELECT id FROM profiles WHERE forumline_id = $1
 `
 
-func (q *Queries) GetProfileIDByForumlineID(ctx context.Context, forumlineID pgtype.Text) (uuid.UUID, error) {
+func (q *Queries) GetProfileIDByForumlineID(ctx context.Context, forumlineID *string) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getProfileIDByForumlineID, forumlineID)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -274,8 +274,8 @@ UPDATE profiles SET forumline_id = $1 WHERE id = $2
 `
 
 type SetForumlineIDParams struct {
-	ForumlineID pgtype.Text `json:"forumline_id"`
-	ID          uuid.UUID   `json:"id"`
+	ForumlineID *string   `json:"forumline_id"`
+	ID          uuid.UUID `json:"id"`
 }
 
 func (q *Queries) SetForumlineID(ctx context.Context, arg SetForumlineIDParams) error {
@@ -288,8 +288,8 @@ UPDATE profiles SET display_name = $1 WHERE id = $2
 `
 
 type UpdateDisplayNameParams struct {
-	DisplayName pgtype.Text `json:"display_name"`
-	ID          uuid.UUID   `json:"id"`
+	DisplayName *string   `json:"display_name"`
+	ID          uuid.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateDisplayName(ctx context.Context, arg UpdateDisplayNameParams) error {
@@ -302,9 +302,9 @@ UPDATE profiles SET display_name = $1, avatar_url = $2, updated_at = now() WHERE
 `
 
 type UpdateDisplayNameAndAvatarParams struct {
-	DisplayName pgtype.Text `json:"display_name"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
-	ID          uuid.UUID   `json:"id"`
+	DisplayName *string   `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	ID          uuid.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateDisplayNameAndAvatar(ctx context.Context, arg UpdateDisplayNameAndAvatarParams) error {
@@ -323,11 +323,11 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertProfileFullParams struct {
-	ID          uuid.UUID          `json:"id"`
-	Username    string             `json:"username"`
-	DisplayName pgtype.Text        `json:"display_name"`
-	AvatarUrl   pgtype.Text        `json:"avatar_url"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName *string   `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (q *Queries) UpsertProfileFull(ctx context.Context, arg UpsertProfileFullParams) error {

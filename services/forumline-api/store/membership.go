@@ -22,16 +22,16 @@ func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Mem
 		m := model.Membership{
 			ForumDomain:        r.Domain,
 			ForumName:          r.Name,
-			ForumIconURL:       pgtextPtr(r.IconUrl),
+			ForumIconURL:       r.IconUrl,
 			APIBase:            r.ApiBase,
 			WebBase:            r.WebBase,
 			Capabilities:       r.Capabilities,
 			MemberCount:        int(r.MemberCount),
-			JoinedAt:           r.JoinedAt.Time.Format(time.RFC3339),
+			JoinedAt:           r.JoinedAt.Format(time.RFC3339),
 			NotificationsMuted: r.NotificationsMuted,
 		}
-		if r.ForumAuthedAt.Valid {
-			s := r.ForumAuthedAt.Time.Format(time.RFC3339)
+		if r.ForumAuthedAt != nil {
+			s := r.ForumAuthedAt.Format(time.RFC3339)
 			m.ForumAuthedAt = &s
 		}
 		memberships = append(memberships, m)
@@ -87,9 +87,9 @@ func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID uuid.UUID,
 	}
 
 	return map[string]interface{}{
-		"domain": r.Domain, "name": r.Name, "icon_url": pgtextPtr(r.IconUrl),
+		"domain": r.Domain, "name": r.Name, "icon_url": r.IconUrl,
 		"api_base": r.ApiBase, "web_base": r.WebBase, "capabilities": r.Capabilities,
-		"joined_at": r.JoinedAt.Time.Format(time.RFC3339), "member_count": int(r.MemberCount),
+		"joined_at": r.JoinedAt.Format(time.RFC3339), "member_count": int(r.MemberCount),
 	}, nil
 }
 

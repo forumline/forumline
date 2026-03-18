@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addChannelFollow = `-- name: AddChannelFollow :exec
@@ -136,10 +136,10 @@ DO UPDATE SET enabled = $3, updated_at = $4
 `
 
 type UpsertNotificationPrefParams struct {
-	UserID    uuid.UUID          `json:"user_id"`
-	Category  string             `json:"category"`
-	Enabled   bool               `json:"enabled"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	Category  string    `json:"category"`
+	Enabled   bool      `json:"enabled"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertNotificationPref(ctx context.Context, arg UpsertNotificationPrefParams) error {

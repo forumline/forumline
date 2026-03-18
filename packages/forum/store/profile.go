@@ -45,7 +45,7 @@ func (s *Store) GetProfilesByIDs(ctx context.Context, ids []uuid.UUID) ([]oapi.P
 
 // GetProfileByForumlineID returns a profile by forumline_id.
 func (s *Store) GetProfileByForumlineID(ctx context.Context, forumlineID string) (*oapi.Profile, error) {
-	id, err := s.Q.GetProfileIDByForumlineID(ctx, textToPgtext(forumlineID))
+	id, err := s.Q.GetProfileIDByForumlineID(ctx, &forumlineID)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (s *Store) GetProfileByForumlineID(ctx context.Context, forumlineID string)
 
 // GetProfileIDByForumlineID returns just the profile UUID for a forumline_id.
 func (s *Store) GetProfileIDByForumlineID(ctx context.Context, forumlineID string) (uuid.UUID, error) {
-	return s.Q.GetProfileIDByForumlineID(ctx, textToPgtext(forumlineID))
+	return s.Q.GetProfileIDByForumlineID(ctx, &forumlineID)
 }
 
 // GetProfileIDByForumlineIDUnlinked returns the profile UUID if forumline_id is null/empty.
@@ -73,9 +73,9 @@ func (s *Store) UpsertProfileFull(ctx context.Context, id uuid.UUID, username st
 	return s.Q.UpsertProfileFull(ctx, sqlcdb.UpsertProfileFullParams{
 		ID:          id,
 		Username:    username,
-		DisplayName: optTextToPgtext(displayName),
-		AvatarUrl:   optTextToPgtext(avatarURL),
-		CreatedAt:   pgTimestamp(now),
+		DisplayName: displayName,
+		AvatarUrl:   avatarURL,
+		CreatedAt:   now,
 	})
 }
 
@@ -101,7 +101,7 @@ func (s *Store) ClearForumlineID(ctx context.Context, userID uuid.UUID) error {
 // SetForumlineID sets the forumline_id on a profile.
 func (s *Store) SetForumlineID(ctx context.Context, userID uuid.UUID, forumlineID string) error {
 	return s.Q.SetForumlineID(ctx, sqlcdb.SetForumlineIDParams{
-		ForumlineID: textToPgtext(forumlineID),
+		ForumlineID: &forumlineID,
 		ID:          userID,
 	})
 }
@@ -111,8 +111,8 @@ func (s *Store) EnsureProfileWithForumlineID(ctx context.Context, userID uuid.UU
 	return s.Q.EnsureProfileWithForumlineID(ctx, sqlcdb.EnsureProfileWithForumlineIDParams{
 		ID:          userID,
 		Username:    identity.Username,
-		DisplayName: textToPgtext(identity.DisplayName),
-		ForumlineID: textToPgtext(identity.ForumlineID),
+		DisplayName: &identity.DisplayName,
+		ForumlineID: &identity.ForumlineID,
 	})
 }
 
@@ -122,7 +122,7 @@ func (s *Store) GetForumlineID(ctx context.Context, userID uuid.UUID) (*string, 
 	if err != nil {
 		return nil, err
 	}
-	return pgtextPtr(t), nil
+	return t, nil
 }
 
 // IsAdmin returns whether a user is an admin.
@@ -156,7 +156,7 @@ func (s *Store) GetUsername(ctx context.Context, userID uuid.UUID) (string, erro
 // UpdateDisplayName updates a profile's display_name.
 func (s *Store) UpdateDisplayName(ctx context.Context, userID uuid.UUID, displayName string) error {
 	return s.Q.UpdateDisplayName(ctx, sqlcdb.UpdateDisplayNameParams{
-		DisplayName: textToPgtext(displayName),
+		DisplayName: &displayName,
 		ID:          userID,
 	})
 }
@@ -164,8 +164,8 @@ func (s *Store) UpdateDisplayName(ctx context.Context, userID uuid.UUID, display
 // UpdateDisplayNameAndAvatar updates display_name and avatar_url.
 func (s *Store) UpdateDisplayNameAndAvatar(ctx context.Context, userID uuid.UUID, displayName, avatarURL string) error {
 	return s.Q.UpdateDisplayNameAndAvatar(ctx, sqlcdb.UpdateDisplayNameAndAvatarParams{
-		DisplayName: textToPgtext(displayName),
-		AvatarUrl:   textToPgtext(avatarURL),
+		DisplayName: &displayName,
+		AvatarUrl:   &avatarURL,
 		ID:          userID,
 	})
 }
@@ -175,7 +175,7 @@ func (s *Store) CreateProfileSimple(ctx context.Context, id uuid.UUID, username,
 	return s.Q.CreateProfileSimple(ctx, sqlcdb.CreateProfileSimpleParams{
 		ID:          id,
 		Username:    username,
-		DisplayName: textToPgtext(displayName),
+		DisplayName: &displayName,
 	})
 }
 
@@ -186,9 +186,9 @@ func (s *Store) CreateProfileHosted(ctx context.Context, identity *ForumlineIden
 	err := s.Q.CreateProfileHosted(ctx, sqlcdb.CreateProfileHostedParams{
 		ID:          id,
 		Username:    identity.Username,
-		DisplayName: textToPgtext(identity.DisplayName),
-		AvatarUrl:   textToPgtext(identity.AvatarURL),
-		ForumlineID: textToPgtext(identity.ForumlineID),
+		DisplayName: &identity.DisplayName,
+		AvatarUrl:   &identity.AvatarURL,
+		ForumlineID: &identity.ForumlineID,
 	})
 	return id, err
 }

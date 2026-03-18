@@ -41,9 +41,9 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 			members = []model.ConversationMember{}
 		}
 		conversations = append(conversations, model.Conversation{
-			ID: r.ID, IsGroup: r.IsGroup, Name: pgtextPtr(r.Name),
+			ID: r.ID, IsGroup: r.IsGroup, Name: r.Name,
 			Members: members, LastMessage: r.LastMessage,
-			LastMessageTime: r.LastMessageTime.Time.Format(time.RFC3339),
+			LastMessageTime: r.LastMessageTime.Format(time.RFC3339),
 			UnreadCount:     int(r.UnreadCount),
 		})
 	}
@@ -68,9 +68,9 @@ func (s *Store) GetConversation(ctx context.Context, userID string, conversation
 		members = []model.ConversationMember{}
 	}
 	return &model.Conversation{
-		ID: row.ID, IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
+		ID: row.ID, IsGroup: row.IsGroup, Name: row.Name,
 		Members: members, LastMessage: row.LastMessage,
-		LastMessageTime: row.LastMessageTime.Time.Format(time.RFC3339),
+		LastMessageTime: row.LastMessageTime.Format(time.RFC3339),
 		UnreadCount:     int(row.UnreadCount),
 	}, nil
 }
@@ -88,7 +88,7 @@ func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UU
 			name = r.Username
 		}
 		result[r.ConversationID] = append(result[r.ConversationID], model.ConversationMember{
-			ID: r.UserID, Username: r.Username, DisplayName: name, AvatarURL: pgtextPtr(r.AvatarUrl),
+			ID: r.UserID, Username: r.Username, DisplayName: name, AvatarURL: r.AvatarUrl,
 		})
 	}
 	return result, nil
@@ -141,7 +141,7 @@ func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, befor
 			ConversationID: m.ConversationID,
 			SenderID:       m.SenderID,
 			Content:        m.Content,
-			CreatedAt:      m.CreatedAt.Time,
+			CreatedAt:      m.CreatedAt,
 		}
 	}
 
@@ -168,7 +168,7 @@ func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, sende
 		ConversationID: row.ConversationID,
 		SenderID:       row.SenderID,
 		Content:        row.Content,
-		CreatedAt:      row.CreatedAt.Time,
+		CreatedAt:      row.CreatedAt,
 	}, nil
 }
 
@@ -200,7 +200,7 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 
 	convoID, err := qtx.CreateConversation(ctx, sqlcdb.CreateConversationParams{
 		IsGroup:   false,
-		CreatedBy: textToPgtext(userID),
+		CreatedBy: &userID,
 	})
 	if err != nil {
 		return uuid.UUID{}, err
@@ -233,8 +233,8 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 
 	convoID, err := qtx.CreateConversation(ctx, sqlcdb.CreateConversationParams{
 		IsGroup:   true,
-		Name:      textToPgtext(name),
-		CreatedBy: textToPgtext(creatorID),
+		Name:      &name,
+		CreatedBy: &creatorID,
 	})
 	if err != nil {
 		return uuid.UUID{}, err
@@ -272,7 +272,7 @@ func (s *Store) IsGroupConversation(ctx context.Context, conversationID uuid.UUI
 
 func (s *Store) UpdateConversationName(ctx context.Context, conversationID uuid.UUID, name string) error {
 	return s.Q.UpdateConversationName(ctx, sqlcdb.UpdateConversationNameParams{
-		Name: textToPgtext(name),
+		Name: &name,
 		ID:   conversationID,
 	})
 }

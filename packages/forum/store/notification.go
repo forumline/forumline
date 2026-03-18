@@ -26,9 +26,9 @@ func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit i
 			Type:      r.Type,
 			Title:     r.Title,
 			Message:   r.Message,
-			Link:      pgtextPtr(r.Link),
+			Link:      r.Link,
 			Read:      r.Read,
-			CreatedAt: tsTime(r.CreatedAt),
+			CreatedAt: r.CreatedAt,
 		})
 	}
 	return notifications, nil
@@ -46,8 +46,8 @@ func (s *Store) ListForumlineNotifications(ctx context.Context, userID uuid.UUID
 	notifications := make([]oapi.ForumlineNotification, 0, len(rows))
 	for _, r := range rows {
 		link := "/"
-		if r.Link.Valid {
-			link = r.Link.String
+		if r.Link != nil {
+			link = *r.Link
 		}
 		notifications = append(notifications, oapi.ForumlineNotification{
 			Id:          r.ID,
@@ -56,7 +56,7 @@ func (s *Store) ListForumlineNotifications(ctx context.Context, userID uuid.UUID
 			Body:        r.Message,
 			Link:        link,
 			Read:        r.Read,
-			Timestamp:   tsTime(r.CreatedAt),
+			Timestamp:   r.CreatedAt,
 			ForumDomain: forumDomain,
 		})
 	}
@@ -83,7 +83,7 @@ func (s *Store) InsertNotification(ctx context.Context, userID uuid.UUID, notifT
 		Type:    notifType,
 		Title:   title,
 		Message: message,
-		Link:    textToPgtext(link),
+		Link:    &link,
 	})
 }
 

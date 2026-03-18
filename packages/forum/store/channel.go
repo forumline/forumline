@@ -21,8 +21,8 @@ func (s *Store) ListChannels(ctx context.Context) ([]oapi.Channel, error) {
 			Id:          r.ID,
 			Name:        r.Name,
 			Slug:        r.Slug,
-			Description: pgtextPtr(r.Description),
-			CreatedAt:   tsTime(r.CreatedAt),
+			Description: r.Description,
+			CreatedAt:   r.CreatedAt,
 		})
 	}
 	return channels, nil

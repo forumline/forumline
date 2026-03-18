@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const autoDeleteUnownedForum = `-- name: AutoDeleteUnownedForum :execrows
@@ -39,7 +39,7 @@ const countForumsByOwner = `-- name: CountForumsByOwner :one
 SELECT COUNT(*)::int FROM forumline_forums WHERE owner_id = $1
 `
 
-func (q *Queries) CountForumsByOwner(ctx context.Context, ownerID pgtype.Text) (int32, error) {
+func (q *Queries) CountForumsByOwner(ctx context.Context, ownerID *string) (int32, error) {
 	row := q.db.QueryRow(ctx, countForumsByOwner, ownerID)
 	var column_1 int32
 	err := row.Scan(&column_1)
@@ -51,8 +51,8 @@ DELETE FROM forumline_forums WHERE id = $1 AND owner_id = $2
 `
 
 type DeleteForumParams struct {
-	ID      uuid.UUID   `json:"id"`
-	OwnerID pgtype.Text `json:"owner_id"`
+	ID      uuid.UUID `json:"id"`
+	OwnerID *string   `json:"owner_id"`
 }
 
 func (q *Queries) DeleteForum(ctx context.Context, arg DeleteForumParams) (int64, error) {
@@ -143,9 +143,9 @@ const getForumOwner = `-- name: GetForumOwner :one
 SELECT owner_id FROM forumline_forums WHERE id = $1
 `
 
-func (q *Queries) GetForumOwner(ctx context.Context, id uuid.UUID) (pgtype.Text, error) {
+func (q *Queries) GetForumOwner(ctx context.Context, id uuid.UUID) (*string, error) {
 	row := q.db.QueryRow(ctx, getForumOwner, id)
-	var owner_id pgtype.Text
+	var owner_id *string
 	err := row.Scan(&owner_id)
 	return owner_id, err
 }
@@ -156,8 +156,8 @@ WHERE domain = $1 RETURNING consecutive_failures, owner_id
 `
 
 type IncrementForumFailuresRow struct {
-	ConsecutiveFailures int32       `json:"consecutive_failures"`
-	OwnerID             pgtype.Text `json:"owner_id"`
+	ConsecutiveFailures int32   `json:"consecutive_failures"`
+	OwnerID             *string `json:"owner_id"`
 }
 
 func (q *Queries) IncrementForumFailures(ctx context.Context, domain string) (IncrementForumFailuresRow, error) {
@@ -174,17 +174,17 @@ FROM forumline_forums ORDER BY domain
 `
 
 type ListAllForumsRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	Domain              string             `json:"domain"`
-	Name                string             `json:"name"`
-	IconUrl             pgtype.Text        `json:"icon_url"`
-	ApiBase             string             `json:"api_base"`
-	WebBase             string             `json:"web_base"`
-	Capabilities        []string           `json:"capabilities"`
-	Approved            bool               `json:"approved"`
-	OwnerID             pgtype.Text        `json:"owner_id"`
-	LastSeenAt          pgtype.Timestamptz `json:"last_seen_at"`
-	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	ID                  uuid.UUID  `json:"id"`
+	Domain              string     `json:"domain"`
+	Name                string     `json:"name"`
+	IconUrl             *string    `json:"icon_url"`
+	ApiBase             string     `json:"api_base"`
+	WebBase             string     `json:"web_base"`
+	Capabilities        []string   `json:"capabilities"`
+	Approved            bool       `json:"approved"`
+	OwnerID             *string    `json:"owner_id"`
+	LastSeenAt          *time.Time `json:"last_seen_at"`
+	ConsecutiveFailures int32      `json:"consecutive_failures"`
 }
 
 func (q *Queries) ListAllForums(ctx context.Context) ([]ListAllForumsRow, error) {
@@ -253,20 +253,20 @@ ORDER BY created_at DESC
 `
 
 type ListOwnedForumsRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	Domain              string             `json:"domain"`
-	Name                string             `json:"name"`
-	IconUrl             pgtype.Text        `json:"icon_url"`
-	ApiBase             string             `json:"api_base"`
-	WebBase             string             `json:"web_base"`
-	Approved            bool               `json:"approved"`
-	MemberCount         int32              `json:"member_count"`
-	LastSeenAt          pgtype.Timestamptz `json:"last_seen_at"`
-	ConsecutiveFailures int32              `json:"consecutive_failures"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	ID                  uuid.UUID  `json:"id"`
+	Domain              string     `json:"domain"`
+	Name                string     `json:"name"`
+	IconUrl             *string    `json:"icon_url"`
+	ApiBase             string     `json:"api_base"`
+	WebBase             string     `json:"web_base"`
+	Approved            bool       `json:"approved"`
+	MemberCount         int32      `json:"member_count"`
+	LastSeenAt          *time.Time `json:"last_seen_at"`
+	ConsecutiveFailures int32      `json:"consecutive_failures"`
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
-func (q *Queries) ListOwnedForums(ctx context.Context, ownerID pgtype.Text) ([]ListOwnedForumsRow, error) {
+func (q *Queries) ListOwnedForums(ctx context.Context, ownerID *string) ([]ListOwnedForumsRow, error) {
 	rows, err := q.db.Query(ctx, listOwnedForums, ownerID)
 	if err != nil {
 		return nil, err
@@ -322,18 +322,18 @@ LIMIT 10
 `
 
 type ListRecommendedForumsRow struct {
-	ID                uuid.UUID   `json:"id"`
-	Domain            string      `json:"domain"`
-	Name              string      `json:"name"`
-	IconUrl           pgtype.Text `json:"icon_url"`
-	ApiBase           string      `json:"api_base"`
-	WebBase           string      `json:"web_base"`
-	Capabilities      []string    `json:"capabilities"`
-	Description       pgtype.Text `json:"description"`
-	ScreenshotUrl     pgtype.Text `json:"screenshot_url"`
-	Tags              []string    `json:"tags"`
-	MemberCount       int32       `json:"member_count"`
-	SharedMemberCount int32       `json:"shared_member_count"`
+	ID                uuid.UUID `json:"id"`
+	Domain            string    `json:"domain"`
+	Name              string    `json:"name"`
+	IconUrl           *string   `json:"icon_url"`
+	ApiBase           string    `json:"api_base"`
+	WebBase           string    `json:"web_base"`
+	Capabilities      []string  `json:"capabilities"`
+	Description       *string   `json:"description"`
+	ScreenshotUrl     *string   `json:"screenshot_url"`
+	Tags              []string  `json:"tags"`
+	MemberCount       int32     `json:"member_count"`
+	SharedMemberCount int32     `json:"shared_member_count"`
 }
 
 func (q *Queries) ListRecommendedForums(ctx context.Context, userID string) ([]ListRecommendedForumsRow, error) {
@@ -398,14 +398,14 @@ RETURNING id
 `
 
 type RegisterForumParams struct {
-	Domain       string      `json:"domain"`
-	Name         string      `json:"name"`
-	ApiBase      string      `json:"api_base"`
-	WebBase      string      `json:"web_base"`
-	Capabilities []string    `json:"capabilities"`
-	Description  pgtype.Text `json:"description"`
-	Tags         []string    `json:"tags"`
-	OwnerID      pgtype.Text `json:"owner_id"`
+	Domain       string   `json:"domain"`
+	Name         string   `json:"name"`
+	ApiBase      string   `json:"api_base"`
+	WebBase      string   `json:"web_base"`
+	Capabilities []string `json:"capabilities"`
+	Description  *string  `json:"description"`
+	Tags         []string `json:"tags"`
+	OwnerID      *string  `json:"owner_id"`
 }
 
 func (q *Queries) RegisterForum(ctx context.Context, arg RegisterForumParams) (uuid.UUID, error) {
@@ -429,8 +429,8 @@ UPDATE forumline_forums SET icon_url = $1, updated_at = now() WHERE domain = $2
 `
 
 type UpdateForumIconParams struct {
-	IconUrl pgtype.Text `json:"icon_url"`
-	Domain  string      `json:"domain"`
+	IconUrl *string `json:"icon_url"`
+	Domain  string  `json:"domain"`
 }
 
 func (q *Queries) UpdateForumIcon(ctx context.Context, arg UpdateForumIconParams) (int64, error) {
@@ -446,8 +446,8 @@ UPDATE forumline_forums SET screenshot_url = $1, updated_at = now() WHERE domain
 `
 
 type UpdateForumScreenshotParams struct {
-	ScreenshotUrl pgtype.Text `json:"screenshot_url"`
-	Domain        string      `json:"domain"`
+	ScreenshotUrl *string `json:"screenshot_url"`
+	Domain        string  `json:"domain"`
 }
 
 func (q *Queries) UpdateForumScreenshot(ctx context.Context, arg UpdateForumScreenshotParams) (int64, error) {
@@ -470,13 +470,13 @@ RETURNING id
 `
 
 type UpsertForumFromManifestParams struct {
-	Domain       string      `json:"domain"`
-	Name         string      `json:"name"`
-	IconUrl      pgtype.Text `json:"icon_url"`
-	ApiBase      string      `json:"api_base"`
-	WebBase      string      `json:"web_base"`
-	Capabilities []string    `json:"capabilities"`
-	Tags         []string    `json:"tags"`
+	Domain       string   `json:"domain"`
+	Name         string   `json:"name"`
+	IconUrl      *string  `json:"icon_url"`
+	ApiBase      string   `json:"api_base"`
+	WebBase      string   `json:"web_base"`
+	Capabilities []string `json:"capabilities"`
+	Tags         []string `json:"tags"`
 }
 
 func (q *Queries) UpsertForumFromManifest(ctx context.Context, arg UpsertForumFromManifestParams) (uuid.UUID, error) {

@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createThread = `-- name: CreateThread :one
@@ -19,13 +19,13 @@ RETURNING id
 `
 
 type CreateThreadParams struct {
-	CategoryID uuid.UUID          `json:"category_id"`
-	AuthorID   uuid.UUID          `json:"author_id"`
-	Title      string             `json:"title"`
-	Slug       string             `json:"slug"`
-	Content    pgtype.Text        `json:"content"`
-	ImageUrl   pgtype.Text        `json:"image_url"`
-	LastPostAt pgtype.Timestamptz `json:"last_post_at"`
+	CategoryID uuid.UUID  `json:"category_id"`
+	AuthorID   uuid.UUID  `json:"author_id"`
+	Title      string     `json:"title"`
+	Slug       string     `json:"slug"`
+	Content    *string    `json:"content"`
+	ImageUrl   *string    `json:"image_url"`
+	LastPostAt *time.Time `json:"last_post_at"`
 }
 
 func (q *Queries) CreateThread(ctx context.Context, arg CreateThreadParams) (uuid.UUID, error) {
@@ -60,36 +60,36 @@ WHERE t.id = $1
 `
 
 type GetThreadRow struct {
-	ID                uuid.UUID          `json:"id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) GetThread(ctx context.Context, id uuid.UUID) (GetThreadRow, error) {
@@ -170,36 +170,36 @@ ORDER BY t.is_pinned DESC, t.last_post_at DESC NULLS LAST LIMIT $1
 `
 
 type ListThreadsRow struct {
-	ID                uuid.UUID          `json:"id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) ListThreads(ctx context.Context, limit int32) ([]ListThreadsRow, error) {
@@ -270,36 +270,36 @@ WHERE c.slug = $1 ORDER BY t.is_pinned DESC, t.last_post_at DESC NULLS LAST
 `
 
 type ListThreadsByCategoryRow struct {
-	ID                uuid.UUID          `json:"id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) ListThreadsByCategory(ctx context.Context, slug string) ([]ListThreadsByCategoryRow, error) {
@@ -370,36 +370,36 @@ WHERE t.author_id = $1 ORDER BY t.created_at DESC LIMIT 10
 `
 
 type ListUserThreadsRow struct {
-	ID                uuid.UUID          `json:"id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) ListUserThreads(ctx context.Context, authorID uuid.UUID) ([]ListUserThreadsRow, error) {
@@ -470,36 +470,36 @@ WHERE t.title ILIKE $1 ORDER BY t.created_at DESC LIMIT 20
 `
 
 type SearchThreadsRow struct {
-	ID                uuid.UUID          `json:"id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) SearchThreads(ctx context.Context, title string) ([]SearchThreadsRow, error) {
@@ -558,8 +558,8 @@ UPDATE threads SET last_post_at = $2, post_count = post_count + 1, updated_at = 
 `
 
 type UpdateThreadStatsParams struct {
-	ID         uuid.UUID          `json:"id"`
-	LastPostAt pgtype.Timestamptz `json:"last_post_at"`
+	ID         uuid.UUID  `json:"id"`
+	LastPostAt *time.Time `json:"last_post_at"`
 }
 
 func (q *Queries) UpdateThreadStats(ctx context.Context, arg UpdateThreadStatsParams) error {

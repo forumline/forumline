@@ -22,7 +22,7 @@ func (s *Store) ListVoiceRooms(ctx context.Context) ([]oapi.VoiceRoom, error) {
 			Id:        r.ID,
 			Name:      r.Name,
 			Slug:      r.Slug,
-			CreatedAt: tsTime(r.CreatedAt),
+			CreatedAt: r.CreatedAt,
 		})
 	}
 	return rooms, nil
@@ -47,7 +47,7 @@ func (s *Store) SetVoicePresence(ctx context.Context, userID uuid.UUID, roomSlug
 	return s.Q.SetVoicePresence(ctx, sqlcdb.SetVoicePresenceParams{
 		UserID:   userID,
 		RoomSlug: roomSlug,
-		JoinedAt: pgTimestamp(now),
+		JoinedAt: now,
 	})
 }
 

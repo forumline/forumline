@@ -7,8 +7,6 @@ package sqlcdb
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countExistingUsers = `-- name: CountExistingUsers :one
@@ -28,10 +26,10 @@ ON CONFLICT (id) DO NOTHING
 `
 
 type CreateProfileParams struct {
-	ID          string      `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName string      `json:"display_name"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	AvatarUrl   *string `json:"avatar_url"`
 }
 
 func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) error {
@@ -59,10 +57,10 @@ FROM forumline_profiles WHERE id = ANY($1::text[])
 `
 
 type FetchProfilesByIDsRow struct {
-	ID          string      `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName string      `json:"display_name"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	AvatarUrl   *string `json:"avatar_url"`
 }
 
 func (q *Queries) FetchProfilesByIDs(ctx context.Context, dollar_1 []string) ([]FetchProfilesByIDsRow, error) {
@@ -127,14 +125,14 @@ FROM forumline_profiles WHERE id = $1
 `
 
 type GetProfileRow struct {
-	ID               string      `json:"id"`
-	Username         string      `json:"username"`
-	DisplayName      string      `json:"display_name"`
-	AvatarUrl        pgtype.Text `json:"avatar_url"`
-	Bio              pgtype.Text `json:"bio"`
-	StatusMessage    string      `json:"status_message"`
-	OnlineStatus     string      `json:"online_status"`
-	ShowOnlineStatus bool        `json:"show_online_status"`
+	ID               string  `json:"id"`
+	Username         string  `json:"username"`
+	DisplayName      string  `json:"display_name"`
+	AvatarUrl        *string `json:"avatar_url"`
+	Bio              *string `json:"bio"`
+	StatusMessage    string  `json:"status_message"`
+	OnlineStatus     string  `json:"online_status"`
+	ShowOnlineStatus bool    `json:"show_online_status"`
 }
 
 func (q *Queries) GetProfile(ctx context.Context, id string) (GetProfileRow, error) {
@@ -188,10 +186,10 @@ type SearchProfilesParams struct {
 }
 
 type SearchProfilesRow struct {
-	ID          string      `json:"id"`
-	Username    string      `json:"username"`
-	DisplayName string      `json:"display_name"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
+	ID          string  `json:"id"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	AvatarUrl   *string `json:"avatar_url"`
 }
 
 func (q *Queries) SearchProfiles(ctx context.Context, arg SearchProfilesParams) ([]SearchProfilesRow, error) {

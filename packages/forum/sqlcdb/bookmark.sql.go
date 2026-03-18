@@ -7,9 +7,9 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addBookmark = `-- name: AddBookmark :exec
@@ -62,38 +62,38 @@ ORDER BY b.created_at DESC
 `
 
 type ListBookmarksRow struct {
-	ID                uuid.UUID          `json:"id"`
-	BookmarkCreatedAt pgtype.Timestamptz `json:"bookmark_created_at"`
-	ThreadID          uuid.UUID          `json:"thread_id"`
-	CategoryID        uuid.UUID          `json:"category_id"`
-	AuthorID          uuid.UUID          `json:"author_id"`
-	Title             string             `json:"title"`
-	Slug              string             `json:"slug"`
-	Content           pgtype.Text        `json:"content"`
-	ImageUrl          pgtype.Text        `json:"image_url"`
-	IsPinned          bool               `json:"is_pinned"`
-	IsLocked          bool               `json:"is_locked"`
-	ViewCount         int32              `json:"view_count"`
-	PostCount         int32              `json:"post_count"`
-	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
-	ThreadCreatedAt   pgtype.Timestamptz `json:"thread_created_at"`
-	ThreadUpdatedAt   pgtype.Timestamptz `json:"thread_updated_at"`
-	AuthorID2         uuid.UUID          `json:"author_id_2"`
-	AuthorUsername    string             `json:"author_username"`
-	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
-	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
-	AuthorBio         pgtype.Text        `json:"author_bio"`
-	AuthorWebsite     pgtype.Text        `json:"author_website"`
-	AuthorIsAdmin     bool               `json:"author_is_admin"`
-	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
-	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
-	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             uuid.UUID          `json:"cat_id"`
-	CatName           string             `json:"cat_name"`
-	CatSlug           string             `json:"cat_slug"`
-	CatDescription    pgtype.Text        `json:"cat_description"`
-	CatSortOrder      int32              `json:"cat_sort_order"`
-	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
+	ID                uuid.UUID `json:"id"`
+	BookmarkCreatedAt time.Time `json:"bookmark_created_at"`
+	ThreadID          uuid.UUID `json:"thread_id"`
+	CategoryID        uuid.UUID `json:"category_id"`
+	AuthorID          uuid.UUID `json:"author_id"`
+	Title             string    `json:"title"`
+	Slug              string    `json:"slug"`
+	Content           *string   `json:"content"`
+	ImageUrl          *string   `json:"image_url"`
+	IsPinned          bool      `json:"is_pinned"`
+	IsLocked          bool      `json:"is_locked"`
+	ViewCount         int32     `json:"view_count"`
+	PostCount         int32     `json:"post_count"`
+	LastPostAt        time.Time `json:"last_post_at"`
+	ThreadCreatedAt   time.Time `json:"thread_created_at"`
+	ThreadUpdatedAt   time.Time `json:"thread_updated_at"`
+	AuthorID2         uuid.UUID `json:"author_id_2"`
+	AuthorUsername    string    `json:"author_username"`
+	AuthorDisplayName *string   `json:"author_display_name"`
+	AuthorAvatarUrl   *string   `json:"author_avatar_url"`
+	AuthorBio         *string   `json:"author_bio"`
+	AuthorWebsite     *string   `json:"author_website"`
+	AuthorIsAdmin     bool      `json:"author_is_admin"`
+	AuthorForumlineID *string   `json:"author_forumline_id"`
+	AuthorCreatedAt   time.Time `json:"author_created_at"`
+	AuthorUpdatedAt   time.Time `json:"author_updated_at"`
+	CatID             uuid.UUID `json:"cat_id"`
+	CatName           string    `json:"cat_name"`
+	CatSlug           string    `json:"cat_slug"`
+	CatDescription    *string   `json:"cat_description"`
+	CatSortOrder      int32     `json:"cat_sort_order"`
+	CatCreatedAt      time.Time `json:"cat_created_at"`
 }
 
 func (q *Queries) ListBookmarks(ctx context.Context, userID uuid.UUID) ([]ListBookmarksRow, error) {
