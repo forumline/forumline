@@ -44,6 +44,7 @@ import {
 } from './components/sidebar.js';
 import { initStatusModal } from './components/status-modal.js';
 import { showToast } from './components/toast.js';
+import { showErrorBanner, hideErrorBanner } from './components/error-banner.js';
 import {
   initVoiceRoom,
   renderVoiceParticipants,
@@ -328,6 +329,7 @@ initSearch({
   showSettings: wrappedShowSettings,
   showHome: wrappedShowHome,
   showToast,
+  showErrorBanner,
   setTheme,
   renderVoiceParticipants,
   closeAllDropdowns,
@@ -344,10 +346,12 @@ initHoverCard({
   showProfile: wrappedShowProfile,
   showDm: wrappedShowDm,
   showToast,
+  showErrorBanner,
 });
 
 initContextMenu({
   showToast,
+  showErrorBanner,
   renderFilteredThreads,
 });
 
@@ -364,12 +368,14 @@ initForum({
   renderDmList,
   showThread: wrappedShowThread,
   showToast,
+  showErrorBanner,
   showContextMenu,
 });
 
 initThread({
   showView,
   showToast,
+  showErrorBanner,
   showForum: wrappedShowForum,
   showHome: wrappedShowHome,
   addBookmark,
@@ -383,6 +389,7 @@ initConversation({
   renderDmList,
   showHome: wrappedShowHome,
   showToast,
+  showErrorBanner,
 });
 
 initDiscover({
@@ -390,6 +397,7 @@ initDiscover({
   renderForumList,
   renderDmList,
   showToast,
+  showErrorBanner,
 });
 
 initProfile({
@@ -407,6 +415,7 @@ initSettings({
   closeAllDropdowns,
   showLogin,
   showToast,
+  showErrorBanner,
 });
 
 initCreateForum({
@@ -415,6 +424,7 @@ initCreateForum({
   showHome: wrappedShowHome,
   showForum: wrappedShowForum,
   showToast,
+  showErrorBanner,
   fireConfetti,
 });
 
@@ -423,12 +433,14 @@ initNewThread({
   showForum: wrappedShowForum,
   showHome: wrappedShowHome,
   showToast,
+  showErrorBanner,
 });
 
 initLogin({
   showView,
   showHome: wrappedShowHome,
   showToast,
+  showErrorBanner,
   showOnboarding,
 });
 
@@ -562,6 +574,20 @@ if (bannerDismissed) {
 $('announcementClose')?.addEventListener('click', () => {
   $('announcementBanner').classList.add('dismissed');
   localStorage.setItem('forumline-banner-dismissed', 'true');
+});
+
+// Error banner dismiss
+$('errorBannerClose')?.addEventListener('click', () => {
+  hideErrorBanner();
+});
+
+// SSE health monitoring — show error banner if stream is degraded
+EventStream.onStatusChange(status => {
+  if (status === 'degraded') {
+    showErrorBanner('Live updates unavailable — reconnecting in background');
+  } else if (status === 'connected') {
+    hideErrorBanner();
+  }
 });
 
 // Post author click -> profile

@@ -1,13 +1,11 @@
 /*
  * Real-Time Event Stream
  *
- * Keeps the forum UI live-updated by maintaining a persistent server connection for push events (new messages, posts, notifications).
+ * Keeps the forum UI live-updated by maintaining a persistent server connection
+ * for push events (new messages, posts, notifications).
  *
- * It must:
- * - Establish an EventSource connection to the server's SSE endpoint for a given resource
- * - Automatically reconnect after network interruptions so users don't miss updates
- * - Attach the user's auth token when the stream requires authentication
- * - Return a cleanup function so pages can disconnect when the user navigates away
+ * Shows a persistent error banner after 3 failed reconnect attempts so users
+ * know live updates are degraded.
  */
 
 import { getAccessToken } from './auth.js';
@@ -16,6 +14,7 @@ export function connectSSE(url, onMessage, requireAuth = false) {
   let es = null;
   let reconnectTimer = null;
   let cancelled = false;
+  let reconnectAttempts = 0;
 
   async function connect() {
     if (cancelled) return;
@@ -33,6 +32,13 @@ export function connectSSE(url, onMessage, requireAuth = false) {
 
     es = new EventSource(fullUrl);
 
+    es.onopen = () => {
+      if (reconnectAttempts > 0) {
+        import('./toast.js').then(({ hideErrorBanner }) => hideErrorBanner());
+      }
+      reconnectAttempts = 0;
+    };
+
     es.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
@@ -46,6 +52,12 @@ export function connectSSE(url, onMessage, requireAuth = false) {
       if (cancelled) return;
       es?.close();
       es = null;
+      reconnectAttempts++;
+      if (reconnectAttempts >= 3) {
+        import('./toast.js').then(({ toast }) => {
+          toast.error('Live updates unavailable — reconnecting in background');
+        });
+      }
       reconnectTimer = setTimeout(connect, 3000);
     };
   }

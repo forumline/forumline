@@ -51,6 +51,13 @@
       <button class="announcement-close" id="announcementClose" aria-label="Dismiss announcement">&times;</button>
     </div>
 
+    <!-- Error banner (hidden by default, shown on first error) -->
+    <div class="error-banner hidden" id="errorBanner" role="alert">
+      <span class="error-banner-icon" aria-hidden="true">&#x26A0;</span>
+      <span class="error-banner-text" id="errorBannerMessage"></span>
+      <button class="error-banner-close" id="errorBannerClose" aria-label="Dismiss error">&times;</button>
+    </div>
+
     <!-- Main layout -->
     <div class="main-layout">
       <!-- Sidebar backdrop for mobile -->

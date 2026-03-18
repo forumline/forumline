@@ -163,7 +163,11 @@ export async function tokenExchange(forumlineToken) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: forumlineToken }),
     });
-    if (!resp.ok) return false;
+    if (!resp.ok) {
+      const { toast } = await import('./toast.js');
+      toast.error('Sign-in failed — try clicking Sign In');
+      return false;
+    }
 
     const data = await resp.json();
     if (!data.access_token || !data.user) return false;
@@ -188,6 +192,8 @@ export async function tokenExchange(forumlineToken) {
     return true;
   } catch (err) {
     console.error('[Auth] token exchange failed:', err);
+    const { toast } = await import('./toast.js');
+    toast.error('Sign-in failed — try clicking Sign In');
     return false;
   }
 }

@@ -6,10 +6,11 @@
 
 import { ForumStore } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
+import { showErrorBanner } from '../components/error-banner.js';
 
 let _webviewIframe = null;
 let _messageHandler = null;
-let _webviewState = { loading: false, authSent: false };
+let _webviewState = { loading: false, authSent: false, authComplete: false, authTimer: null };
 let _currentWebviewDomain = null;
 
 function _postToForum(msg, origin) {
@@ -59,7 +60,7 @@ export function showWebview(forum, path) {
   container.appendChild(iframe);
   _webviewIframe = iframe;
 
-  _webviewState = { loading: true, authSent: false };
+  _webviewState = { loading: true, authSent: false, authComplete: false, authTimer: null };
   const forumOrigin = new URL(forum.web_base).origin;
 
   iframe.addEventListener('load', () => {
@@ -78,6 +79,12 @@ export function showWebview(forum, path) {
         if (accessToken && !_webviewState.authSent) {
           _webviewState.authSent = true;
           _postToForum({ type: 'forumline:token_exchange', token: accessToken }, forumOrigin);
+          // Timeout: if no auth_complete within 10s, show error
+          _webviewState.authTimer = setTimeout(() => {
+            if (_webviewState.authSent && !_webviewState.authComplete) {
+              showErrorBanner('Forum sign-in failed — try opening the forum directly');
+            }
+          }, 10000);
         } else {
           _postToForum({ type: 'forumline:request_auth_state' }, forumOrigin);
         }
@@ -98,6 +105,11 @@ export function showWebview(forum, path) {
 
       case 'forumline:auth_complete':
         // Invisible handshake succeeded
+        _webviewState.authComplete = true;
+        if (_webviewState.authTimer) {
+          clearTimeout(_webviewState.authTimer);
+          _webviewState.authTimer = null;
+        }
         var bn = document.getElementById('webviewBanner');
         if (bn) bn.classList.add('hidden');
         break;
@@ -125,6 +137,10 @@ export function showWebview(forum, path) {
 
 export function destroyWebview() {
   _currentWebviewDomain = null;
+  if (_webviewState.authTimer) {
+    clearTimeout(_webviewState.authTimer);
+    _webviewState.authTimer = null;
+  }
   if (_messageHandler) {
     window.removeEventListener('message', _messageHandler);
     _messageHandler = null;

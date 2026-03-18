@@ -56,6 +56,19 @@ export type CallListener = (signal: CallSignal) => void;
 /** Function returned by subscribe methods — call it to unsubscribe. */
 export type Unsubscribe = () => void;
 
+/** SSE connection health status. */
+export type StreamStatus = 'connected' | 'reconnecting' | 'degraded';
+/** Callback for {@link EventStream.onStatusChange}. */
+export type StatusListener = (status: StreamStatus) => void;
+
+const statusListeners = new Set<StatusListener>();
+
+function notifyStatus(status: StreamStatus): void {
+  for (const fn of statusListeners) {
+    try { fn(status); } catch {}
+  }
+}
+
 let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let destroyed = false;
@@ -75,6 +88,7 @@ function connect(): void {
 
   eventSource.onopen = () => {
     reconnectAttempts = 0;
+    notifyStatus('connected');
   };
 
   eventSource.addEventListener('dm', (e: MessageEvent) => {
@@ -112,6 +126,7 @@ function connect(): void {
       const base = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
       const jitter = Math.random() * base * 0.3;
       reconnectAttempts++;
+      notifyStatus(reconnectAttempts >= 3 ? 'degraded' : 'reconnecting');
       reconnectTimer = setTimeout(connect, base + jitter);
     }
   };
@@ -209,4 +224,14 @@ export const EventStream = {
   subscribeCall,
   disconnect,
   reconnect,
+  /**
+   * Register a listener for SSE connection health changes.
+   * Fires `'connected'` on successful open, `'reconnecting'` on early failures,
+   * and `'degraded'` after 3+ consecutive failures.
+   * @returns Unsubscribe function.
+   */
+  onStatusChange(fn: StatusListener): Unsubscribe {
+    statusListeners.add(fn);
+    return () => { statusListeners.delete(fn); };
+  },
 };

@@ -20,6 +20,8 @@ export type {
   DmListener,
   NotificationEvent,
   NotificationListener,
+  StatusListener,
+  StreamStatus,
   Unsubscribe,
 } from './event-stream.js';
 export { EventStream } from './event-stream.js';

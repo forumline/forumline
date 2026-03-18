@@ -3452,6 +3452,52 @@
   border-bottom: 1px solid #444;
 }
 
+/* ========== ERROR BANNER ========== */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, #dc2626, #b91c1c);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+  animation: bannerSlideDown 0.3s ease-out;
+}
+
+.error-banner.hidden {
+  display: none;
+}
+
+.error-banner-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.error-banner-text {
+  flex: 1;
+}
+
+.error-banner-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.error-banner-close:hover {
+  color: white;
+}
+
+[data-theme="dark"] .error-banner {
+  background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 50%, #7f1d1d 100%);
+  border-bottom: 1px solid #dc2626;
+}
+
 /* ========== ONLINE BAR (FORUM VIEW) ========== */
 .online-bar {
   display: flex;
