@@ -1,9 +1,11 @@
 package forum
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
-
 
 	"github.com/forumline/forumline/forum/oapi"
 )
@@ -177,8 +179,17 @@ func (h *Handlers) AuthCallback(ctx context.Context, _ oapi.AuthCallbackRequestO
 }
 
 // TokenExchange delegates to the auth provider for JWT-to-session exchange.
-func (h *Handlers) TokenExchange(ctx context.Context, _ oapi.TokenExchangeRequestObject) (oapi.TokenExchangeResponseObject, error) {
+// The OAPI strict handler already consumed r.Body to parse the request object,
+// so we reconstruct it from the parsed body before forwarding to the auth provider.
+func (h *Handlers) TokenExchange(ctx context.Context, request oapi.TokenExchangeRequestObject) (oapi.TokenExchangeResponseObject, error) {
 	r := reqFromCtx(ctx)
+	if request.Body != nil {
+		data, err := json.Marshal(request.Body)
+		if err == nil {
+			r = r.Clone(r.Context())
+			r.Body = io.NopCloser(bytes.NewReader(data))
+		}
+	}
 	return tokenExchangeRaw{fn: func(w http.ResponseWriter) {
 		h.Config.Auth.TokenExchange(w, r)
 	}}, nil

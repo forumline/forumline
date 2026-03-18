@@ -1,5 +1,6 @@
 import { ForumDiscoveryAPI, ForumlineAPI, ForumStore } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
+import { showWebview } from '../api/forum-webview.js';
 import { escapeHtml } from '../lib/markdown.js';
 import { $, plural } from '../lib/utils.js';
 import { pushState } from '../router.js';
@@ -160,7 +161,7 @@ export function renderDiscover() {
         const allForums = [...(discoveryForumsApi || []), ...discoveryRecommended];
         const forumInfo = allForums.find(f => f.domain === domain);
         if (forumInfo && forumInfo.web_base) {
-          ForumStore.showWebview({
+          showWebview({
             domain,
             name: forumInfo.name || domain,
             icon_url: forumInfo.icon_url || '',
