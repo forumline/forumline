@@ -36,13 +36,12 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 
 	conversations := make([]model.Conversation, 0, len(rows))
 	for _, r := range rows {
-		id := r.ID.String()
-		members := membersMap[id]
+		members := membersMap[r.ID]
 		if members == nil {
 			members = []model.ConversationMember{}
 		}
 		conversations = append(conversations, model.Conversation{
-			ID: id, IsGroup: r.IsGroup, Name: pgtextPtr(r.Name),
+			ID: r.ID, IsGroup: r.IsGroup, Name: pgtextPtr(r.Name),
 			Members: members, LastMessage: r.LastMessage,
 			LastMessageTime: r.LastMessageTime.Time.Format(time.RFC3339),
 			UnreadCount:     int(r.UnreadCount),
@@ -64,32 +63,31 @@ func (s *Store) GetConversation(ctx context.Context, userID string, conversation
 	if err != nil {
 		return nil, err
 	}
-	members := membersMap[conversationID.String()]
+	members := membersMap[conversationID]
 	if members == nil {
 		members = []model.ConversationMember{}
 	}
 	return &model.Conversation{
-		ID: row.ID.String(), IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
+		ID: row.ID, IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
 		Members: members, LastMessage: row.LastMessage,
 		LastMessageTime: row.LastMessageTime.Time.Format(time.RFC3339),
 		UnreadCount:     int(row.UnreadCount),
 	}, nil
 }
 
-func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UUID) (map[string][]model.ConversationMember, error) {
+func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UUID) (map[uuid.UUID][]model.ConversationMember, error) {
 	rows, err := s.Q.FetchConversationMembers(ctx, convoIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string][]model.ConversationMember)
+	result := make(map[uuid.UUID][]model.ConversationMember)
 	for _, r := range rows {
-		convoID := r.ConversationID.String()
 		name := r.DisplayName
 		if name == "" {
 			name = r.Username
 		}
-		result[convoID] = append(result[convoID], model.ConversationMember{
+		result[r.ConversationID] = append(result[r.ConversationID], model.ConversationMember{
 			ID: r.UserID, Username: r.Username, DisplayName: name, AvatarURL: pgtextPtr(r.AvatarUrl),
 		})
 	}
@@ -139,8 +137,8 @@ func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, befor
 	messages := make([]model.DirectMessage, len(dbMessages))
 	for i, m := range dbMessages {
 		messages[i] = model.DirectMessage{
-			ID:             m.ID.String(),
-			ConversationID: m.ConversationID.String(),
+			ID:             m.ID,
+			ConversationID: m.ConversationID,
 			SenderID:       m.SenderID,
 			Content:        m.Content,
 			CreatedAt:      m.CreatedAt.Time,
@@ -166,8 +164,8 @@ func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, sende
 	// Update conversation timestamp (fire-and-forget)
 	_ = s.Q.TouchConversation(ctx, conversationID)
 	return &model.DirectMessage{
-		ID:             row.ID.String(),
-		ConversationID: row.ConversationID.String(),
+		ID:             row.ID,
+		ConversationID: row.ConversationID,
 		SenderID:       row.SenderID,
 		Content:        row.Content,
 		CreatedAt:      row.CreatedAt.Time,
@@ -181,20 +179,20 @@ func (s *Store) MarkRead(ctx context.Context, conversationID uuid.UUID, userID s
 	})
 }
 
-func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherUserID string) (string, error) {
+func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherUserID string) (uuid.UUID, error) {
 	// Try to find existing
 	id, err := s.Q.Find1to1Conversation(ctx, sqlcdb.Find1to1ConversationParams{
 		UserID:      userID,
 		OtherUserID: otherUserID,
 	})
 	if err == nil {
-		return id.String(), nil
+		return id, nil
 	}
 
 	// Create new (needs transaction)
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -205,7 +203,7 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 		CreatedBy: textToPgtext(userID),
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	err = qtx.Insert1to1Members(ctx, sqlcdb.Insert1to1MembersParams{
@@ -214,20 +212,20 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 		UserID_2:       otherUserID,
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return convoID.String(), nil
+	return convoID, nil
 }
 
 // CreateGroupConversation uses dynamic SQL for batch member insert — stays hand-written.
-func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID string, memberIDs []string) (string, error) {
+func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID string, memberIDs []string) (uuid.UUID, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -239,7 +237,7 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 		CreatedBy: textToPgtext(creatorID),
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	// Batch insert members (dynamic VALUES — can't be sqlc'd)
@@ -256,13 +254,13 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 		args...,
 	)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return convoID.String(), nil
+	return convoID, nil
 }
 
 func (s *Store) IsGroupConversation(ctx context.Context, conversationID uuid.UUID, userID string) (bool, error) {

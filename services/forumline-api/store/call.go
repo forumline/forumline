@@ -35,8 +35,8 @@ func (s *Store) CreateCall(ctx context.Context, conversationID uuid.UUID, caller
 		return nil, err
 	}
 	return &model.CallRecord{
-		ID:             row.ID.String(),
-		ConversationID: row.ConversationID.String(),
+		ID:             row.ID,
+		ConversationID: row.ConversationID,
 		CallerID:       row.CallerID,
 		CalleeID:       row.CalleeID,
 		Status:         row.Status,

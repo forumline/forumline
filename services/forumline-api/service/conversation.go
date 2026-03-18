@@ -24,29 +24,25 @@ func (cs *ConversationService) List(ctx context.Context, userID string) ([]model
 }
 
 // Get returns a single conversation if the user is a member.
-func (cs *ConversationService) Get(ctx context.Context, userID, conversationID string) (*model.Conversation, error) {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, &ValidationError{Msg: "invalid conversation_id"}
-	}
-	return cs.Store.GetConversation(ctx, userID, convoUUID)
+func (cs *ConversationService) Get(ctx context.Context, userID string, conversationID uuid.UUID) (*model.Conversation, error) {
+	return cs.Store.GetConversation(ctx, userID, conversationID)
 }
 
 // GetOrCreateDM finds an existing 1:1 conversation or creates one.
 // Returns the conversation ID.
-func (cs *ConversationService) GetOrCreateDM(ctx context.Context, userID, otherUserID string) (string, error) {
+func (cs *ConversationService) GetOrCreateDM(ctx context.Context, userID, otherUserID string) (uuid.UUID, error) {
 	if otherUserID == "" {
-		return "", &ValidationError{Msg: "userId is required"}
+		return uuid.UUID{}, &ValidationError{Msg: "userId is required"}
 	}
 	if otherUserID == userID {
-		return "", &ValidationError{Msg: "cannot message yourself"}
+		return uuid.UUID{}, &ValidationError{Msg: "cannot message yourself"}
 	}
 	exists, err := cs.Store.ProfileExists(ctx, otherUserID)
 	if err != nil {
-		return "", fmt.Errorf("failed to verify user: %w", err)
+		return uuid.UUID{}, fmt.Errorf("failed to verify user: %w", err)
 	}
 	if !exists {
-		return "", &NotFoundError{Msg: "user not found"}
+		return uuid.UUID{}, &NotFoundError{Msg: "user not found"}
 	}
 	return cs.Store.FindOrCreate1to1Conversation(ctx, userID, otherUserID)
 }
@@ -95,6 +91,7 @@ func (cs *ConversationService) CreateGroup(ctx context.Context, userID string, i
 	}, nil
 }
 
+
 // UpdateInput represents optional updates to a group conversation.
 type UpdateInput struct {
 	Name          *string
@@ -103,12 +100,8 @@ type UpdateInput struct {
 }
 
 // Update modifies a group conversation (rename, add/remove members).
-func (cs *ConversationService) Update(ctx context.Context, userID, conversationID string, input UpdateInput) error {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return &NotFoundError{Msg: "conversation not found"}
-	}
-	isGroup, err := cs.Store.IsGroupConversation(ctx, convoUUID, userID)
+func (cs *ConversationService) Update(ctx context.Context, userID string, conversationID uuid.UUID, input UpdateInput) error {
+	isGroup, err := cs.Store.IsGroupConversation(ctx, conversationID, userID)
 	if err != nil {
 		return &NotFoundError{Msg: "conversation not found"}
 	}
@@ -121,12 +114,12 @@ func (cs *ConversationService) Update(ctx context.Context, userID, conversationI
 		if name == "" || len(name) > 100 {
 			return &ValidationError{Msg: "group name must be 1-100 characters"}
 		}
-		if err := cs.Store.UpdateConversationName(ctx, convoUUID, name); err != nil {
+		if err := cs.Store.UpdateConversationName(ctx, conversationID, name); err != nil {
 			return fmt.Errorf("failed to update name: %w", err)
 		}
 	}
 	if len(input.AddMembers) > 0 {
-		if err := cs.Store.AddConversationMembers(ctx, convoUUID, input.AddMembers); err != nil {
+		if err := cs.Store.AddConversationMembers(ctx, conversationID, input.AddMembers); err != nil {
 			return fmt.Errorf("failed to add members: %w", err)
 		}
 	}
@@ -138,7 +131,7 @@ func (cs *ConversationService) Update(ctx context.Context, userID, conversationI
 			}
 		}
 		if len(filtered) > 0 {
-			if err := cs.Store.RemoveConversationMembers(ctx, convoUUID, filtered); err != nil {
+			if err := cs.Store.RemoveConversationMembers(ctx, conversationID, filtered); err != nil {
 				return fmt.Errorf("failed to remove members: %w", err)
 			}
 		}
@@ -148,25 +141,17 @@ func (cs *ConversationService) Update(ctx context.Context, userID, conversationI
 
 // GetMessages returns paginated messages for a conversation.
 // Enforces membership before returning messages.
-func (cs *ConversationService) GetMessages(ctx context.Context, userID, conversationID, before, limit string) ([]model.DirectMessage, error) {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, &NotFoundError{Msg: "conversation not found"}
-	}
-	isMember, _ := cs.Store.IsConversationMember(ctx, convoUUID, userID)
+func (cs *ConversationService) GetMessages(ctx context.Context, userID string, conversationID uuid.UUID, before, limit string) ([]model.DirectMessage, error) {
+	isMember, _ := cs.Store.IsConversationMember(ctx, conversationID, userID)
 	if !isMember {
 		return nil, &NotFoundError{Msg: "conversation not found"}
 	}
-	return cs.Store.GetMessages(ctx, convoUUID, before, limit)
+	return cs.Store.GetMessages(ctx, conversationID, before, limit)
 }
 
 // SendMessage sends a message to a conversation. Enforces membership.
-func (cs *ConversationService) SendMessage(ctx context.Context, userID, conversationID, content string) (*model.DirectMessage, error) {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, &NotFoundError{Msg: "conversation not found"}
-	}
-	isMember, _ := cs.Store.IsConversationMember(ctx, convoUUID, userID)
+func (cs *ConversationService) SendMessage(ctx context.Context, userID string, conversationID uuid.UUID, content string) (*model.DirectMessage, error) {
+	isMember, _ := cs.Store.IsConversationMember(ctx, conversationID, userID)
 	if !isMember {
 		return nil, &NotFoundError{Msg: "conversation not found"}
 	}
@@ -174,38 +159,30 @@ func (cs *ConversationService) SendMessage(ctx context.Context, userID, conversa
 	if content == "" || len(content) > 2000 {
 		return nil, &ValidationError{Msg: "message must be 1-2000 characters"}
 	}
-	return cs.Store.SendMessage(ctx, convoUUID, userID, content)
+	return cs.Store.SendMessage(ctx, conversationID, userID, content)
 }
 
 // MarkRead marks a conversation as read for the user.
-func (cs *ConversationService) MarkRead(ctx context.Context, userID, conversationID string) error {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return &NotFoundError{Msg: "conversation not found"}
-	}
-	return cs.Store.MarkRead(ctx, convoUUID, userID)
+func (cs *ConversationService) MarkRead(ctx context.Context, userID string, conversationID uuid.UUID) error {
+	return cs.Store.MarkRead(ctx, conversationID, userID)
 }
 
 // Leave removes the user from a group conversation.
-func (cs *ConversationService) Leave(ctx context.Context, userID, conversationID string) error {
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return &NotFoundError{Msg: "conversation not found"}
-	}
-	isGroup, err := cs.Store.IsGroupConversation(ctx, convoUUID, userID)
+func (cs *ConversationService) Leave(ctx context.Context, userID string, conversationID uuid.UUID) error {
+	isGroup, err := cs.Store.IsGroupConversation(ctx, conversationID, userID)
 	if err != nil {
 		return &NotFoundError{Msg: "conversation not found"}
 	}
 	if !isGroup {
 		return &ValidationError{Msg: "cannot leave a 1:1 conversation"}
 	}
-	return cs.Store.LeaveConversation(ctx, convoUUID, userID)
+	return cs.Store.LeaveConversation(ctx, conversationID, userID)
 }
 
 // ResolveConversationID finds or creates a 1:1 conversation for legacy DM routes.
-func (cs *ConversationService) ResolveConversationID(ctx context.Context, userID, otherUserID string) (string, error) {
+func (cs *ConversationService) ResolveConversationID(ctx context.Context, userID, otherUserID string) (uuid.UUID, error) {
 	if otherUserID == "" || otherUserID == userID {
-		return "", &NotFoundError{Msg: "conversation not found"}
+		return uuid.UUID{}, &NotFoundError{Msg: "conversation not found"}
 	}
 	return cs.Store.FindOrCreate1to1Conversation(ctx, userID, otherUserID)
 }

@@ -2,6 +2,8 @@ package model
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // --- Profiles ---
@@ -27,7 +29,7 @@ type ProfileSearchResult struct {
 // --- Forums ---
 
 type Forum struct {
-	ID                  string    `json:"id"`
+	ID                  uuid.UUID `json:"id"`
 	Domain              string    `json:"domain"`
 	Name                string    `json:"name"`
 	IconURL             *string   `json:"icon_url"`
@@ -81,7 +83,7 @@ type ConversationMember struct {
 }
 
 type Conversation struct {
-	ID              string               `json:"id"`
+	ID              uuid.UUID            `json:"id"`
 	IsGroup         bool                 `json:"isGroup"`
 	Name            *string              `json:"name"`
 	Members         []ConversationMember `json:"members"`
@@ -91,8 +93,8 @@ type Conversation struct {
 }
 
 type DirectMessage struct {
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
+	ID             uuid.UUID `json:"id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
 	SenderID       string    `json:"sender_id"`
 	Content        string    `json:"content"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -101,8 +103,8 @@ type DirectMessage struct {
 // --- Calls ---
 
 type CallRecord struct {
-	ID              string  `json:"id"`
-	ConversationID  string  `json:"conversation_id"`
+	ID              uuid.UUID `json:"id"`
+	ConversationID  uuid.UUID `json:"conversation_id"`
 	CallerID        string  `json:"caller_id"`
 	CalleeID        string  `json:"callee_id"`
 	Status          string  `json:"status"`

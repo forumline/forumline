@@ -267,7 +267,7 @@ func (s *StrictServer) ListConversations(ctx context.Context, _ oapi.ListConvers
 
 func (s *StrictServer) GetConversation(ctx context.Context, req oapi.GetConversationRequestObject) (oapi.GetConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	c, err := s.convoSvc.Get(ctx, userID, req.ConversationId.String())
+	c, err := s.convoSvc.Get(ctx, userID, uuid.UUID(req.ConversationId))
 	if err != nil || c == nil {
 		return oapi.GetConversation404JSONResponse{Error: "conversation not found"}, nil
 	}
@@ -287,11 +287,7 @@ func (s *StrictServer) GetOrCreateDM(ctx context.Context, req oapi.GetOrCreateDM
 	if err != nil {
 		return nil, err
 	}
-	id, err := uuid.Parse(convoID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid conversation ID: %w", err)
-	}
-	return oapi.GetOrCreateDM200JSONResponse{Id: id}, nil
+	return oapi.GetOrCreateDM200JSONResponse{Id: convoID}, nil
 }
 
 func (s *StrictServer) CreateGroupConversation(ctx context.Context, req oapi.CreateGroupConversationRequestObject) (oapi.CreateGroupConversationResponseObject, error) {
@@ -327,7 +323,7 @@ func (s *StrictServer) UpdateConversation(ctx context.Context, req oapi.UpdateCo
 	if req.Body.RemoveMembers != nil {
 		input.RemoveMembers = *req.Body.RemoveMembers
 	}
-	if err := s.convoSvc.Update(ctx, userID, req.ConversationId.String(), input); err != nil {
+	if err := s.convoSvc.Update(ctx, userID, uuid.UUID(req.ConversationId), input); err != nil {
 		return nil, err
 	}
 	return oapi.UpdateConversation200JSONResponse{Success: true}, nil
@@ -335,7 +331,7 @@ func (s *StrictServer) UpdateConversation(ctx context.Context, req oapi.UpdateCo
 
 func (s *StrictServer) LeaveConversation(ctx context.Context, req oapi.LeaveConversationRequestObject) (oapi.LeaveConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if err := s.convoSvc.Leave(ctx, userID, req.ConversationId.String()); err != nil {
+	if err := s.convoSvc.Leave(ctx, userID, uuid.UUID(req.ConversationId)); err != nil {
 		return nil, err
 	}
 	return oapi.LeaveConversation200JSONResponse{Success: true}, nil
@@ -350,7 +346,7 @@ func (s *StrictServer) GetMessages(ctx context.Context, req oapi.GetMessagesRequ
 	if req.Params.Limit != nil {
 		limit = fmt.Sprintf("%d", *req.Params.Limit)
 	}
-	msgs, err := s.convoSvc.GetMessages(ctx, userID, req.ConversationId.String(), before, limit)
+	msgs, err := s.convoSvc.GetMessages(ctx, userID, uuid.UUID(req.ConversationId), before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +365,7 @@ func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequ
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	msg, err := s.convoSvc.SendMessage(ctx, userID, req.ConversationId.String(), req.Body.Content)
+	msg, err := s.convoSvc.SendMessage(ctx, userID, uuid.UUID(req.ConversationId), req.Body.Content)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +378,7 @@ func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequ
 
 func (s *StrictServer) MarkConversationRead(ctx context.Context, req oapi.MarkConversationReadRequestObject) (oapi.MarkConversationReadResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if err := s.convoSvc.MarkRead(ctx, userID, req.ConversationId.String()); err != nil {
+	if err := s.convoSvc.MarkRead(ctx, userID, uuid.UUID(req.ConversationId)); err != nil {
 		return nil, fmt.Errorf("failed to mark as read: %w", err)
 	}
 	return oapi.MarkConversationRead200JSONResponse{Success: true}, nil
@@ -492,7 +488,7 @@ func (s *StrictServer) RegisterForum(ctx context.Context, req oapi.RegisterForum
 		}
 	}
 	return oapi.RegisterForum200JSONResponse{
-		ForumId:  result.ForumID,
+		ForumId:  result.ForumID.String(),
 		Approved: result.Approved,
 		Message:  result.Message,
 	}, nil
@@ -504,13 +500,9 @@ func (s *StrictServer) DeleteForum(ctx context.Context, req oapi.DeleteForumRequ
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
 	forumDomain := req.Body.ForumDomain
-	forumIDStr := s.store.GetForumIDByDomain(ctx, forumDomain)
-	if forumIDStr == "" {
+	forumID := s.store.GetForumIDByDomain(ctx, forumDomain)
+	if forumID == uuid.Nil {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid forum id")
 	}
 	ownerID, _ := s.store.GetForumOwner(ctx, forumID)
 	if ownerID == nil || *ownerID != userID {
@@ -545,13 +537,9 @@ func (s *StrictServer) UpdateMembershipAuth(ctx context.Context, req oapi.Update
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumID == uuid.Nil {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpdateMembershipAuth(ctx, userID, forumID, req.Body.Authed); err != nil {
 		return nil, fmt.Errorf("failed to update auth state: %w", err)
@@ -564,13 +552,9 @@ func (s *StrictServer) ToggleMembershipMute(ctx context.Context, req oapi.Toggle
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumID == uuid.Nil {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpdateMembershipMute(ctx, userID, forumID, req.Body.Muted); err != nil {
 		return nil, fmt.Errorf("failed to update mute state: %w", err)
@@ -583,13 +567,9 @@ func (s *StrictServer) JoinForum(ctx context.Context, req oapi.JoinForumRequestO
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumIDStr, err := s.forumSvc.ResolveOrDiscoverForum(ctx, req.Body.ForumDomain)
+	forumID, err := s.forumSvc.ResolveOrDiscoverForum(ctx, req.Body.ForumDomain)
 	if err != nil {
 		return nil, &service.NotFoundError{Msg: "forum not found and manifest fetch failed"}
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpsertMembership(ctx, userID, forumID); err != nil {
 		return nil, fmt.Errorf("failed to join forum: %w", err)
@@ -610,13 +590,9 @@ func (s *StrictServer) LeaveForum(ctx context.Context, req oapi.LeaveForumReques
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumID == uuid.Nil {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.DeleteMembership(ctx, userID, forumID); err != nil {
 		return nil, fmt.Errorf("failed to leave forum: %w", err)
@@ -635,7 +611,7 @@ func (s *StrictServer) GetNotifications(ctx context.Context, _ oapi.GetNotificat
 	items := make(oapi.GetNotifications200JSONResponse, len(notifs))
 	for i, n := range notifs {
 		items[i] = oapi.Notification{
-			Id:          n.ID,
+			Id:          n.ID.String(),
 			Type:        oapi.NotificationType(n.Type),
 			Title:       n.Title,
 			Body:        n.Body,
@@ -744,7 +720,7 @@ func (s *StrictServer) InitiateCall(ctx context.Context, req oapi.InitiateCallRe
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	result, err := s.callSvc.Initiate(ctx, userID, req.Body.ConversationId.String())
+	result, err := s.callSvc.Initiate(ctx, userID, uuid.UUID(req.Body.ConversationId))
 	if err != nil {
 		return nil, err
 	}
@@ -760,7 +736,7 @@ func (s *StrictServer) RespondToCall(ctx context.Context, req oapi.RespondToCall
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	result, err := s.callSvc.Respond(ctx, userID, req.CallId.String(), string(req.Body.Action))
+	result, err := s.callSvc.Respond(ctx, userID, uuid.UUID(req.CallId), string(req.Body.Action))
 	if err != nil {
 		return nil, err
 	}
@@ -769,7 +745,7 @@ func (s *StrictServer) RespondToCall(ctx context.Context, req oapi.RespondToCall
 
 func (s *StrictServer) EndCall(ctx context.Context, req oapi.EndCallRequestObject) (oapi.EndCallResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	result, err := s.callSvc.End(ctx, userID, req.CallId.String())
+	result, err := s.callSvc.End(ctx, userID, uuid.UUID(req.CallId))
 	if err != nil {
 		return nil, err
 	}

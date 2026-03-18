@@ -121,7 +121,7 @@ func (h *ForumHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"forum_id": result.ForumID, "approved": result.Approved, "message": result.Message,
+		"forum_id": result.ForumID.String(), "approved": result.Approved, "message": result.Message,
 	})
 }
 
@@ -147,14 +147,9 @@ func (h *ForumHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+	if forumID == uuid.Nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
-		return
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 	ownerID, _ := h.Store.GetForumOwner(ctx, forumID)

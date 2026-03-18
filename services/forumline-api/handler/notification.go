@@ -43,7 +43,7 @@ func (h *NotificationHandler) HandleNotifications(w http.ResponseWriter, r *http
 	items := make([]notificationResponse, len(notifs))
 	for i, n := range notifs {
 		items[i] = notificationResponse{
-			ID:          n.ID,
+			ID:          n.ID.String(),
 			Type:        n.Type,
 			Title:       n.Title,
 			Body:        n.Body,

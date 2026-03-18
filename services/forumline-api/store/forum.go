@@ -111,12 +111,12 @@ func (s *Store) ListRecommendedForums(ctx context.Context, userID string) ([]map
 	return forums, nil
 }
 
-func (s *Store) GetForumIDByDomain(ctx context.Context, domain string) string {
+func (s *Store) GetForumIDByDomain(ctx context.Context, domain string) uuid.UUID {
 	id, err := s.Q.GetForumIDByDomain(ctx, domain)
 	if err != nil {
-		return ""
+		return uuid.UUID{}
 	}
-	return id.String()
+	return id
 }
 
 func (s *Store) GetForumDomainByID(ctx context.Context, forumID uuid.UUID) (string, error) {
@@ -132,30 +132,30 @@ func (s *Store) GetForumName(ctx context.Context, forumID uuid.UUID) string {
 }
 
 func (s *Store) RegisterForum(ctx context.Context, domain, name, apiBase, webBase string,
-	capabilities []string, description *string, tags []string, ownerID string) (string, error) {
+	capabilities []string, description *string, tags []string, ownerID string) (uuid.UUID, error) {
 	id, err := s.Q.RegisterForum(ctx, sqlcdb.RegisterForumParams{
 		Domain: domain, Name: name, ApiBase: apiBase, WebBase: webBase,
 		Capabilities: capabilities, Description: optTextToPgtext(description),
 		Tags: tags, OwnerID: textToPgtext(ownerID),
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return id.String(), nil
+	return id, nil
 }
 
-func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManifest, tags []string) (string, error) {
+func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManifest, tags []string) (uuid.UUID, error) {
 	id, err := s.Q.UpsertForumFromManifest(ctx, sqlcdb.UpsertForumFromManifestParams{
 		Domain: m.Domain, Name: m.Name, IconUrl: textToPgtext(m.IconURL),
 		ApiBase: m.APIBase, WebBase: m.WebBase, Capabilities: m.Capabilities, Tags: tags,
 	})
 	if err == pgx.ErrNoRows {
-		return "", nil // approved forum exists, don't overwrite
+		return uuid.UUID{}, nil // approved forum exists, don't overwrite
 	}
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return id.String(), nil
+	return id, nil
 }
 
 func (s *Store) CountForumsByOwner(ctx context.Context, ownerID string) (int, error) {

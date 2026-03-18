@@ -38,7 +38,16 @@ func (h *CallHandler) HandleInitiate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	result, err := h.Service.Initiate(r.Context(), userID, body.ConversationID)
+	if body.ConversationID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversation_id is required"})
+		return
+	}
+	convoID, err := uuid.Parse(body.ConversationID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid conversation_id"})
+		return
+	}
+	result, err := h.Service.Initiate(r.Context(), userID, convoID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -48,7 +57,11 @@ func (h *CallHandler) HandleInitiate(w http.ResponseWriter, r *http.Request) {
 
 func (h *CallHandler) HandleRespond(w http.ResponseWriter, r *http.Request) {
 	userID := fauth.UserIDFromContext(r.Context())
-	callID := r.PathValue("callId")
+	callID, err := uuid.Parse(r.PathValue("callId"))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Call not found or already responded"})
+		return
+	}
 
 	var body struct {
 		Action string `json:"action"`
@@ -67,7 +80,11 @@ func (h *CallHandler) HandleRespond(w http.ResponseWriter, r *http.Request) {
 
 func (h *CallHandler) HandleEnd(w http.ResponseWriter, r *http.Request) {
 	userID := fauth.UserIDFromContext(r.Context())
-	callID := r.PathValue("callId")
+	callID, err := uuid.Parse(r.PathValue("callId"))
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Active call not found"})
+		return
+	}
 
 	result, err := h.Service.End(r.Context(), userID, callID)
 	if err != nil {
@@ -99,6 +116,7 @@ func (h *CallHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a participant of this call"})
 		return
 	}
+
 
 	profile, _ := h.Service.Store.GetProfile(r.Context(), userID)
 	participantName := userID

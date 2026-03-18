@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+
+	"github.com/google/uuid"
 )
 
 // RegisterForumInput contains validated input for forum registration.
@@ -19,7 +21,7 @@ type RegisterForumInput struct {
 
 // RegisterForumResult contains the outcome of a forum registration.
 type RegisterForumResult struct {
-	ForumID  string
+	ForumID  uuid.UUID
 	Approved bool
 	Message  string
 }

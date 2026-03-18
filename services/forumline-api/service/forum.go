@@ -11,6 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
@@ -26,15 +28,15 @@ func NewForumService(s *store.Store) *ForumService {
 // ResolveOrDiscoverForum looks up a forum by domain; if not found, fetches the
 // manifest from /.well-known/forumline-manifest.json and auto-registers it.
 // Returns the forum ID.
-func (fs *ForumService) ResolveOrDiscoverForum(ctx context.Context, domain string) (string, error) {
+func (fs *ForumService) ResolveOrDiscoverForum(ctx context.Context, domain string) (uuid.UUID, error) {
 	forumID := fs.Store.GetForumIDByDomain(ctx, domain)
-	if forumID != "" {
+	if forumID != (uuid.UUID{}) {
 		return forumID, nil
 	}
 
 	manifest, err := FetchForumManifest(domain)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	// Always use the requested domain — never trust the manifest's domain claim
@@ -43,14 +45,14 @@ func (fs *ForumService) ResolveOrDiscoverForum(ctx context.Context, domain strin
 
 	forumID, err = fs.Store.UpsertForumFromManifest(ctx, manifest, tags)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	if forumID == "" {
+	if forumID == (uuid.UUID{}) {
 		// Forum existed and was approved — fetch the existing ID
 		forumID = fs.Store.GetForumIDByDomain(ctx, domain)
 	}
-	if forumID == "" {
-		return "", fmt.Errorf("failed to resolve forum")
+	if forumID == (uuid.UUID{}) {
+		return uuid.UUID{}, fmt.Errorf("failed to resolve forum")
 	}
 	return forumID, nil
 }

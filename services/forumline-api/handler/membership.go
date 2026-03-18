@@ -47,14 +47,9 @@ func (h *MembershipHandler) HandleUpdateAuth(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+	if forumID == uuid.Nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
-		return
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 	if err := h.Store.UpdateMembershipAuth(ctx, userID, forumID, *body.Authed); err != nil {
@@ -81,14 +76,9 @@ func (h *MembershipHandler) HandleToggleMute(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+	if forumID == uuid.Nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
-		return
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 	if err := h.Store.UpdateMembershipMute(ctx, userID, forumID, *body.Muted); err != nil {
@@ -110,14 +100,9 @@ func (h *MembershipHandler) HandleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forumIDStr, err := h.ForumService.ResolveOrDiscoverForum(ctx, body.ForumDomain)
+	forumID, err := h.ForumService.ResolveOrDiscoverForum(ctx, body.ForumDomain)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found and manifest fetch failed"})
-		return
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 
@@ -146,14 +131,9 @@ func (h *MembershipHandler) HandleLeave(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-	if forumIDStr == "" {
+	forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+	if forumID == uuid.Nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
-		return
-	}
-	forumID, err := uuid.Parse(forumIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 	if err := h.Store.DeleteMembership(ctx, userID, forumID); err != nil {

@@ -31,21 +31,13 @@ type InitiateResult struct {
 // Validates that the conversation is 1:1, no active call exists, and neither
 // party is busy. Creates the call record, builds the SSE signal, and sends
 // a push notification to the callee in the background.
-func (cs *CallService) Initiate(ctx context.Context, callerID, conversationID string) (*InitiateResult, error) {
-	if conversationID == "" {
-		return nil, &ValidationError{Msg: "conversation_id is required"}
-	}
-	convoUUID, err := uuid.Parse(conversationID)
-	if err != nil {
-		return nil, &ValidationError{Msg: "invalid conversation_id"}
-	}
-
-	calleeID, err := cs.Store.GetCalleeFor1to1(ctx, callerID, convoUUID)
+func (cs *CallService) Initiate(ctx context.Context, callerID string, conversationID uuid.UUID) (*InitiateResult, error) {
+	calleeID, err := cs.Store.GetCalleeFor1to1(ctx, callerID, conversationID)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "1:1 conversation not found"}
 	}
 
-	if active, _ := cs.Store.HasActiveCall(ctx, convoUUID); active {
+	if active, _ := cs.Store.HasActiveCall(ctx, conversationID); active {
 		return nil, &ConflictError{Msg: "Call already in progress"}
 	}
 	if busy, _ := cs.Store.IsUserInCall(ctx, callerID); busy {
@@ -55,7 +47,7 @@ func (cs *CallService) Initiate(ctx context.Context, callerID, conversationID st
 		return nil, &ConflictError{Msg: "User is busy"}
 	}
 
-	call, err := cs.Store.CreateCall(ctx, convoUUID, callerID, calleeID)
+	call, err := cs.Store.CreateCall(ctx, conversationID, callerID, calleeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create call: %w", err)
 	}
@@ -102,25 +94,21 @@ type RespondResult struct {
 }
 
 // Respond handles accepting or declining a ringing call.
-func (cs *CallService) Respond(ctx context.Context, userID, callID, action string) (*RespondResult, error) {
+func (cs *CallService) Respond(ctx context.Context, userID string, callID uuid.UUID, action string) (*RespondResult, error) {
 	if action != "accept" && action != "decline" {
 		return nil, &ValidationError{Msg: "action must be 'accept' or 'decline'"}
 	}
-	callUUID, err := uuid.Parse(callID)
-	if err != nil {
-		return nil, &NotFoundError{Msg: "Call not found or already responded"}
-	}
 
-	callerID, err := cs.Store.GetRingingCallCallerID(ctx, callUUID, userID)
+	callerID, err := cs.Store.GetRingingCallCallerID(ctx, callID, userID)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "Call not found or already responded"}
 	}
 
 	signalType := "call_accepted"
 	if action == "accept" {
-		err = cs.Store.AcceptCall(ctx, callUUID)
+		err = cs.Store.AcceptCall(ctx, callID)
 	} else {
-		err = cs.Store.DeclineCall(ctx, callUUID)
+		err = cs.Store.DeclineCall(ctx, callID)
 		signalType = "call_declined"
 	}
 	if err != nil {
@@ -141,12 +129,8 @@ type EndResult struct {
 }
 
 // End terminates an active or ringing call.
-func (cs *CallService) End(ctx context.Context, userID, callID string) (*EndResult, error) {
-	callUUID, err := uuid.Parse(callID)
-	if err != nil {
-		return nil, &NotFoundError{Msg: "Active call not found"}
-	}
-	newStatus, otherUserID, err := cs.Store.EndCall(ctx, callUUID, userID)
+func (cs *CallService) End(ctx context.Context, userID string, callID uuid.UUID) (*EndResult, error) {
+	newStatus, otherUserID, err := cs.Store.EndCall(ctx, callID, userID)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "Active call not found"}
 	}

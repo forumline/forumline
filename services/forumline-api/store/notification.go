@@ -11,7 +11,7 @@ import (
 )
 
 type NotificationRow struct {
-	ID          string `json:"id"`
+	ID          uuid.UUID `json:"id"`
 	UserID      string `json:"user_id"`
 	ForumDomain string `json:"forum_domain"`
 	ForumName   string `json:"forum_name"`
@@ -47,7 +47,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 	notifs := make([]NotificationRow, 0, len(rows))
 	for _, r := range rows {
 		notifs = append(notifs, NotificationRow{
-			ID:          r.ID.String(),
+			ID:          r.ID,
 			ForumDomain: r.ForumDomain,
 			ForumName:   r.ForumName,
 			Type:        r.Type,
