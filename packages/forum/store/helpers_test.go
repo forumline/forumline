@@ -4,40 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
-
-// --- pgUUID / uuidStr round-trip ---
-
-func TestPgUUID_ValidUUID(t *testing.T) {
-	input := "550e8400-e29b-41d4-a716-446655440000"
-	u := pgUUID(input)
-	if !u.Valid {
-		t.Fatal("expected Valid=true")
-	}
-	got := uuidStr(u)
-	if got != input {
-		t.Errorf("round-trip failed: got %q, want %q", got, input)
-	}
-}
-
-func TestPgUUID_Panics_OnInvalid(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic on invalid UUID")
-		}
-	}()
-	pgUUID("not-a-uuid")
-}
-
-func TestUuidStr_InvalidReturnsEmpty(t *testing.T) {
-	var u pgtype.UUID // Valid = false
-	if got := uuidStr(u); got != "" {
-		t.Errorf("expected empty string, got %q", got)
-	}
-}
 
 // --- pgtextPtr / textToPgtext / optTextToPgtext ---
 
@@ -126,7 +97,7 @@ func TestTsStrPtr_Zero(t *testing.T) {
 // --- profileFromSqlc ---
 
 func TestProfileFromSqlc(t *testing.T) {
-	id := pgUUID("550e8400-e29b-41d4-a716-446655440000")
+	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	now := pgTimestamp(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC))
 	displayName := pgtype.Text{String: "Test User", Valid: true}
 
@@ -145,9 +116,9 @@ func TestProfileFromSqlc(t *testing.T) {
 
 	p := profileFromSqlc(row)
 
-	wantID := pgUUID("550e8400-e29b-41d4-a716-446655440000")
-	if p.Id != [16]byte(wantID.Bytes) {
-		t.Errorf("Id = %v", p.Id)
+	wantID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+	if p.Id != wantID {
+		t.Errorf("Id = %v, want %v", p.Id, wantID)
 	}
 	if p.Username != "testuser" {
 		t.Errorf("Username = %q", p.Username)
@@ -169,7 +140,7 @@ func TestProfileFromSqlc(t *testing.T) {
 // --- categoryFromThreadRow ---
 
 func TestCategoryFromThreadRow(t *testing.T) {
-	id := pgUUID("660e8400-e29b-41d4-a716-446655440000")
+	id := uuid.MustParse("660e8400-e29b-41d4-a716-446655440000")
 	now := pgTimestamp(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC))
 	desc := pgtype.Text{String: "A category", Valid: true}
 

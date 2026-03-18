@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,14 +19,14 @@ RETURNING id
 `
 
 type CreatePostParams struct {
-	ThreadID  pgtype.UUID        `json:"thread_id"`
-	AuthorID  pgtype.UUID        `json:"author_id"`
+	ThreadID  uuid.UUID          `json:"thread_id"`
+	AuthorID  uuid.UUID          `json:"author_id"`
 	Content   string             `json:"content"`
-	ReplyToID pgtype.UUID        `json:"reply_to_id"`
+	ReplyToID *uuid.UUID         `json:"reply_to_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (pgtype.UUID, error) {
+func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createPost,
 		arg.ThreadID,
 		arg.AuthorID,
@@ -33,7 +34,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (pgtype.
 		arg.ReplyToID,
 		arg.CreatedAt,
 	)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -42,9 +43,9 @@ const getPostAuthor = `-- name: GetPostAuthor :one
 SELECT author_id FROM posts WHERE id = $1
 `
 
-func (q *Queries) GetPostAuthor(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+func (q *Queries) GetPostAuthor(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getPostAuthor, id)
-	var author_id pgtype.UUID
+	var author_id uuid.UUID
 	err := row.Scan(&author_id)
 	return author_id, err
 }
@@ -61,14 +62,14 @@ WHERE po.thread_id = $1 ORDER BY po.created_at ASC
 `
 
 type ListPostsByThreadRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	ThreadID          pgtype.UUID        `json:"thread_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	ThreadID          uuid.UUID          `json:"thread_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Content           string             `json:"content"`
-	ReplyToID         pgtype.UUID        `json:"reply_to_id"`
+	ReplyToID         *uuid.UUID         `json:"reply_to_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -80,7 +81,7 @@ type ListPostsByThreadRow struct {
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
 }
 
-func (q *Queries) ListPostsByThread(ctx context.Context, threadID pgtype.UUID) ([]ListPostsByThreadRow, error) {
+func (q *Queries) ListPostsByThread(ctx context.Context, threadID uuid.UUID) ([]ListPostsByThreadRow, error) {
 	rows, err := q.db.Query(ctx, listPostsByThread, threadID)
 	if err != nil {
 		return nil, err
@@ -130,14 +131,14 @@ WHERE po.author_id = $1 ORDER BY po.created_at DESC LIMIT 20
 `
 
 type ListUserPostsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	ThreadID          pgtype.UUID        `json:"thread_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	ThreadID          uuid.UUID          `json:"thread_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Content           string             `json:"content"`
-	ReplyToID         pgtype.UUID        `json:"reply_to_id"`
+	ReplyToID         *uuid.UUID         `json:"reply_to_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -149,7 +150,7 @@ type ListUserPostsRow struct {
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
 }
 
-func (q *Queries) ListUserPosts(ctx context.Context, authorID pgtype.UUID) ([]ListUserPostsRow, error) {
+func (q *Queries) ListUserPosts(ctx context.Context, authorID uuid.UUID) ([]ListUserPostsRow, error) {
 	rows, err := q.db.Query(ctx, listUserPosts, authorID)
 	if err != nil {
 		return nil, err
@@ -199,14 +200,14 @@ WHERE po.content ILIKE $1 ORDER BY po.created_at DESC LIMIT 20
 `
 
 type SearchPostsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	ThreadID          pgtype.UUID        `json:"thread_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	ThreadID          uuid.UUID          `json:"thread_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Content           string             `json:"content"`
-	ReplyToID         pgtype.UUID        `json:"reply_to_id"`
+	ReplyToID         *uuid.UUID         `json:"reply_to_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/forum"
 	"github.com/forumline/forumline/forum/store"
@@ -23,10 +25,26 @@ type ForumlineAuthProvider struct {
 	Store       *store.Store
 }
 
-// Middleware returns the Zitadel JWT validation middleware.
-// The identity service issues Zitadel JWTs, so we validate them directly.
+// Middleware returns the Zitadel JWT validation middleware chained with a
+// profile UUID resolution step. The identity service issues Zitadel JWTs,
+// so we validate them directly and then resolve the Zitadel subject to
+// the local profile UUID for use by forum handlers.
 func (p *ForumlineAuthProvider) Middleware() func(http.Handler) http.Handler {
-	return auth.Middleware
+	return func(next http.Handler) http.Handler {
+		return auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// auth.Middleware has already validated the JWT and set the
+			// Zitadel subject in context via auth.UserIDKey. Resolve it
+			// to the local profile UUID so ProfileUUIDFromContext works.
+			zitadelID := auth.UserIDFromContext(r.Context())
+			localID, err := p.Store.GetProfileIDByForumlineID(r.Context(), zitadelID)
+			if err != nil || localID == (uuid.UUID{}) {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			ctx := forum.SetProfileUUID(r.Context(), localID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}))
+	}
 }
 
 // StartLogin handles GET /api/forumline/auth.
@@ -168,11 +186,12 @@ func (p *ForumlineAuthProvider) Logout(w http.ResponseWriter, r *http.Request) {
 
 // CreateOrLinkUser creates a local forum profile for the given identity,
 // or links to an existing profile if the provider ID is already known.
+// Returns the local user ID as a string for cookie storage.
 func (p *ForumlineAuthProvider) CreateOrLinkUser(ctx context.Context, identity *forum.UserIdentity) (string, error) {
 	existingID, err := p.Store.GetProfileIDByForumlineID(ctx, identity.ProviderID)
-	if err == nil && existingID != "" {
+	if err == nil && existingID != (uuid.UUID{}) {
 		_ = p.Store.UpdateDisplayNameAndAvatar(ctx, existingID, identity.DisplayName, identity.AvatarURL)
-		return existingID, nil
+		return existingID.String(), nil
 	}
 
 	fIdentity := &store.ForumlineIdentity{
@@ -185,7 +204,7 @@ func (p *ForumlineAuthProvider) CreateOrLinkUser(ctx context.Context, identity *
 	if err != nil {
 		return "", err
 	}
-	return localID, nil
+	return localID.String(), nil
 }
 
 // --- Identity service integration ---

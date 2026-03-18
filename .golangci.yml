@@ -12,15 +12,56 @@ linters:
     # return (typed_response, nil) when err != nil: the error is converted to a typed
     # HTTP response object rather than propagated as a Go error.
     - reassign        # Detect reassignment of package-level variables
+    - forbidigo       # Forbid re-introduction of eliminated dangerous patterns
+    - goconst         # Detect repeated string literals that should be constants
+    - unconvert       # Detect unnecessary type conversions
+    # nilerr intentionally omitted — oapi-codegen strict handlers legitimately return
+    # (TypedResponse, nil) when converting errors to HTTP responses, not propagating them.
 
 linters-settings:
   errcheck:
-    # Don't flag blank identifier error discards globally — too noisy
-    # with deferred closes. Instead we enforce via pgUUID panic + code review.
     check-blank: false
-    # But DO check that errors aren't completely dropped (no assignment at all)
     exclude-functions:
       - (*github.com/jackc/pgx/v5/pgpool.Pool).Close
       - (net/http.ResponseWriter).Write
       - fmt.Fprintf
       - fmt.Fprint
+
+  forbidigo:
+    forbid:
+      # pgtype types belong only in generated sqlcdb/ code.
+      # Use uuid.UUID, string, int, time.Time in application code instead.
+      # These were eliminated in the uuid migration — do not reintroduce them.
+      - pattern: 'pgtype\.(UUID|Text|Int4|Int8|Timestamp|Timestamptz|Numeric|Bool)'
+        msg: "pgtype types belong only in generated sqlcdb/ code. Use uuid.UUID, string, int, or time.Time instead."
+      # These helpers were deleted. Do not recreate them.
+      - pattern: '\bpgUUID\('
+        msg: "pgUUID() was deleted. Pass uuid.UUID directly — don't reintroduce the string→UUID panic helper."
+      - pattern: '\buuidStr\('
+        msg: "uuidStr() was deleted. Return uuid.UUID from store functions — don't convert back to string."
+      - pattern: '\bformatUUID\('
+        msg: "formatUUID() was deleted. Use uuid.UUID directly."
+
+  goconst:
+    # Flag strings repeated 3+ times — candidates for named constants.
+    # Most relevant for SSE channel names, notification types, call statuses.
+    min-occurrences: 3
+    # Exclude test files — repeated strings in tests are usually fine.
+    ignore-tests: true
+    # Ignore strings that are too short or too generic to be worth extracting.
+    min-len: 5
+
+issues:
+  exclude-rules:
+    # Generated code is exempt — sqlcdb/ legitimately uses pgtype internally.
+    - path: "sqlcdb/"
+      linters:
+        - forbidigo
+        - goconst
+        - unconvert
+    # Test files are more relaxed.
+    - path: ".*_test\\.go$"
+      linters:
+        - forbidigo
+        - goconst
+        - unconvert

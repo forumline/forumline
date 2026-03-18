@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,9 +16,9 @@ const getChannelIDBySlug = `-- name: GetChannelIDBySlug :one
 SELECT id FROM chat_channels WHERE slug = $1
 `
 
-func (q *Queries) GetChannelIDBySlug(ctx context.Context, slug string) (pgtype.UUID, error) {
+func (q *Queries) GetChannelIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getChannelIDBySlug, slug)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -27,9 +28,9 @@ INSERT INTO chat_messages (channel_id, author_id, content) VALUES ($1, $2, $3)
 `
 
 type InsertChatMessageParams struct {
-	ChannelID pgtype.UUID `json:"channel_id"`
-	AuthorID  pgtype.UUID `json:"author_id"`
-	Content   string      `json:"content"`
+	ChannelID uuid.UUID `json:"channel_id"`
+	AuthorID  uuid.UUID `json:"author_id"`
+	Content   string    `json:"content"`
 }
 
 func (q *Queries) InsertChatMessage(ctx context.Context, arg InsertChatMessageParams) error {
@@ -83,12 +84,12 @@ LIMIT 100
 `
 
 type ListChatMessagesRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	ChannelID         pgtype.UUID        `json:"channel_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	ChannelID         uuid.UUID          `json:"channel_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Content           string             `json:"content"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`

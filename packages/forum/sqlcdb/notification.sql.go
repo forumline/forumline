@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -16,7 +17,7 @@ SELECT COUNT(*)::int FROM notifications
 WHERE user_id = $1 AND read = false AND type = 'chat_mention'
 `
 
-func (q *Queries) CountUnreadChatMentions(ctx context.Context, userID pgtype.UUID) (int32, error) {
+func (q *Queries) CountUnreadChatMentions(ctx context.Context, userID uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countUnreadChatMentions, userID)
 	var column_1 int32
 	err := row.Scan(&column_1)
@@ -28,7 +29,7 @@ SELECT COUNT(*)::int FROM notifications
 WHERE user_id = $1 AND read = false AND type != 'chat_mention'
 `
 
-func (q *Queries) CountUnreadNotifications(ctx context.Context, userID pgtype.UUID) (int32, error) {
+func (q *Queries) CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countUnreadNotifications, userID)
 	var column_1 int32
 	err := row.Scan(&column_1)
@@ -42,11 +43,11 @@ WHERE t.id = $1 ORDER BY p.created_at ASC LIMIT 1
 `
 
 type GetThreadTitleAndAuthorRow struct {
-	Title    string      `json:"title"`
-	AuthorID pgtype.UUID `json:"author_id"`
+	Title    string    `json:"title"`
+	AuthorID uuid.UUID `json:"author_id"`
 }
 
-func (q *Queries) GetThreadTitleAndAuthor(ctx context.Context, id pgtype.UUID) (GetThreadTitleAndAuthorRow, error) {
+func (q *Queries) GetThreadTitleAndAuthor(ctx context.Context, id uuid.UUID) (GetThreadTitleAndAuthorRow, error) {
 	row := q.db.QueryRow(ctx, getThreadTitleAndAuthor, id)
 	var i GetThreadTitleAndAuthorRow
 	err := row.Scan(&i.Title, &i.AuthorID)
@@ -59,7 +60,7 @@ VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertNotificationParams struct {
-	UserID  pgtype.UUID `json:"user_id"`
+	UserID  uuid.UUID   `json:"user_id"`
 	Type    string      `json:"type"`
 	Title   string      `json:"title"`
 	Message string      `json:"message"`
@@ -86,12 +87,12 @@ LIMIT $2
 `
 
 type ListForumlineNotificationsParams struct {
-	UserID pgtype.UUID `json:"user_id"`
-	Limit  int32       `json:"limit"`
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
 }
 
 type ListForumlineNotificationsRow struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        uuid.UUID          `json:"id"`
 	Type      string             `json:"type"`
 	Title     string             `json:"title"`
 	Message   string             `json:"message"`
@@ -137,8 +138,8 @@ LIMIT $2
 `
 
 type ListNotificationsParams struct {
-	UserID pgtype.UUID `json:"user_id"`
-	Limit  int32       `json:"limit"`
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
 }
 
 func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error) {
@@ -174,7 +175,7 @@ const markAllNotificationsRead = `-- name: MarkAllNotificationsRead :exec
 UPDATE notifications SET read = true WHERE user_id = $1 AND read = false
 `
 
-func (q *Queries) MarkAllNotificationsRead(ctx context.Context, userID pgtype.UUID) error {
+func (q *Queries) MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, markAllNotificationsRead, userID)
 	return err
 }
@@ -184,8 +185,8 @@ UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2
 `
 
 type MarkNotificationReadParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error {

@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -16,8 +17,8 @@ UPDATE forumline_memberships SET forum_authed_at = NULL WHERE user_id = $1 AND f
 `
 
 type ClearMembershipAuthedParams struct {
-	UserID  string      `json:"user_id"`
-	ForumID pgtype.UUID `json:"forum_id"`
+	UserID  string    `json:"user_id"`
+	ForumID uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) ClearMembershipAuthed(ctx context.Context, arg ClearMembershipAuthedParams) error {
@@ -30,8 +31,8 @@ DELETE FROM forumline_memberships WHERE user_id = $1 AND forum_id = $2
 `
 
 type DeleteMembershipParams struct {
-	UserID  string      `json:"user_id"`
-	ForumID pgtype.UUID `json:"forum_id"`
+	UserID  string    `json:"user_id"`
+	ForumID uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipParams) error {
@@ -48,8 +49,8 @@ WHERE f.id = $1 AND m.user_id = $2
 `
 
 type GetMembershipJoinDetailsParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID string      `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID string    `json:"user_id"`
 }
 
 type GetMembershipJoinDetailsRow struct {
@@ -84,8 +85,8 @@ SELECT notifications_muted FROM forumline_memberships WHERE user_id = $1 AND for
 `
 
 type IsNotificationsMutedParams struct {
-	UserID  string      `json:"user_id"`
-	ForumID pgtype.UUID `json:"forum_id"`
+	UserID  string    `json:"user_id"`
+	ForumID uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) IsNotificationsMuted(ctx context.Context, arg IsNotificationsMutedParams) (bool, error) {
@@ -125,7 +126,7 @@ ORDER BY m.joined_at DESC
 `
 
 type ListMembershipsRow struct {
-	ID                 pgtype.UUID        `json:"id"`
+	ID                 uuid.UUID          `json:"id"`
 	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
 	ForumAuthedAt      pgtype.Timestamptz `json:"forum_authed_at"`
 	NotificationsMuted bool               `json:"notifications_muted"`
@@ -175,8 +176,8 @@ UPDATE forumline_memberships SET forum_authed_at = now() WHERE user_id = $1 AND 
 `
 
 type SetMembershipAuthedParams struct {
-	UserID  string      `json:"user_id"`
-	ForumID pgtype.UUID `json:"forum_id"`
+	UserID  string    `json:"user_id"`
+	ForumID uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) SetMembershipAuthed(ctx context.Context, arg SetMembershipAuthedParams) error {
@@ -189,9 +190,9 @@ UPDATE forumline_memberships SET notifications_muted = $1 WHERE user_id = $2 AND
 `
 
 type UpdateMembershipMuteParams struct {
-	NotificationsMuted bool        `json:"notifications_muted"`
-	UserID             string      `json:"user_id"`
-	ForumID            pgtype.UUID `json:"forum_id"`
+	NotificationsMuted bool      `json:"notifications_muted"`
+	UserID             string    `json:"user_id"`
+	ForumID            uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) UpdateMembershipMute(ctx context.Context, arg UpdateMembershipMuteParams) error {
@@ -204,8 +205,8 @@ INSERT INTO forumline_memberships (user_id, forum_id) VALUES ($1, $2) ON CONFLIC
 `
 
 type UpsertMembershipParams struct {
-	UserID  string      `json:"user_id"`
-	ForumID pgtype.UUID `json:"forum_id"`
+	UserID  string    `json:"user_id"`
+	ForumID uuid.UUID `json:"forum_id"`
 }
 
 func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) error {

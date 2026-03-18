@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
@@ -125,8 +127,13 @@ func (h *PushHandler) HandleNotify(w http.ResponseWriter, r *http.Request) {
 
 	// Check mute
 	if body.ForumDomain != "" {
-		forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-		if forumID != "" {
+		forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+		if forumIDStr != "" {
+			forumID, parseErr := uuid.Parse(forumIDStr)
+			if parseErr != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
+				return
+			}
 			muted, err := h.Store.IsNotificationsMuted(ctx, targetUserID, forumID)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to check mute status"})

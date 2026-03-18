@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
@@ -17,7 +19,7 @@ func (s *Store) ListVoiceRooms(ctx context.Context) ([]oapi.VoiceRoom, error) {
 	rooms := make([]oapi.VoiceRoom, 0, len(rows))
 	for _, r := range rows {
 		rooms = append(rooms, oapi.VoiceRoom{
-			Id:        pgUUID2OapiUUID(r.ID),
+			Id:        r.ID,
 			Name:      r.Name,
 			Slug:      r.Slug,
 			CreatedAt: tsTime(r.CreatedAt),
@@ -40,16 +42,16 @@ func (s *Store) ListVoicePresence(ctx context.Context) ([]oapi.VoicePresence, er
 }
 
 // SetVoicePresence sets a user's voice presence.
-func (s *Store) SetVoicePresence(ctx context.Context, userID, roomSlug string) error {
+func (s *Store) SetVoicePresence(ctx context.Context, userID uuid.UUID, roomSlug string) error {
 	now := time.Now()
 	return s.Q.SetVoicePresence(ctx, sqlcdb.SetVoicePresenceParams{
-		UserID:   pgUUID(userID),
+		UserID:   userID,
 		RoomSlug: roomSlug,
 		JoinedAt: pgTimestamp(now),
 	})
 }
 
 // ClearVoicePresence removes a user's voice presence.
-func (s *Store) ClearVoicePresence(ctx context.Context, userID string) error {
-	return s.Q.ClearVoicePresence(ctx, pgUUID(userID))
+func (s *Store) ClearVoicePresence(ctx context.Context, userID uuid.UUID) error {
+	return s.Q.ClearVoicePresence(ctx, userID)
 }

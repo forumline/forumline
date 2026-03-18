@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
@@ -16,7 +18,7 @@ func (s *Store) ListChannels(ctx context.Context) ([]oapi.Channel, error) {
 	channels := make([]oapi.Channel, 0, len(rows))
 	for _, r := range rows {
 		channels = append(channels, oapi.Channel{
-			Id:          pgUUID2OapiUUID(r.ID),
+			Id:          r.ID,
 			Name:        r.Name,
 			Slug:        r.Slug,
 			Description: pgtextPtr(r.Description),
@@ -26,13 +28,9 @@ func (s *Store) ListChannels(ctx context.Context) ([]oapi.Channel, error) {
 	return channels, nil
 }
 
-// GetChannelIDBySlug returns the channel ID for a given slug.
-func (s *Store) GetChannelIDBySlug(ctx context.Context, slug string) (string, error) {
-	id, err := s.Q.GetChannelIDBySlug(ctx, slug)
-	if err != nil {
-		return "", err
-	}
-	return uuidStr(id), nil
+// GetChannelIDBySlug returns the channel UUID for a given slug.
+func (s *Store) GetChannelIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	return s.Q.GetChannelIDBySlug(ctx, slug)
 }
 
 // ListChatMessages returns chat messages for a channel slug (with author profile).
@@ -49,10 +47,10 @@ func (s *Store) ListChatMessages(ctx context.Context, slug string) ([]oapi.ChatM
 }
 
 // InsertChatMessage inserts a chat message.
-func (s *Store) InsertChatMessage(ctx context.Context, channelID, authorID, content string) error {
+func (s *Store) InsertChatMessage(ctx context.Context, channelID, authorID uuid.UUID, content string) error {
 	return s.Q.InsertChatMessage(ctx, sqlcdb.InsertChatMessageParams{
-		ChannelID: pgUUID(channelID),
-		AuthorID:  pgUUID(authorID),
+		ChannelID: channelID,
+		AuthorID:  authorID,
 		Content:   content,
 	})
 }

@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListPostsByThread returns posts for a thread ordered by creation time.
-func (s *Store) ListPostsByThread(ctx context.Context, threadID string) ([]oapi.Post, error) {
-	rows, err := s.Q.ListPostsByThread(ctx, pgUUID(threadID))
+func (s *Store) ListPostsByThread(ctx context.Context, threadID uuid.UUID) ([]oapi.Post, error) {
+	rows, err := s.Q.ListPostsByThread(ctx, threadID)
 	if err != nil {
 		return nil, err
 	}
@@ -24,8 +24,8 @@ func (s *Store) ListPostsByThread(ctx context.Context, threadID string) ([]oapi.
 }
 
 // ListUserPosts returns posts authored by a user.
-func (s *Store) ListUserPosts(ctx context.Context, userID string) ([]oapi.Post, error) {
-	rows, err := s.Q.ListUserPosts(ctx, pgUUID(userID))
+func (s *Store) ListUserPosts(ctx context.Context, userID uuid.UUID) ([]oapi.Post, error) {
+	rows, err := s.Q.ListUserPosts(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,30 +50,22 @@ func (s *Store) SearchPosts(ctx context.Context, pattern string) ([]oapi.Post, e
 }
 
 // CreatePost inserts a new post and returns its ID.
-func (s *Store) CreatePost(ctx context.Context, threadID, authorID, content string, replyToID *string) (string, error) {
+func (s *Store) CreatePost(ctx context.Context, threadID, authorID uuid.UUID, content string, replyToID *uuid.UUID) (uuid.UUID, error) {
 	now := time.Now()
-	var replyUUID pgtype.UUID
-	if replyToID != nil {
-		replyUUID = pgUUID(*replyToID)
-	}
 	id, err := s.Q.CreatePost(ctx, sqlcdb.CreatePostParams{
-		ThreadID:  pgUUID(threadID),
-		AuthorID:  pgUUID(authorID),
+		ThreadID:  threadID,
+		AuthorID:  authorID,
 		Content:   content,
-		ReplyToID: replyUUID,
+		ReplyToID: replyToID,
 		CreatedAt: pgTimestamp(now),
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return uuidStr(id), nil
+	return id, nil
 }
 
 // GetPostAuthor returns the author_id of a post.
-func (s *Store) GetPostAuthor(ctx context.Context, postID string) (string, error) {
-	id, err := s.Q.GetPostAuthor(ctx, pgUUID(postID))
-	if err != nil {
-		return "", err
-	}
-	return uuidStr(id), nil
+func (s *Store) GetPostAuthor(ctx context.Context, postID uuid.UUID) (uuid.UUID, error) {
+	return s.Q.GetPostAuthor(ctx, postID)
 }

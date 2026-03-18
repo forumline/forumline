@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/forumline/forumline/backend/auth"
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/service"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // ============================================================================
@@ -16,7 +16,7 @@ import (
 
 // CreateThread handles POST /api/threads
 func (h *Handlers) CreateThread(ctx context.Context, request oapi.CreateThreadRequestObject) (oapi.CreateThreadResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
 	var content *string
@@ -25,7 +25,7 @@ func (h *Handlers) CreateThread(ctx context.Context, request oapi.CreateThreadRe
 	}
 
 	id, err := h.ThreadSvc.Create(ctx, userID, service.CreateThreadInput{
-		CategoryID: body.CategoryId.String(),
+		CategoryID: body.CategoryId,
 		Title:      body.Title,
 		Slug:       body.Slug,
 		Content:    content,
@@ -41,17 +41,13 @@ func (h *Handlers) CreateThread(ctx context.Context, request oapi.CreateThreadRe
 		}
 	}
 
-	// Parse the returned string ID into a UUID
-	var idUUID openapi_types.UUID
-	if err := idUUID.UnmarshalText([]byte(id)); err != nil {
-		return oapi.CreateThread400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "invalid id returned"}}, nil
-	}
+	idUUID := id
 	return oapi.CreateThread201JSONResponse{Id: &idUUID}, nil
 }
 
 // UpdateThread handles PATCH /api/threads/{id}
 func (h *Handlers) UpdateThread(ctx context.Context, request oapi.UpdateThreadRequestObject) (oapi.UpdateThreadResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
 	// Convert *time.Time to *string for the service layer
@@ -61,7 +57,7 @@ func (h *Handlers) UpdateThread(ctx context.Context, request oapi.UpdateThreadRe
 		lastPostAt = &s
 	}
 
-	err := h.ThreadSvc.Update(ctx, userID, request.Id.String(), service.UpdateThreadInput{
+	err := h.ThreadSvc.Update(ctx, userID, request.Id, service.UpdateThreadInput{
 		ImageURL:   body.ImageUrl,
 		LastPostAt: lastPostAt,
 		PostCount:  body.PostCount,
@@ -91,17 +87,17 @@ func (h *Handlers) UpdateThread(ctx context.Context, request oapi.UpdateThreadRe
 
 // CreatePost handles POST /api/posts
 func (h *Handlers) CreatePost(ctx context.Context, request oapi.CreatePostRequestObject) (oapi.CreatePostResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
-	var replyToID *string
+	var replyToID *uuid.UUID
 	if body.ReplyToId != nil {
-		s := body.ReplyToId.String()
-		replyToID = &s
+		v := *body.ReplyToId
+		replyToID = &v
 	}
 
 	id, err := h.PostSvc.Create(ctx, userID, service.CreatePostInput{
-		ThreadID:  body.ThreadId.String(),
+		ThreadID:  body.ThreadId,
 		Content:   body.Content,
 		ReplyToID: replyToID,
 	})
@@ -115,10 +111,7 @@ func (h *Handlers) CreatePost(ctx context.Context, request oapi.CreatePostReques
 		}
 	}
 
-	var idUUID openapi_types.UUID
-	if err := idUUID.UnmarshalText([]byte(id)); err != nil {
-		return oapi.CreatePost400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: "invalid id returned"}}, nil
-	}
+	idUUID := id
 	return oapi.CreatePost201JSONResponse{Id: &idUUID}, nil
 }
 
@@ -128,7 +121,7 @@ func (h *Handlers) CreatePost(ctx context.Context, request oapi.CreatePostReques
 
 // SendChatMessage handles POST /api/channels/{slug}/messages
 func (h *Handlers) SendChatMessage(ctx context.Context, request oapi.SendChatMessageRequestObject) (oapi.SendChatMessageResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
 	if err := h.ChatSvc.SendMessage(ctx, userID, request.Slug, body.Content); err != nil {
@@ -148,10 +141,10 @@ func (h *Handlers) SendChatMessage(ctx context.Context, request oapi.SendChatMes
 
 // SendChatMessageByID handles POST /api/channels/_by-id/{id}/messages
 func (h *Handlers) SendChatMessageByID(ctx context.Context, request oapi.SendChatMessageByIDRequestObject) (oapi.SendChatMessageByIDResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
-	if err := h.ChatSvc.SendMessageByID(ctx, userID, request.Id.String(), body.Content); err != nil {
+	if err := h.ChatSvc.SendMessageByID(ctx, userID, request.Id, body.Content); err != nil {
 		status, msg := serviceErrStatus(err)
 		switch status {
 		case http.StatusBadRequest:
@@ -170,9 +163,9 @@ func (h *Handlers) SendChatMessageByID(ctx context.Context, request oapi.SendCha
 
 // AddBookmark handles POST /api/bookmarks
 func (h *Handlers) AddBookmark(ctx context.Context, request oapi.AddBookmarkRequestObject) (oapi.AddBookmarkResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.AddBookmark(ctx, userID, request.Body.ThreadId.String()); err != nil {
+	if err := h.Store.AddBookmark(ctx, userID, request.Body.ThreadId); err != nil {
 		return oapi.AddBookmark400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -181,9 +174,9 @@ func (h *Handlers) AddBookmark(ctx context.Context, request oapi.AddBookmarkRequ
 
 // RemoveBookmark handles DELETE /api/bookmarks/{threadId}
 func (h *Handlers) RemoveBookmark(ctx context.Context, request oapi.RemoveBookmarkRequestObject) (oapi.RemoveBookmarkResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.RemoveBookmark(ctx, userID, request.ThreadId.String()); err != nil {
+	if err := h.Store.RemoveBookmark(ctx, userID, request.ThreadId); err != nil {
 		return oapi.RemoveBookmark500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -192,9 +185,9 @@ func (h *Handlers) RemoveBookmark(ctx context.Context, request oapi.RemoveBookma
 
 // RemoveBookmarkById handles DELETE /api/bookmarks/by-id/{id}
 func (h *Handlers) RemoveBookmarkById(ctx context.Context, request oapi.RemoveBookmarkByIdRequestObject) (oapi.RemoveBookmarkByIdResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.RemoveBookmarkByID(ctx, userID, request.Id.String()); err != nil {
+	if err := h.Store.RemoveBookmarkByID(ctx, userID, request.Id); err != nil {
 		return oapi.RemoveBookmarkById500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -207,7 +200,7 @@ func (h *Handlers) RemoveBookmarkById(ctx context.Context, request oapi.RemoveBo
 
 // MarkAllNotificationsRead handles POST /api/notifications/read-all
 func (h *Handlers) MarkAllNotificationsRead(ctx context.Context, _ oapi.MarkAllNotificationsReadRequestObject) (oapi.MarkAllNotificationsReadResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
 	if err := h.Store.MarkAllNotificationsRead(ctx, userID); err != nil {
 		return oapi.MarkAllNotificationsRead500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -222,10 +215,10 @@ func (h *Handlers) MarkAllNotificationsRead(ctx context.Context, _ oapi.MarkAllN
 
 // UpsertProfile handles PUT /api/profiles/{id}
 func (h *Handlers) UpsertProfile(ctx context.Context, request oapi.UpsertProfileRequestObject) (oapi.UpsertProfileResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
-	err := h.ProfileSvc.Upsert(ctx, userID, request.Id.String(), service.UpdateProfileInput{
+	err := h.ProfileSvc.Upsert(ctx, userID, request.Id, service.UpdateProfileInput{
 		Username:    body.Username,
 		DisplayName: body.DisplayName,
 		AvatarURL:   body.AvatarUrl,
@@ -249,9 +242,9 @@ func (h *Handlers) UpsertProfile(ctx context.Context, request oapi.UpsertProfile
 
 // ClearForumlineId handles DELETE /api/profiles/{id}/forumline-id
 func (h *Handlers) ClearForumlineId(ctx context.Context, request oapi.ClearForumlineIdRequestObject) (oapi.ClearForumlineIdResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.ProfileSvc.ClearForumlineID(ctx, userID, request.Id.String()); err != nil {
+	if err := h.ProfileSvc.ClearForumlineID(ctx, userID, request.Id); err != nil {
 		status, msg := serviceErrStatus(err)
 		if status == http.StatusForbidden {
 			return oapi.ClearForumlineId403JSONResponse{ForbiddenJSONResponse: oapi.ForbiddenJSONResponse{Error: msg}}, nil
@@ -268,7 +261,7 @@ func (h *Handlers) ClearForumlineId(ctx context.Context, request oapi.ClearForum
 
 // SetVoicePresence handles PUT /api/voice-presence
 func (h *Handlers) SetVoicePresence(ctx context.Context, request oapi.SetVoicePresenceRequestObject) (oapi.SetVoicePresenceResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
 	if err := h.Store.SetVoicePresence(ctx, userID, request.Body.RoomSlug); err != nil {
 		return oapi.SetVoicePresence500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -279,7 +272,7 @@ func (h *Handlers) SetVoicePresence(ctx context.Context, request oapi.SetVoicePr
 
 // ClearVoicePresence handles DELETE /api/voice-presence
 func (h *Handlers) ClearVoicePresence(ctx context.Context, _ oapi.ClearVoicePresenceRequestObject) (oapi.ClearVoicePresenceResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
 	if err := h.Store.ClearVoicePresence(ctx, userID); err != nil {
 		return oapi.ClearVoicePresence500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil

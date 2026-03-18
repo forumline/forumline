@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -18,7 +20,7 @@ func NewAdminService(s *store.Store) *AdminService {
 }
 
 // GetStats returns admin dashboard statistics after verifying admin access.
-func (as *AdminService) GetStats(ctx context.Context, userID string) (*oapi.AdminStats, error) {
+func (as *AdminService) GetStats(ctx context.Context, userID uuid.UUID) (*oapi.AdminStats, error) {
 	isAdmin, err := as.Store.IsAdmin(ctx, userID)
 	if err != nil || !isAdmin {
 		return nil, &ForbiddenError{Msg: "admin access required"}
@@ -32,7 +34,7 @@ func (as *AdminService) GetStats(ctx context.Context, userID string) (*oapi.Admi
 }
 
 // ListUsers returns all users after verifying admin access.
-func (as *AdminService) ListUsers(ctx context.Context, userID string) ([]oapi.Profile, error) {
+func (as *AdminService) ListUsers(ctx context.Context, userID uuid.UUID) ([]oapi.Profile, error) {
 	isAdmin, err := as.Store.IsAdmin(ctx, userID)
 	if err != nil || !isAdmin {
 		return nil, &ForbiddenError{Msg: "admin access required"}
@@ -42,7 +44,7 @@ func (as *AdminService) ListUsers(ctx context.Context, userID string) ([]oapi.Pr
 }
 
 // VerifyAdmin returns an error if the user is not an admin.
-func (as *AdminService) VerifyAdmin(ctx context.Context, userID string) error {
+func (as *AdminService) VerifyAdmin(ctx context.Context, userID uuid.UUID) error {
 	isAdmin, err := as.Store.IsAdmin(ctx, userID)
 	if err != nil || !isAdmin {
 		return &ForbiddenError{Msg: "admin access required"}

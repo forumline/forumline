@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -19,7 +21,7 @@ func NewProfileService(s *store.Store) *ProfileService {
 }
 
 // Get returns a profile by ID.
-func (ps *ProfileService) Get(ctx context.Context, id string) (*oapi.Profile, error) {
+func (ps *ProfileService) Get(ctx context.Context, id uuid.UUID) (*oapi.Profile, error) {
 	p, err := ps.Store.GetProfile(ctx, id)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "profile not found"}
@@ -37,7 +39,7 @@ func (ps *ProfileService) GetByUsername(ctx context.Context, username string) (*
 }
 
 // GetBatch returns profiles for the given IDs.
-func (ps *ProfileService) GetBatch(ctx context.Context, ids []string) ([]oapi.Profile, error) {
+func (ps *ProfileService) GetBatch(ctx context.Context, ids []uuid.UUID) ([]oapi.Profile, error) {
 	if len(ids) == 0 {
 		return []oapi.Profile{}, nil
 	}
@@ -54,7 +56,7 @@ type UpdateProfileInput struct {
 }
 
 // Upsert creates or updates a profile.
-func (ps *ProfileService) Upsert(ctx context.Context, userID, profileID string, input UpdateProfileInput) error {
+func (ps *ProfileService) Upsert(ctx context.Context, userID, profileID uuid.UUID, input UpdateProfileInput) error {
 	if userID != profileID {
 		return &ForbiddenError{Msg: "can only update own profile"}
 	}
@@ -93,7 +95,7 @@ func (ps *ProfileService) Upsert(ctx context.Context, userID, profileID string, 
 }
 
 // ClearForumlineID removes the forumline_id from a profile.
-func (ps *ProfileService) ClearForumlineID(ctx context.Context, userID, profileID string) error {
+func (ps *ProfileService) ClearForumlineID(ctx context.Context, userID, profileID uuid.UUID) error {
 	if userID != profileID {
 		return &ForbiddenError{Msg: "can only update own profile"}
 	}

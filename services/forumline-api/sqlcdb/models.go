@@ -5,12 +5,13 @@
 package sqlcdb
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ForumlineCall struct {
-	ID              pgtype.UUID        `json:"id"`
-	ConversationID  pgtype.UUID        `json:"conversation_id"`
+	ID              uuid.UUID          `json:"id"`
+	ConversationID  uuid.UUID          `json:"conversation_id"`
 	CallerID        string             `json:"caller_id"`
 	CalleeID        string             `json:"callee_id"`
 	Status          string             `json:"status"`
@@ -21,7 +22,7 @@ type ForumlineCall struct {
 }
 
 type ForumlineConversation struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        uuid.UUID          `json:"id"`
 	IsGroup   bool               `json:"is_group"`
 	Name      pgtype.Text        `json:"name"`
 	CreatedBy pgtype.Text        `json:"created_by"`
@@ -30,22 +31,22 @@ type ForumlineConversation struct {
 }
 
 type ForumlineConversationMember struct {
-	ConversationID pgtype.UUID        `json:"conversation_id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
 	UserID         string             `json:"user_id"`
 	JoinedAt       pgtype.Timestamptz `json:"joined_at"`
 	LastReadAt     pgtype.Timestamptz `json:"last_read_at"`
 }
 
 type ForumlineDirectMessage struct {
-	ID             pgtype.UUID        `json:"id"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
 	SenderID       string             `json:"sender_id"`
 	Content        string             `json:"content"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type ForumlineForum struct {
-	ID                  pgtype.UUID        `json:"id"`
+	ID                  uuid.UUID          `json:"id"`
 	Domain              string             `json:"domain"`
 	Name                string             `json:"name"`
 	IconUrl             pgtype.Text        `json:"icon_url"`
@@ -65,16 +66,16 @@ type ForumlineForum struct {
 }
 
 type ForumlineMembership struct {
-	ID                 pgtype.UUID        `json:"id"`
+	ID                 uuid.UUID          `json:"id"`
 	UserID             string             `json:"user_id"`
-	ForumID            pgtype.UUID        `json:"forum_id"`
+	ForumID            uuid.UUID          `json:"forum_id"`
 	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
 	NotificationsMuted bool               `json:"notifications_muted"`
 	ForumAuthedAt      pgtype.Timestamptz `json:"forum_authed_at"`
 }
 
 type ForumlineNotification struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	UserID      string             `json:"user_id"`
 	ForumDomain string             `json:"forum_domain"`
 	ForumName   string             `json:"forum_name"`
@@ -100,7 +101,7 @@ type ForumlineProfile struct {
 }
 
 type PushSubscription struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        uuid.UUID          `json:"id"`
 	UserID    string             `json:"user_id"`
 	Endpoint  string             `json:"endpoint"`
 	P256dh    string             `json:"p256dh"`

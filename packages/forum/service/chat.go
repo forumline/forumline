@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -23,7 +25,7 @@ func (cs *ChatService) ListMessages(ctx context.Context, slug string) ([]oapi.Ch
 }
 
 // SendMessage sends a chat message to a channel by slug.
-func (cs *ChatService) SendMessage(ctx context.Context, userID, slug, content string) error {
+func (cs *ChatService) SendMessage(ctx context.Context, userID uuid.UUID, slug, content string) error {
 	if content == "" {
 		return &ValidationError{Msg: "content is required"}
 	}
@@ -37,7 +39,7 @@ func (cs *ChatService) SendMessage(ctx context.Context, userID, slug, content st
 }
 
 // SendMessageByID sends a chat message to a channel by ID.
-func (cs *ChatService) SendMessageByID(ctx context.Context, userID, channelID, content string) error {
+func (cs *ChatService) SendMessageByID(ctx context.Context, userID, channelID uuid.UUID, content string) error {
 	if content == "" {
 		return &ValidationError{Msg: "content is required"}
 	}

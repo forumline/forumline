@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,8 +19,8 @@ ON CONFLICT (user_id, category_id) DO NOTHING
 `
 
 type AddChannelFollowParams struct {
-	UserID     pgtype.UUID `json:"user_id"`
-	CategoryID pgtype.UUID `json:"category_id"`
+	UserID     uuid.UUID `json:"user_id"`
+	CategoryID uuid.UUID `json:"category_id"`
 }
 
 func (q *Queries) AddChannelFollow(ctx context.Context, arg AddChannelFollowParams) error {
@@ -64,15 +65,15 @@ const listChannelFollows = `-- name: ListChannelFollows :many
 SELECT category_id FROM channel_follows WHERE user_id = $1
 `
 
-func (q *Queries) ListChannelFollows(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+func (q *Queries) ListChannelFollows(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listChannelFollows, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []pgtype.UUID{}
+	items := []uuid.UUID{}
 	for rows.Next() {
-		var category_id pgtype.UUID
+		var category_id uuid.UUID
 		if err := rows.Scan(&category_id); err != nil {
 			return nil, err
 		}
@@ -93,7 +94,7 @@ type ListNotificationPrefsRow struct {
 	Enabled  bool   `json:"enabled"`
 }
 
-func (q *Queries) ListNotificationPrefs(ctx context.Context, userID pgtype.UUID) ([]ListNotificationPrefsRow, error) {
+func (q *Queries) ListNotificationPrefs(ctx context.Context, userID uuid.UUID) ([]ListNotificationPrefsRow, error) {
 	rows, err := q.db.Query(ctx, listNotificationPrefs, userID)
 	if err != nil {
 		return nil, err
@@ -118,8 +119,8 @@ DELETE FROM channel_follows WHERE user_id = $1 AND category_id = $2
 `
 
 type RemoveChannelFollowParams struct {
-	UserID     pgtype.UUID `json:"user_id"`
-	CategoryID pgtype.UUID `json:"category_id"`
+	UserID     uuid.UUID `json:"user_id"`
+	CategoryID uuid.UUID `json:"category_id"`
 }
 
 func (q *Queries) RemoveChannelFollow(ctx context.Context, arg RemoveChannelFollowParams) error {
@@ -135,7 +136,7 @@ DO UPDATE SET enabled = $3, updated_at = $4
 `
 
 type UpsertNotificationPrefParams struct {
-	UserID    pgtype.UUID        `json:"user_id"`
+	UserID    uuid.UUID          `json:"user_id"`
 	Category  string             `json:"category"`
 	Enabled   bool               `json:"enabled"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`

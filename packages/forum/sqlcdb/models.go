@@ -5,18 +5,19 @@
 package sqlcdb
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Bookmark struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	ThreadID  pgtype.UUID        `json:"thread_id"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	ThreadID  uuid.UUID          `json:"thread_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Category struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	Name        string             `json:"name"`
 	Slug        string             `json:"slug"`
 	Description pgtype.Text        `json:"description"`
@@ -25,14 +26,14 @@ type Category struct {
 }
 
 type ChannelFollow struct {
-	ID         pgtype.UUID        `json:"id"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	CategoryID pgtype.UUID        `json:"category_id"`
+	ID         uuid.UUID          `json:"id"`
+	UserID     uuid.UUID          `json:"user_id"`
+	CategoryID uuid.UUID          `json:"category_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type ChatChannel struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	Name        string             `json:"name"`
 	Slug        string             `json:"slug"`
 	Description pgtype.Text        `json:"description"`
@@ -40,16 +41,16 @@ type ChatChannel struct {
 }
 
 type ChatMessage struct {
-	ID        pgtype.UUID        `json:"id"`
-	ChannelID pgtype.UUID        `json:"channel_id"`
-	AuthorID  pgtype.UUID        `json:"author_id"`
+	ID        uuid.UUID          `json:"id"`
+	ChannelID uuid.UUID          `json:"channel_id"`
+	AuthorID  uuid.UUID          `json:"author_id"`
 	Content   string             `json:"content"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Notification struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
 	Type      string             `json:"type"`
 	Title     string             `json:"title"`
 	Message   string             `json:"message"`
@@ -59,25 +60,25 @@ type Notification struct {
 }
 
 type NotificationPreference struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
 	Category  string             `json:"category"`
 	Enabled   bool               `json:"enabled"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Post struct {
-	ID        pgtype.UUID        `json:"id"`
-	ThreadID  pgtype.UUID        `json:"thread_id"`
-	AuthorID  pgtype.UUID        `json:"author_id"`
+	ID        uuid.UUID          `json:"id"`
+	ThreadID  uuid.UUID          `json:"thread_id"`
+	AuthorID  uuid.UUID          `json:"author_id"`
 	Content   string             `json:"content"`
-	ReplyToID pgtype.UUID        `json:"reply_to_id"`
+	ReplyToID *uuid.UUID         `json:"reply_to_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Profile struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	Username    string             `json:"username"`
 	DisplayName pgtype.Text        `json:"display_name"`
 	AvatarUrl   pgtype.Text        `json:"avatar_url"`
@@ -90,9 +91,9 @@ type Profile struct {
 }
 
 type Thread struct {
-	ID         pgtype.UUID        `json:"id"`
-	CategoryID pgtype.UUID        `json:"category_id"`
-	AuthorID   pgtype.UUID        `json:"author_id"`
+	ID         uuid.UUID          `json:"id"`
+	CategoryID uuid.UUID          `json:"category_id"`
+	AuthorID   uuid.UUID          `json:"author_id"`
 	Title      string             `json:"title"`
 	Slug       string             `json:"slug"`
 	Content    pgtype.Text        `json:"content"`
@@ -107,14 +108,14 @@ type Thread struct {
 }
 
 type VoicePresence struct {
-	ID       pgtype.UUID        `json:"id"`
-	UserID   pgtype.UUID        `json:"user_id"`
+	ID       uuid.UUID          `json:"id"`
+	UserID   uuid.UUID          `json:"user_id"`
 	RoomSlug string             `json:"room_slug"`
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }
 
 type VoiceRoom struct {
-	ID        pgtype.UUID        `json:"id"`
+	ID        uuid.UUID          `json:"id"`
 	Name      string             `json:"name"`
 	Slug      string             `json:"slug"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`

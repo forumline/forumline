@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+const (
+	testAppOrigin      = "https://app.forumline.net"
+	testRemoteAddr     = "10.0.0.1:1234"
+	corsCredentials    = "true" // value of Access-Control-Allow-Credentials header
+)
+
 func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.forumline.net,https://hosted.forumline.net")
 
@@ -16,16 +22,16 @@ func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req.Header.Set("Origin", "https://app.forumline.net")
+	req.Header.Set("Origin", testAppOrigin)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.forumline.net" {
-		t.Errorf("Allow-Origin = %q, want %q", got, "https://app.forumline.net")
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != testAppOrigin {
+		t.Errorf("Allow-Origin = %q, want %q", got, testAppOrigin)
 	}
-	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
-		t.Errorf("Allow-Credentials = %q, want %q", got, "true")
+	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != corsCredentials {
+		t.Errorf("Allow-Credentials = %q, want %q", got, corsCredentials)
 	}
 }
 
@@ -41,7 +47,7 @@ func TestCORSMiddleware_WildcardSubdomain(t *testing.T) {
 		allowed bool
 	}{
 		{"https://myforum.forumline.net", true},
-		{"https://app.forumline.net", true},
+		{testAppOrigin, true},
 		{"https://evil.com", false},
 		{"https://sub.nested.forumline.net", false}, // nested subdomain
 		{"http://myforum.forumline.net", false},     // wrong scheme
@@ -67,7 +73,7 @@ func TestCORSMiddleware_WildcardSubdomain(t *testing.T) {
 }
 
 func TestCORSMiddleware_DisallowedOrigin(t *testing.T) {
-	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.forumline.net")
+	t.Setenv("CORS_ALLOWED_ORIGINS", testAppOrigin)
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -96,25 +102,25 @@ func TestCORSMiddleware_DefaultOrigin(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req.Header.Set("Origin", "https://app.forumline.net")
+	req.Header.Set("Origin", testAppOrigin)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.forumline.net" {
-		t.Errorf("Allow-Origin = %q, want %q", got, "https://app.forumline.net")
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != testAppOrigin {
+		t.Errorf("Allow-Origin = %q, want %q", got, testAppOrigin)
 	}
 }
 
 func TestCORSMiddleware_Preflight(t *testing.T) {
-	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.forumline.net")
+	t.Setenv("CORS_ALLOWED_ORIGINS", testAppOrigin)
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("handler should not be called for OPTIONS")
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), "OPTIONS", "/test", nil)
-	req.Header.Set("Origin", "https://app.forumline.net")
+	req.Header.Set("Origin", testAppOrigin)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -262,7 +268,7 @@ func TestRateLimitMiddleware_TrustProxy(t *testing.T) {
 
 	// First request allowed
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req.RemoteAddr = "10.0.0.1:1234"
+	req.RemoteAddr = testRemoteAddr
 	req.Header.Set("X-Forwarded-For", "203.0.113.50")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -293,7 +299,7 @@ func TestRateLimitMiddleware_NoTrustProxy(t *testing.T) {
 
 	// With TRUST_PROXY=false, X-Forwarded-For should be ignored
 	req1 := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req1.RemoteAddr = "10.0.0.1:1234"
+	req1.RemoteAddr = testRemoteAddr
 	req1.Header.Set("X-Forwarded-For", "203.0.113.50")
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req1)
@@ -303,7 +309,7 @@ func TestRateLimitMiddleware_NoTrustProxy(t *testing.T) {
 
 	// Second request with same RemoteAddr but different X-Forwarded-For
 	req2 := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req2.RemoteAddr = "10.0.0.1:1234"
+	req2.RemoteAddr = testRemoteAddr
 	req2.Header.Set("X-Forwarded-For", "203.0.113.99")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req2)

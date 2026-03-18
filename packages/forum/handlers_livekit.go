@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	fauth "github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
@@ -16,7 +15,9 @@ import (
 // GetLiveKitToken handles POST /api/livekit -- generates an access token for joining a room.
 func (h *Handlers) GetLiveKitToken(ctx context.Context, request oapi.GetLiveKitTokenRequestObject) (oapi.GetLiveKitTokenResponseObject, error) {
 	body := request.Body
-	userID := fauth.UserIDFromContext(ctx)
+	// Use the local profile UUID as the LiveKit identity
+	userID := ProfileUUIDFromContext(ctx)
+	userIDStr := userID.String()
 
 	if h.Config.LiveKit == nil {
 		return oapi.GetLiveKitToken500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: "LiveKit not configured"}}, nil
@@ -37,7 +38,7 @@ func (h *Handlers) GetLiveKitToken(ctx context.Context, request oapi.GetLiveKitT
 		for _, room := range rooms.Rooms {
 			_, removeErr := roomClient.RemoveParticipant(timeoutCtx, &livekit.RoomParticipantIdentity{
 				Room:     room.Name,
-				Identity: userID,
+				Identity: userIDStr,
 			})
 			_ = removeErr // Not in this room -- ignore
 		}
@@ -52,7 +53,7 @@ func (h *Handlers) GetLiveKitToken(ctx context.Context, request oapi.GetLiveKitT
 		CanSubscribe: boolPtr(true),
 	}
 	at.SetVideoGrant(grant).
-		SetIdentity(userID).
+		SetIdentity(userIDStr).
 		SetName(body.ParticipantName).
 		SetValidFor(6 * time.Hour)
 

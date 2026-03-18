@@ -4,8 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
 
 type NotificationRow struct {
@@ -36,7 +38,7 @@ func (s *Store) InsertNotification(ctx context.Context, userID, forumDomain, for
 func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]NotificationRow, error) {
 	rows, err := s.Q.ListNotifications(ctx, sqlcdb.ListNotificationsParams{
 		UserID: userID,
-		Limit:  int32(min(limit, 1000)),  //nolint:gosec // limit is bounded
+		Limit:  int32(min(limit, 1000)), //nolint:gosec // limit is bounded
 	})
 	if err != nil {
 		return nil, err
@@ -45,7 +47,7 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 	notifs := make([]NotificationRow, 0, len(rows))
 	for _, r := range rows {
 		notifs = append(notifs, NotificationRow{
-			ID:          uuidStr(r.ID),
+			ID:          r.ID.String(),
 			ForumDomain: r.ForumDomain,
 			ForumName:   r.ForumName,
 			Type:        r.Type,
@@ -62,9 +64,9 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 	return notifs, nil
 }
 
-func (s *Store) MarkNotificationRead(ctx context.Context, notifID, userID string) error {
+func (s *Store) MarkNotificationRead(ctx context.Context, notifID uuid.UUID, userID string) error {
 	return s.Q.MarkNotificationRead(ctx, sqlcdb.MarkNotificationReadParams{
-		ID:     pgUUID(notifID),
+		ID:     notifID,
 		UserID: userID,
 	})
 }

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -26,7 +28,7 @@ func (ts *ThreadService) List(ctx context.Context, limit int) ([]oapi.Thread, er
 }
 
 // Get returns a single thread by ID.
-func (ts *ThreadService) Get(ctx context.Context, id string) (*oapi.Thread, error) {
+func (ts *ThreadService) Get(ctx context.Context, id uuid.UUID) (*oapi.Thread, error) {
 	t, err := ts.Store.GetThread(ctx, id)
 	if err != nil {
 		return nil, &NotFoundError{Msg: "thread not found"}
@@ -40,7 +42,7 @@ func (ts *ThreadService) ListByCategory(ctx context.Context, slug string) ([]oap
 }
 
 // ListByUser returns threads authored by a user.
-func (ts *ThreadService) ListByUser(ctx context.Context, userID string) ([]oapi.Thread, error) {
+func (ts *ThreadService) ListByUser(ctx context.Context, userID uuid.UUID) ([]oapi.Thread, error) {
 	return ts.Store.ListUserThreads(ctx, userID)
 }
 
@@ -52,9 +54,9 @@ func (ts *ThreadService) Search(ctx context.Context, query string) ([]oapi.Threa
 	return ts.Store.SearchThreads(ctx, "%"+query+"%")
 }
 
-// CreateInput holds input for creating a thread.
+// CreateThreadInput holds input for creating a thread.
 type CreateThreadInput struct {
-	CategoryID string
+	CategoryID uuid.UUID
 	Title      string
 	Slug       string
 	Content    *string
@@ -62,9 +64,9 @@ type CreateThreadInput struct {
 }
 
 // Create creates a new thread.
-func (ts *ThreadService) Create(ctx context.Context, userID string, input CreateThreadInput) (string, error) {
-	if input.CategoryID == "" || input.Title == "" || input.Slug == "" {
-		return "", &ValidationError{Msg: "category_id, title, and slug are required"}
+func (ts *ThreadService) Create(ctx context.Context, userID uuid.UUID, input CreateThreadInput) (uuid.UUID, error) {
+	if input.CategoryID == (uuid.UUID{}) || input.Title == "" || input.Slug == "" {
+		return uuid.UUID{}, &ValidationError{Msg: "category_id, title, and slug are required"}
 	}
 	return ts.Store.CreateThread(ctx, input.CategoryID, userID, input.Title, input.Slug, input.Content, input.ImageURL)
 }
@@ -79,7 +81,7 @@ type UpdateThreadInput struct {
 }
 
 // Update updates a thread, verifying ownership or admin.
-func (ts *ThreadService) Update(ctx context.Context, userID, threadID string, input UpdateThreadInput) error {
+func (ts *ThreadService) Update(ctx context.Context, userID, threadID uuid.UUID, input UpdateThreadInput) error {
 	authorID, isAdmin, err := ts.Store.GetThreadOwnership(ctx, threadID, userID)
 	if err != nil {
 		return &NotFoundError{Msg: "thread not found"}

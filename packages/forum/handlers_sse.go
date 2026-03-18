@@ -90,7 +90,7 @@ func (h *Handlers) StreamChatMessages(ctx context.Context, request oapi.StreamCh
 	if err != nil {
 		return oapi.StreamChatMessages404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: "channel not found"}}, nil
 	}
-	return chatSSEStream{ctx: ctx, h: h, channelID: channelID}, nil
+	return chatSSEStream{ctx: ctx, h: h, channelID: channelID.String()}, nil
 }
 
 // ── StreamPosts ───────────────────────────────────────────────────────

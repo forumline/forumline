@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.Conversation, error) {
@@ -23,7 +24,7 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 		return []model.Conversation{}, nil
 	}
 
-	convoIDs := make([]pgtype.UUID, len(rows))
+	convoIDs := make([]uuid.UUID, len(rows))
 	for i, r := range rows {
 		convoIDs[i] = r.ID
 	}
@@ -35,7 +36,7 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 
 	conversations := make([]model.Conversation, 0, len(rows))
 	for _, r := range rows {
-		id := uuidStr(r.ID)
+		id := r.ID.String()
 		members := membersMap[id]
 		if members == nil {
 			members = []model.ConversationMember{}
@@ -50,32 +51,32 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 	return conversations, nil
 }
 
-func (s *Store) GetConversation(ctx context.Context, userID, conversationID string) (*model.Conversation, error) {
+func (s *Store) GetConversation(ctx context.Context, userID string, conversationID uuid.UUID) (*model.Conversation, error) {
 	row, err := s.Q.GetConversation(ctx, sqlcdb.GetConversationParams{
 		UserID:         userID,
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	membersMap, err := s.fetchConversationMembers(ctx, []pgtype.UUID{pgUUID(conversationID)})
+	membersMap, err := s.fetchConversationMembers(ctx, []uuid.UUID{conversationID})
 	if err != nil {
 		return nil, err
 	}
-	members := membersMap[conversationID]
+	members := membersMap[conversationID.String()]
 	if members == nil {
 		members = []model.ConversationMember{}
 	}
 	return &model.Conversation{
-		ID: uuidStr(row.ID), IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
+		ID: row.ID.String(), IsGroup: row.IsGroup, Name: pgtextPtr(row.Name),
 		Members: members, LastMessage: row.LastMessage,
 		LastMessageTime: row.LastMessageTime.Time.Format(time.RFC3339),
 		UnreadCount:     int(row.UnreadCount),
 	}, nil
 }
 
-func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []pgtype.UUID) (map[string][]model.ConversationMember, error) {
+func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UUID) (map[string][]model.ConversationMember, error) {
 	rows, err := s.Q.FetchConversationMembers(ctx, convoIDs)
 	if err != nil {
 		return nil, err
@@ -83,7 +84,7 @@ func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []pgtype.
 
 	result := make(map[string][]model.ConversationMember)
 	for _, r := range rows {
-		convoID := uuidStr(r.ConversationID)
+		convoID := r.ConversationID.String()
 		name := r.DisplayName
 		if name == "" {
 			name = r.Username
@@ -95,14 +96,14 @@ func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []pgtype.
 	return result, nil
 }
 
-func (s *Store) IsConversationMember(ctx context.Context, conversationID, userID string) (bool, error) {
+func (s *Store) IsConversationMember(ctx context.Context, conversationID uuid.UUID, userID string) (bool, error) {
 	return s.Q.IsConversationMember(ctx, sqlcdb.IsConversationMemberParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		UserID:         userID,
 	})
 }
 
-func (s *Store) GetMessages(ctx context.Context, conversationID, before string, limitStr string) ([]model.DirectMessage, error) {
+func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, before string, limitStr string) ([]model.DirectMessage, error) {
 	limit := 50
 	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 		limit = int(math.Min(float64(l), 100))
@@ -111,9 +112,13 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 	var dbMessages []sqlcdb.ForumlineDirectMessage
 
 	if before != "" {
+		beforeID, err := uuid.Parse(before)
+		if err != nil {
+			return nil, fmt.Errorf("invalid before cursor: %w", err)
+		}
 		rows, err := s.Q.GetMessagesBefore(ctx, sqlcdb.GetMessagesBeforeParams{
-			ConversationID: pgUUID(conversationID),
-			BeforeID:       pgUUID(before),
+			ConversationID: conversationID,
+			BeforeID:       beforeID,
 			MsgLimit:       int32(min(limit, 1000)), //nolint:gosec // bounded
 		})
 		if err != nil {
@@ -122,7 +127,7 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 		dbMessages = rows
 	} else {
 		rows, err := s.Q.GetMessagesLatest(ctx, sqlcdb.GetMessagesLatestParams{
-			ConversationID: pgUUID(conversationID),
+			ConversationID: conversationID,
 			Limit:          int32(min(limit, 1000)), //nolint:gosec // bounded
 		})
 		if err != nil {
@@ -134,8 +139,8 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 	messages := make([]model.DirectMessage, len(dbMessages))
 	for i, m := range dbMessages {
 		messages[i] = model.DirectMessage{
-			ID:             uuidStr(m.ID),
-			ConversationID: uuidStr(m.ConversationID),
+			ID:             m.ID.String(),
+			ConversationID: m.ConversationID.String(),
 			SenderID:       m.SenderID,
 			Content:        m.Content,
 			CreatedAt:      m.CreatedAt.Time,
@@ -149,9 +154,9 @@ func (s *Store) GetMessages(ctx context.Context, conversationID, before string, 
 	return messages, nil
 }
 
-func (s *Store) SendMessage(ctx context.Context, conversationID, senderID, content string) (*model.DirectMessage, error) {
+func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, senderID, content string) (*model.DirectMessage, error) {
 	row, err := s.Q.SendMessage(ctx, sqlcdb.SendMessageParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		SenderID:       senderID,
 		Content:        content,
 	})
@@ -159,19 +164,19 @@ func (s *Store) SendMessage(ctx context.Context, conversationID, senderID, conte
 		return nil, err
 	}
 	// Update conversation timestamp (fire-and-forget)
-	_ = s.Q.TouchConversation(ctx, pgUUID(conversationID))
+	_ = s.Q.TouchConversation(ctx, conversationID)
 	return &model.DirectMessage{
-		ID:             uuidStr(row.ID),
-		ConversationID: uuidStr(row.ConversationID),
+		ID:             row.ID.String(),
+		ConversationID: row.ConversationID.String(),
 		SenderID:       row.SenderID,
 		Content:        row.Content,
 		CreatedAt:      row.CreatedAt.Time,
 	}, nil
 }
 
-func (s *Store) MarkRead(ctx context.Context, conversationID, userID string) error {
+func (s *Store) MarkRead(ctx context.Context, conversationID uuid.UUID, userID string) error {
 	return s.Q.MarkRead(ctx, sqlcdb.MarkReadParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		UserID:         userID,
 	})
 }
@@ -183,7 +188,7 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 		OtherUserID: otherUserID,
 	})
 	if err == nil {
-		return uuidStr(id), nil
+		return id.String(), nil
 	}
 
 	// Create new (needs transaction)
@@ -215,7 +220,7 @@ func (s *Store) FindOrCreate1to1Conversation(ctx context.Context, userID, otherU
 	if err = tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	return uuidStr(convoID), nil
+	return convoID.String(), nil
 }
 
 // CreateGroupConversation uses dynamic SQL for batch member insert — stays hand-written.
@@ -257,40 +262,40 @@ func (s *Store) CreateGroupConversation(ctx context.Context, name, creatorID str
 	if err = tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	return uuidStr(convoID), nil
+	return convoID.String(), nil
 }
 
-func (s *Store) IsGroupConversation(ctx context.Context, conversationID, userID string) (bool, error) {
+func (s *Store) IsGroupConversation(ctx context.Context, conversationID uuid.UUID, userID string) (bool, error) {
 	return s.Q.IsGroupConversation(ctx, sqlcdb.IsGroupConversationParams{
 		UserID:         userID,
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 	})
 }
 
-func (s *Store) UpdateConversationName(ctx context.Context, conversationID, name string) error {
+func (s *Store) UpdateConversationName(ctx context.Context, conversationID uuid.UUID, name string) error {
 	return s.Q.UpdateConversationName(ctx, sqlcdb.UpdateConversationNameParams{
 		Name: textToPgtext(name),
-		ID:   pgUUID(conversationID),
+		ID:   conversationID,
 	})
 }
 
-func (s *Store) AddConversationMembers(ctx context.Context, conversationID string, memberIDs []string) error {
+func (s *Store) AddConversationMembers(ctx context.Context, conversationID uuid.UUID, memberIDs []string) error {
 	return s.Q.AddConversationMembers(ctx, sqlcdb.AddConversationMembersParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		MemberIds:      memberIDs,
 	})
 }
 
-func (s *Store) RemoveConversationMembers(ctx context.Context, conversationID string, memberIDs []string) error {
+func (s *Store) RemoveConversationMembers(ctx context.Context, conversationID uuid.UUID, memberIDs []string) error {
 	return s.Q.RemoveConversationMembers(ctx, sqlcdb.RemoveConversationMembersParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		MemberIds:      memberIDs,
 	})
 }
 
-func (s *Store) LeaveConversation(ctx context.Context, conversationID, userID string) error {
+func (s *Store) LeaveConversation(ctx context.Context, conversationID uuid.UUID, userID string) error {
 	return s.Q.LeaveConversation(ctx, sqlcdb.LeaveConversationParams{
-		ConversationID: pgUUID(conversationID),
+		ConversationID: conversationID,
 		UserID:         userID,
 	})
 }

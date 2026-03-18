@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,8 +19,8 @@ RETURNING id
 `
 
 type CreateThreadParams struct {
-	CategoryID pgtype.UUID        `json:"category_id"`
-	AuthorID   pgtype.UUID        `json:"author_id"`
+	CategoryID uuid.UUID          `json:"category_id"`
+	AuthorID   uuid.UUID          `json:"author_id"`
 	Title      string             `json:"title"`
 	Slug       string             `json:"slug"`
 	Content    pgtype.Text        `json:"content"`
@@ -27,7 +28,7 @@ type CreateThreadParams struct {
 	LastPostAt pgtype.Timestamptz `json:"last_post_at"`
 }
 
-func (q *Queries) CreateThread(ctx context.Context, arg CreateThreadParams) (pgtype.UUID, error) {
+func (q *Queries) CreateThread(ctx context.Context, arg CreateThreadParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createThread,
 		arg.CategoryID,
 		arg.AuthorID,
@@ -37,7 +38,7 @@ func (q *Queries) CreateThread(ctx context.Context, arg CreateThreadParams) (pgt
 		arg.ImageUrl,
 		arg.LastPostAt,
 	)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -59,9 +60,9 @@ WHERE t.id = $1
 `
 
 type GetThreadRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -73,7 +74,7 @@ type GetThreadRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -83,7 +84,7 @@ type GetThreadRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -91,7 +92,7 @@ type GetThreadRow struct {
 	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
 }
 
-func (q *Queries) GetThread(ctx context.Context, id pgtype.UUID) (GetThreadRow, error) {
+func (q *Queries) GetThread(ctx context.Context, id uuid.UUID) (GetThreadRow, error) {
 	row := q.db.QueryRow(ctx, getThread, id)
 	var i GetThreadRow
 	err := row.Scan(
@@ -136,13 +137,13 @@ WHERE t.id = $2
 `
 
 type GetThreadOwnershipParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	ThreadID pgtype.UUID `json:"thread_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	ThreadID uuid.UUID `json:"thread_id"`
 }
 
 type GetThreadOwnershipRow struct {
-	AuthorID pgtype.UUID `json:"author_id"`
-	IsAdmin  bool        `json:"is_admin"`
+	AuthorID uuid.UUID `json:"author_id"`
+	IsAdmin  bool      `json:"is_admin"`
 }
 
 func (q *Queries) GetThreadOwnership(ctx context.Context, arg GetThreadOwnershipParams) (GetThreadOwnershipRow, error) {
@@ -169,9 +170,9 @@ ORDER BY t.is_pinned DESC, t.last_post_at DESC NULLS LAST LIMIT $1
 `
 
 type ListThreadsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -183,7 +184,7 @@ type ListThreadsRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -193,7 +194,7 @@ type ListThreadsRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -269,9 +270,9 @@ WHERE c.slug = $1 ORDER BY t.is_pinned DESC, t.last_post_at DESC NULLS LAST
 `
 
 type ListThreadsByCategoryRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -283,7 +284,7 @@ type ListThreadsByCategoryRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -293,7 +294,7 @@ type ListThreadsByCategoryRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -369,9 +370,9 @@ WHERE t.author_id = $1 ORDER BY t.created_at DESC LIMIT 10
 `
 
 type ListUserThreadsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -383,7 +384,7 @@ type ListUserThreadsRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -393,7 +394,7 @@ type ListUserThreadsRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -401,7 +402,7 @@ type ListUserThreadsRow struct {
 	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
 }
 
-func (q *Queries) ListUserThreads(ctx context.Context, authorID pgtype.UUID) ([]ListUserThreadsRow, error) {
+func (q *Queries) ListUserThreads(ctx context.Context, authorID uuid.UUID) ([]ListUserThreadsRow, error) {
 	rows, err := q.db.Query(ctx, listUserThreads, authorID)
 	if err != nil {
 		return nil, err
@@ -469,9 +470,9 @@ WHERE t.title ILIKE $1 ORDER BY t.created_at DESC LIMIT 20
 `
 
 type SearchThreadsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ID                uuid.UUID          `json:"id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -483,7 +484,7 @@ type SearchThreadsRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -493,7 +494,7 @@ type SearchThreadsRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -557,7 +558,7 @@ UPDATE threads SET last_post_at = $2, post_count = post_count + 1, updated_at = 
 `
 
 type UpdateThreadStatsParams struct {
-	ID         pgtype.UUID        `json:"id"`
+	ID         uuid.UUID          `json:"id"`
 	LastPostAt pgtype.Timestamptz `json:"last_post_at"`
 }
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
@@ -68,7 +70,12 @@ func (h *NotificationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.Store.MarkNotificationRead(r.Context(), body.ID, userID); err != nil {
+	notifID, err := uuid.Parse(body.ID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid notification id"})
+		return
+	}
+	if err := h.Store.MarkNotificationRead(r.Context(), notifID, userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark read"})
 		return
 	}

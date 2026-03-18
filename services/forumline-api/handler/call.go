@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	fauth "github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/livekit/protocol/auth"
@@ -87,7 +89,12 @@ func (h *CallHandler) HandleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, _ := h.Service.Store.IsCallParticipant(r.Context(), callID, userID)
+	callUUID, err := uuid.Parse(callID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid call ID"})
+		return
+	}
+	ok, _ := h.Service.Store.IsCallParticipant(r.Context(), callUUID, userID)
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a participant of this call"})
 		return

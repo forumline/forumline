@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,7 +16,7 @@ const acceptCall = `-- name: AcceptCall :exec
 UPDATE forumline_calls SET status = 'active', started_at = now() WHERE id = $1
 `
 
-func (q *Queries) AcceptCall(ctx context.Context, id pgtype.UUID) error {
+func (q *Queries) AcceptCall(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, acceptCall, id)
 	return err
 }
@@ -40,14 +41,14 @@ RETURNING id, conversation_id, caller_id, callee_id, status, created_at
 `
 
 type CreateCallParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	CallerID       string      `json:"caller_id"`
-	CalleeID       string      `json:"callee_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	CallerID       string    `json:"caller_id"`
+	CalleeID       string    `json:"callee_id"`
 }
 
 type CreateCallRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
 	CallerID       string             `json:"caller_id"`
 	CalleeID       string             `json:"callee_id"`
 	Status         string             `json:"status"`
@@ -72,7 +73,7 @@ const declineCall = `-- name: DeclineCall :exec
 UPDATE forumline_calls SET status = 'declined', ended_at = now() WHERE id = $1
 `
 
-func (q *Queries) DeclineCall(ctx context.Context, id pgtype.UUID) error {
+func (q *Queries) DeclineCall(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, declineCall, id)
 	return err
 }
@@ -83,8 +84,8 @@ WHERE id = $2
 `
 
 type EndCallWithDurationParams struct {
-	Status string      `json:"status"`
-	ID     pgtype.UUID `json:"id"`
+	Status string    `json:"status"`
+	ID     uuid.UUID `json:"id"`
 }
 
 func (q *Queries) EndCallWithDuration(ctx context.Context, arg EndCallWithDurationParams) error {
@@ -97,8 +98,8 @@ UPDATE forumline_calls SET status = $1, ended_at = now() WHERE id = $2
 `
 
 type EndCallWithoutDurationParams struct {
-	Status string      `json:"status"`
-	ID     pgtype.UUID `json:"id"`
+	Status string    `json:"status"`
+	ID     uuid.UUID `json:"id"`
 }
 
 func (q *Queries) EndCallWithoutDuration(ctx context.Context, arg EndCallWithoutDurationParams) error {
@@ -112,8 +113,8 @@ WHERE id = $1 AND (caller_id = $2 OR callee_id = $2) AND status IN ('ringing', '
 `
 
 type GetCallForEndParams struct {
-	CallID pgtype.UUID `json:"call_id"`
-	UserID string      `json:"user_id"`
+	CallID uuid.UUID `json:"call_id"`
+	UserID string    `json:"user_id"`
 }
 
 type GetCallForEndRow struct {
@@ -144,8 +145,8 @@ AND (SELECT count(*) FROM forumline_conversation_members WHERE conversation_id =
 `
 
 type GetCalleeFor1to1Params struct {
-	UserID         string      `json:"user_id"`
-	ConversationID pgtype.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
 }
 
 func (q *Queries) GetCalleeFor1to1(ctx context.Context, arg GetCalleeFor1to1Params) (string, error) {
@@ -160,8 +161,8 @@ SELECT caller_id FROM forumline_calls WHERE id = $1 AND callee_id = $2 AND statu
 `
 
 type GetRingingCallCallerIDParams struct {
-	ID       pgtype.UUID `json:"id"`
-	CalleeID string      `json:"callee_id"`
+	ID       uuid.UUID `json:"id"`
+	CalleeID string    `json:"callee_id"`
 }
 
 func (q *Queries) GetRingingCallCallerID(ctx context.Context, arg GetRingingCallCallerIDParams) (string, error) {
@@ -175,7 +176,7 @@ const hasActiveCall = `-- name: HasActiveCall :one
 SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE conversation_id = $1 AND status IN ('ringing', 'active'))
 `
 
-func (q *Queries) HasActiveCall(ctx context.Context, conversationID pgtype.UUID) (bool, error) {
+func (q *Queries) HasActiveCall(ctx context.Context, conversationID uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, hasActiveCall, conversationID)
 	var exists bool
 	err := row.Scan(&exists)
@@ -188,8 +189,8 @@ WHERE id = $1 AND (caller_id = $2 OR callee_id = $2) AND status IN ('ringing', '
 `
 
 type IsCallParticipantParams struct {
-	ID       pgtype.UUID `json:"id"`
-	CallerID string      `json:"caller_id"`
+	ID       uuid.UUID `json:"id"`
+	CallerID string    `json:"caller_id"`
 }
 
 func (q *Queries) IsCallParticipant(ctx context.Context, arg IsCallParticipantParams) (bool, error) {

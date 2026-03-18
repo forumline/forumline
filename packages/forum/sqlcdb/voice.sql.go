@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,7 +16,7 @@ const clearVoicePresence = `-- name: ClearVoicePresence :exec
 DELETE FROM voice_presence WHERE user_id = $1
 `
 
-func (q *Queries) ClearVoicePresence(ctx context.Context, userID pgtype.UUID) error {
+func (q *Queries) ClearVoicePresence(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, clearVoicePresence, userID)
 	return err
 }
@@ -31,11 +32,11 @@ JOIN profiles p ON p.id = vp.user_id
 `
 
 type ListVoicePresenceRow struct {
-	ID                 pgtype.UUID        `json:"id"`
-	UserID             pgtype.UUID        `json:"user_id"`
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
 	RoomSlug           string             `json:"room_slug"`
 	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
-	ProfileID          pgtype.UUID        `json:"profile_id"`
+	ProfileID          uuid.UUID          `json:"profile_id"`
 	ProfileUsername    string             `json:"profile_username"`
 	ProfileDisplayName pgtype.Text        `json:"profile_display_name"`
 	ProfileAvatarUrl   pgtype.Text        `json:"profile_avatar_url"`
@@ -119,7 +120,7 @@ ON CONFLICT (user_id) DO UPDATE SET room_slug = $2, joined_at = $3
 `
 
 type SetVoicePresenceParams struct {
-	UserID   pgtype.UUID        `json:"user_id"`
+	UserID   uuid.UUID          `json:"user_id"`
 	RoomSlug string             `json:"room_slug"`
 	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }

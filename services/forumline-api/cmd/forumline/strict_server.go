@@ -504,9 +504,13 @@ func (s *StrictServer) DeleteForum(ctx context.Context, req oapi.DeleteForumRequ
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
 	forumDomain := req.Body.ForumDomain
-	forumID := s.store.GetForumIDByDomain(ctx, forumDomain)
-	if forumID == "" {
+	forumIDStr := s.store.GetForumIDByDomain(ctx, forumDomain)
+	if forumIDStr == "" {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forum id")
 	}
 	ownerID, _ := s.store.GetForumOwner(ctx, forumID)
 	if ownerID == nil || *ownerID != userID {
@@ -541,9 +545,13 @@ func (s *StrictServer) UpdateMembershipAuth(ctx context.Context, req oapi.Update
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumID == "" {
+	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumIDStr == "" {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpdateMembershipAuth(ctx, userID, forumID, req.Body.Authed); err != nil {
 		return nil, fmt.Errorf("failed to update auth state: %w", err)
@@ -556,9 +564,13 @@ func (s *StrictServer) ToggleMembershipMute(ctx context.Context, req oapi.Toggle
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumID == "" {
+	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumIDStr == "" {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpdateMembershipMute(ctx, userID, forumID, req.Body.Muted); err != nil {
 		return nil, fmt.Errorf("failed to update mute state: %w", err)
@@ -571,9 +583,13 @@ func (s *StrictServer) JoinForum(ctx context.Context, req oapi.JoinForumRequestO
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumID, err := s.forumSvc.ResolveOrDiscoverForum(ctx, req.Body.ForumDomain)
+	forumIDStr, err := s.forumSvc.ResolveOrDiscoverForum(ctx, req.Body.ForumDomain)
 	if err != nil {
 		return nil, &service.NotFoundError{Msg: "forum not found and manifest fetch failed"}
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.UpsertMembership(ctx, userID, forumID); err != nil {
 		return nil, fmt.Errorf("failed to join forum: %w", err)
@@ -594,9 +610,13 @@ func (s *StrictServer) LeaveForum(ctx context.Context, req oapi.LeaveForumReques
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	forumID := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
-	if forumID == "" {
+	forumIDStr := s.store.GetForumIDByDomain(ctx, req.Body.ForumDomain)
+	if forumIDStr == "" {
 		return nil, &service.NotFoundError{Msg: "forum not found"}
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid forum id")
 	}
 	if err := s.store.DeleteMembership(ctx, userID, forumID); err != nil {
 		return nil, fmt.Errorf("failed to leave forum: %w", err)
@@ -643,7 +663,11 @@ func (s *StrictServer) MarkNotificationRead(ctx context.Context, req oapi.MarkNo
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}
-	if err := s.store.MarkNotificationRead(ctx, req.Body.Id, userID); err != nil {
+	notifID, err := uuid.Parse(req.Body.Id)
+	if err != nil {
+		return nil, &service.ValidationError{Msg: "invalid notification id"}
+	}
+	if err := s.store.MarkNotificationRead(ctx, notifID, userID); err != nil {
 		return nil, fmt.Errorf("failed to mark read: %w", err)
 	}
 	return oapi.MarkNotificationRead200JSONResponse{Success: true}, nil
@@ -758,7 +782,7 @@ func (s *StrictServer) GetCallToken(ctx context.Context, req oapi.GetCallTokenRe
 	if lk == nil || lk.APIKey == "" || lk.APISecret == "" || lk.URL == "" {
 		return nil, fmt.Errorf("LiveKit not configured")
 	}
-	ok, _ := s.store.IsCallParticipant(ctx, req.CallId.String(), userID)
+	ok, _ := s.store.IsCallParticipant(ctx, uuid.UUID(req.CallId), userID)
 	if !ok {
 		return nil, &service.ForbiddenError{Msg: "not a participant of this call"}
 	}

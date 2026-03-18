@@ -1,49 +1,15 @@
 package store
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
-
-// pgUUID converts a UUID string to pgtype.UUID.
-// Panics if s is not a valid UUID — this is a programming error, not a runtime condition.
-func pgUUID(s string) pgtype.UUID {
-	var u pgtype.UUID
-	if err := u.Scan(s); err != nil {
-		panic(fmt.Sprintf("pgUUID: invalid UUID %q: %v", s, err))
-	}
-	return u
-}
-
-// uuidStr converts pgtype.UUID to string.
-func uuidStr(u pgtype.UUID) string {
-	if !u.Valid {
-		return ""
-	}
-	b := u.Bytes
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-}
-
-// pgUUID2OapiUUID converts pgtype.UUID to openapi_types.UUID ([16]byte).
-func pgUUID2OapiUUID(u pgtype.UUID) openapi_types.UUID {
-	return openapi_types.UUID(u.Bytes)
-}
-
-// uuidPtrToOapi converts a nullable pgtype.UUID to *openapi_types.UUID.
-func uuidPtrToOapi(u pgtype.UUID) *openapi_types.UUID {
-	if !u.Valid {
-		return nil
-	}
-	v := openapi_types.UUID(u.Bytes)
-	return &v
-}
 
 // pgtextPtr converts pgtype.Text to *string.
 func pgtextPtr(t pgtype.Text) *string {
@@ -103,9 +69,10 @@ func tsTimePtr(t pgtype.Timestamptz) *time.Time {
 }
 
 // profileFromSqlc converts a sqlcdb.Profile to an oapi.Profile.
+// openapi_types.UUID is a type alias for uuid.UUID, so direct assignment works.
 func profileFromSqlc(p sqlcdb.Profile) oapi.Profile {
 	return oapi.Profile{
-		Id:          pgUUID2OapiUUID(p.ID),
+		Id:          p.ID,
 		Username:    p.Username,
 		DisplayName: pgtextPtr(p.DisplayName),
 		AvatarUrl:   pgtextPtr(p.AvatarUrl),
@@ -120,11 +87,11 @@ func profileFromSqlc(p sqlcdb.Profile) oapi.Profile {
 
 // authorProfileFromThreadRow extracts an oapi.Profile from thread row author fields.
 func authorProfileFromThreadRow(
-	id pgtype.UUID, username string, displayName, avatarURL, bio, website pgtype.Text,
+	id uuid.UUID, username string, displayName, avatarURL, bio, website pgtype.Text,
 	isAdmin bool, forumlineID pgtype.Text, createdAt, updatedAt pgtype.Timestamptz,
 ) oapi.Profile {
 	return oapi.Profile{
-		Id:          pgUUID2OapiUUID(id),
+		Id:          id,
 		Username:    username,
 		DisplayName: pgtextPtr(displayName),
 		AvatarUrl:   pgtextPtr(avatarURL),
@@ -139,10 +106,10 @@ func authorProfileFromThreadRow(
 
 // categoryFromThreadRow extracts an oapi.Category from thread row category fields.
 func categoryFromThreadRow(
-	id pgtype.UUID, name, slug string, description pgtype.Text, sortOrder int32, createdAt pgtype.Timestamptz,
+	id uuid.UUID, name, slug string, description pgtype.Text, sortOrder int32, createdAt pgtype.Timestamptz,
 ) oapi.Category {
 	return oapi.Category{
-		Id:          pgUUID2OapiUUID(id),
+		Id:          id,
 		Name:        name,
 		Slug:        slug,
 		Description: pgtextPtr(description),
@@ -154,9 +121,9 @@ func categoryFromThreadRow(
 // threadRowToOapi converts a GetThreadRow to oapi.Thread.
 func threadRowToOapi(r sqlcdb.GetThreadRow) oapi.Thread {
 	return oapi.Thread{
-		Id:         pgUUID2OapiUUID(r.ID),
-		CategoryId: pgUUID2OapiUUID(r.CategoryID),
-		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
@@ -182,9 +149,9 @@ func threadRowToOapi(r sqlcdb.GetThreadRow) oapi.Thread {
 // listThreadsRowToOapi converts a ListThreadsRow to oapi.Thread.
 func listThreadsRowToOapi(r sqlcdb.ListThreadsRow) oapi.Thread {
 	return oapi.Thread{
-		Id:         pgUUID2OapiUUID(r.ID),
-		CategoryId: pgUUID2OapiUUID(r.CategoryID),
-		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
@@ -210,9 +177,9 @@ func listThreadsRowToOapi(r sqlcdb.ListThreadsRow) oapi.Thread {
 // listThreadsByCategoryRowToOapi converts a ListThreadsByCategoryRow to oapi.Thread.
 func listThreadsByCategoryRowToOapi(r sqlcdb.ListThreadsByCategoryRow) oapi.Thread {
 	return oapi.Thread{
-		Id:         pgUUID2OapiUUID(r.ID),
-		CategoryId: pgUUID2OapiUUID(r.CategoryID),
-		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
@@ -238,9 +205,9 @@ func listThreadsByCategoryRowToOapi(r sqlcdb.ListThreadsByCategoryRow) oapi.Thre
 // listUserThreadsRowToOapi converts a ListUserThreadsRow to oapi.Thread.
 func listUserThreadsRowToOapi(r sqlcdb.ListUserThreadsRow) oapi.Thread {
 	return oapi.Thread{
-		Id:         pgUUID2OapiUUID(r.ID),
-		CategoryId: pgUUID2OapiUUID(r.CategoryID),
-		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
@@ -266,9 +233,9 @@ func listUserThreadsRowToOapi(r sqlcdb.ListUserThreadsRow) oapi.Thread {
 // searchThreadsRowToOapi converts a SearchThreadsRow to oapi.Thread.
 func searchThreadsRowToOapi(r sqlcdb.SearchThreadsRow) oapi.Thread {
 	return oapi.Thread{
-		Id:         pgUUID2OapiUUID(r.ID),
-		CategoryId: pgUUID2OapiUUID(r.CategoryID),
-		AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
 		Title:      r.Title,
 		Slug:       r.Slug,
 		Content:    pgtextPtr(r.Content),
@@ -293,12 +260,17 @@ func searchThreadsRowToOapi(r sqlcdb.SearchThreadsRow) oapi.Thread {
 
 // postRowToOapi converts a ListPostsByThreadRow to oapi.Post.
 func postRowToOapi(r sqlcdb.ListPostsByThreadRow) oapi.Post {
+	var replyToID *openapi_types.UUID
+	if r.ReplyToID != nil {
+		v := *r.ReplyToID
+		replyToID = &v
+	}
 	return oapi.Post{
-		Id:        pgUUID2OapiUUID(r.ID),
-		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
-		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
+		Id:        r.ID,
+		ThreadId:  r.ThreadID,
+		AuthorId:  r.AuthorID,
 		Content:   r.Content,
-		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		ReplyToId: replyToID,
 		CreatedAt: tsTime(r.CreatedAt),
 		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
@@ -311,12 +283,17 @@ func postRowToOapi(r sqlcdb.ListPostsByThreadRow) oapi.Post {
 
 // listUserPostsRowToOapi converts a ListUserPostsRow to oapi.Post.
 func listUserPostsRowToOapi(r sqlcdb.ListUserPostsRow) oapi.Post {
+	var replyToID *openapi_types.UUID
+	if r.ReplyToID != nil {
+		v := *r.ReplyToID
+		replyToID = &v
+	}
 	return oapi.Post{
-		Id:        pgUUID2OapiUUID(r.ID),
-		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
-		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
+		Id:        r.ID,
+		ThreadId:  r.ThreadID,
+		AuthorId:  r.AuthorID,
 		Content:   r.Content,
-		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		ReplyToId: replyToID,
 		CreatedAt: tsTime(r.CreatedAt),
 		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
@@ -329,12 +306,17 @@ func listUserPostsRowToOapi(r sqlcdb.ListUserPostsRow) oapi.Post {
 
 // searchPostsRowToOapi converts a SearchPostsRow to oapi.Post.
 func searchPostsRowToOapi(r sqlcdb.SearchPostsRow) oapi.Post {
+	var replyToID *openapi_types.UUID
+	if r.ReplyToID != nil {
+		v := *r.ReplyToID
+		replyToID = &v
+	}
 	return oapi.Post{
-		Id:        pgUUID2OapiUUID(r.ID),
-		ThreadId:  pgUUID2OapiUUID(r.ThreadID),
-		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
+		Id:        r.ID,
+		ThreadId:  r.ThreadID,
+		AuthorId:  r.AuthorID,
 		Content:   r.Content,
-		ReplyToId: uuidPtrToOapi(r.ReplyToID),
+		ReplyToId: replyToID,
 		CreatedAt: tsTime(r.CreatedAt),
 		UpdatedAt: tsTime(r.UpdatedAt),
 		Author: authorProfileFromThreadRow(
@@ -348,12 +330,12 @@ func searchPostsRowToOapi(r sqlcdb.SearchPostsRow) oapi.Post {
 // bookmarkRowToOapi converts a ListBookmarksRow to oapi.Bookmark.
 func bookmarkRowToOapi(r sqlcdb.ListBookmarksRow) oapi.Bookmark {
 	return oapi.Bookmark{
-		Id:        pgUUID2OapiUUID(r.ID),
+		Id:        r.ID,
 		CreatedAt: tsTime(r.BookmarkCreatedAt),
 		Thread: oapi.Thread{
-			Id:         pgUUID2OapiUUID(r.ThreadID),
-			CategoryId: pgUUID2OapiUUID(r.CategoryID),
-			AuthorId:   pgUUID2OapiUUID(r.AuthorID),
+			Id:         r.ThreadID,
+			CategoryId: r.CategoryID,
+			AuthorId:   r.AuthorID,
 			Title:      r.Title,
 			Slug:       r.Slug,
 			Content:    pgtextPtr(r.Content),
@@ -380,9 +362,9 @@ func bookmarkRowToOapi(r sqlcdb.ListBookmarksRow) oapi.Bookmark {
 // chatMessageRowToOapi converts a ListChatMessagesRow to oapi.ChatMessage.
 func chatMessageRowToOapi(r sqlcdb.ListChatMessagesRow) oapi.ChatMessage {
 	return oapi.ChatMessage{
-		Id:        pgUUID2OapiUUID(r.ID),
-		ChannelId: pgUUID2OapiUUID(r.ChannelID),
-		AuthorId:  pgUUID2OapiUUID(r.AuthorID),
+		Id:        r.ID,
+		ChannelId: r.ChannelID,
+		AuthorId:  r.AuthorID,
 		Content:   r.Content,
 		CreatedAt: tsTime(r.CreatedAt),
 		Author: authorProfileFromThreadRow(
@@ -396,8 +378,8 @@ func chatMessageRowToOapi(r sqlcdb.ListChatMessagesRow) oapi.ChatMessage {
 // voicePresenceRowToOapi converts a ListVoicePresenceRow to oapi.VoicePresence.
 func voicePresenceRowToOapi(r sqlcdb.ListVoicePresenceRow) oapi.VoicePresence {
 	return oapi.VoicePresence{
-		Id:       pgUUID2OapiUUID(r.ID),
-		UserId:   pgUUID2OapiUUID(r.UserID),
+		Id:       r.ID,
+		UserId:   r.UserID,
 		RoomSlug: r.RoomSlug,
 		JoinedAt: tsTime(r.JoinedAt),
 		Profile: authorProfileFromThreadRow(

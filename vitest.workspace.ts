@@ -6,6 +6,7 @@ export default defineWorkspace([
       name: 'protocol',
       root: './packages/frontend/protocol',
       include: ['src/**/*.test.ts'],
+      exclude: ['node_modules/**', '.claude/**'],
     },
   },
 ])

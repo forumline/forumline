@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/store"
 )
 
@@ -47,7 +49,7 @@ func NewNotificationService(s *store.Store, cfg *NotificationConfig) *Notificati
 
 // GeneratePostNotifications creates notification rows for @mentions and thread reply notifications.
 // After inserting locally, it batches and pushes to forumline for users with a forumline_id.
-func (ns *NotificationService) GeneratePostNotifications(threadID, postID, authorID, content string, replyToID *string) {
+func (ns *NotificationService) GeneratePostNotifications(threadID, postID, authorID uuid.UUID, content string, replyToID *uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -61,13 +63,13 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 	threadTitle, threadAuthorID, _ := ns.Store.GetThreadTitleAndAuthor(ctx, threadID)
 
 	threadLink := fmt.Sprintf("/t/%s", threadID)
-	notified := map[string]bool{authorID: true} // don't notify the post author
+	notified := map[uuid.UUID]bool{authorID: true} // don't notify the post author
 
 	// Collect forumline push items
 	var pushItems []pushItem
 
 	// helper: insert local notification and queue forumline push
-	notifyUser := func(userID, notifType, title, body, link string) {
+	notifyUser := func(userID uuid.UUID, notifType, title, body, link string) {
 		if err := ns.Store.InsertNotification(ctx, userID, notifType, title, body, link); err != nil {
 			log.Printf("[notifications] failed to insert for %s: %v", userID, err)
 			return
@@ -87,7 +89,7 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 	}
 
 	// 1. Notify thread author about the reply
-	if threadAuthorID != "" && !notified[threadAuthorID] {
+	if threadAuthorID != (uuid.UUID{}) && !notified[threadAuthorID] {
 		notified[threadAuthorID] = true
 		notifyUser(threadAuthorID, "reply",
 			fmt.Sprintf("<strong>%s</strong> replied in \"%s\"", authorUsername, threadTitle),
@@ -95,9 +97,9 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 	}
 
 	// 2. If this is a reply to a specific post, notify that post's author
-	if replyToID != nil && *replyToID != "" {
+	if replyToID != nil && *replyToID != (uuid.UUID{}) {
 		replyAuthorID, _ := ns.Store.GetPostAuthor(ctx, *replyToID)
-		if replyAuthorID != "" && !notified[replyAuthorID] {
+		if replyAuthorID != (uuid.UUID{}) && !notified[replyAuthorID] {
 			notified[replyAuthorID] = true
 			notifyUser(replyAuthorID, "reply",
 				fmt.Sprintf("<strong>%s</strong> replied to your post in \"%s\"", authorUsername, threadTitle),
@@ -109,8 +111,11 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 	matches := mentionRe.FindAllStringSubmatch(content, -1)
 	for _, match := range matches {
 		username := strings.ToLower(match[1])
-		mentionedUserID, _ := ns.Store.GetUserIDByUsername(ctx, username)
-		if mentionedUserID != "" && !notified[mentionedUserID] {
+		mentionedUserID, err := ns.Store.GetUserIDByUsername(ctx, username)
+		if err != nil || mentionedUserID == (uuid.UUID{}) {
+			continue
+		}
+		if !notified[mentionedUserID] {
 			notified[mentionedUserID] = true
 			notifyUser(mentionedUserID, "mention",
 				fmt.Sprintf("<strong>%s</strong> mentioned you in \"%s\"", authorUsername, threadTitle),

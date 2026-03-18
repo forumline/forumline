@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
@@ -23,8 +25,8 @@ func (s *Store) ListThreads(ctx context.Context, limit int) ([]oapi.Thread, erro
 }
 
 // GetThread returns a single thread by ID.
-func (s *Store) GetThread(ctx context.Context, id string) (*oapi.Thread, error) {
-	row, err := s.Q.GetThread(ctx, pgUUID(id))
+func (s *Store) GetThread(ctx context.Context, id uuid.UUID) (*oapi.Thread, error) {
+	row, err := s.Q.GetThread(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +48,8 @@ func (s *Store) ListThreadsByCategory(ctx context.Context, slug string) ([]oapi.
 }
 
 // ListUserThreads returns threads authored by a user.
-func (s *Store) ListUserThreads(ctx context.Context, userID string) ([]oapi.Thread, error) {
-	rows, err := s.Q.ListUserThreads(ctx, pgUUID(userID))
+func (s *Store) ListUserThreads(ctx context.Context, userID uuid.UUID) ([]oapi.Thread, error) {
+	rows, err := s.Q.ListUserThreads(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +74,11 @@ func (s *Store) SearchThreads(ctx context.Context, pattern string) ([]oapi.Threa
 }
 
 // CreateThread inserts a new thread and returns its ID.
-func (s *Store) CreateThread(ctx context.Context, categoryID, authorID, title, slug string, content, imageURL *string) (string, error) {
+func (s *Store) CreateThread(ctx context.Context, categoryID, authorID uuid.UUID, title, slug string, content, imageURL *string) (uuid.UUID, error) {
 	now := time.Now()
 	id, err := s.Q.CreateThread(ctx, sqlcdb.CreateThreadParams{
-		CategoryID: pgUUID(categoryID),
-		AuthorID:   pgUUID(authorID),
+		CategoryID: categoryID,
+		AuthorID:   authorID,
 		Title:      title,
 		Slug:       slug,
 		Content:    optTextToPgtext(content),
@@ -84,25 +86,25 @@ func (s *Store) CreateThread(ctx context.Context, categoryID, authorID, title, s
 		LastPostAt: pgTimestamp(now),
 	})
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
-	return uuidStr(id), nil
+	return id, nil
 }
 
 // GetThreadOwnership returns the thread author ID and whether the given user is an admin.
-func (s *Store) GetThreadOwnership(ctx context.Context, threadID, userID string) (authorID string, isAdmin bool, err error) {
+func (s *Store) GetThreadOwnership(ctx context.Context, threadID, userID uuid.UUID) (authorID uuid.UUID, isAdmin bool, err error) {
 	row, err := s.Q.GetThreadOwnership(ctx, sqlcdb.GetThreadOwnershipParams{
-		UserID:   pgUUID(userID),
-		ThreadID: pgUUID(threadID),
+		UserID:   userID,
+		ThreadID: threadID,
 	})
 	if err != nil {
-		return "", false, err
+		return uuid.UUID{}, false, err
 	}
-	return uuidStr(row.AuthorID), row.IsAdmin, nil
+	return row.AuthorID, row.IsAdmin, nil
 }
 
 // UpdateThread performs a dynamic update on a thread.
-func (s *Store) UpdateThread(ctx context.Context, threadID string, setClauses []string, args []interface{}) error {
+func (s *Store) UpdateThread(ctx context.Context, threadID uuid.UUID, setClauses []string, args []interface{}) error {
 	query := "UPDATE threads SET "
 	for i, clause := range setClauses {
 		if i > 0 {
@@ -116,9 +118,9 @@ func (s *Store) UpdateThread(ctx context.Context, threadID string, setClauses []
 }
 
 // UpdateThreadStats updates a thread's last_post_at and increments post_count.
-func (s *Store) UpdateThreadStats(ctx context.Context, threadID string, now time.Time) error {
+func (s *Store) UpdateThreadStats(ctx context.Context, threadID uuid.UUID, now time.Time) error {
 	return s.Q.UpdateThreadStats(ctx, sqlcdb.UpdateThreadStatsParams{
-		ID:         pgUUID(threadID),
+		ID:         threadID,
 		LastPostAt: pgTimestamp(now),
 	})
 }

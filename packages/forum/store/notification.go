@@ -3,14 +3,16 @@ package store
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
 // ListNotifications returns notifications for a user (data provider format).
-func (s *Store) ListNotifications(ctx context.Context, userID string, limit int) ([]oapi.Notification, error) {
+func (s *Store) ListNotifications(ctx context.Context, userID uuid.UUID, limit int) ([]oapi.Notification, error) {
 	rows, err := s.Q.ListNotifications(ctx, sqlcdb.ListNotificationsParams{
-		UserID: pgUUID(userID),
+		UserID: userID,
 		Limit:  int32(min(limit, 1000)), //nolint:gosec // limit is bounded
 	})
 	if err != nil {
@@ -19,8 +21,8 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 	notifications := make([]oapi.Notification, 0, len(rows))
 	for _, r := range rows {
 		notifications = append(notifications, oapi.Notification{
-			Id:        pgUUID2OapiUUID(r.ID),
-			UserId:    pgUUID2OapiUUID(r.UserID),
+			Id:        r.ID,
+			UserId:    r.UserID,
 			Type:      r.Type,
 			Title:     r.Title,
 			Message:   r.Message,
@@ -33,9 +35,9 @@ func (s *Store) ListNotifications(ctx context.Context, userID string, limit int)
 }
 
 // ListForumlineNotifications returns notifications in the forumline protocol format.
-func (s *Store) ListForumlineNotifications(ctx context.Context, userID string, limit int, forumDomain string) ([]oapi.ForumlineNotification, error) {
+func (s *Store) ListForumlineNotifications(ctx context.Context, userID uuid.UUID, limit int, forumDomain string) ([]oapi.ForumlineNotification, error) {
 	rows, err := s.Q.ListForumlineNotifications(ctx, sqlcdb.ListForumlineNotificationsParams{
-		UserID: pgUUID(userID),
+		UserID: userID,
 		Limit:  int32(min(limit, 1000)), //nolint:gosec // limit is bounded
 	})
 	if err != nil {
@@ -48,7 +50,7 @@ func (s *Store) ListForumlineNotifications(ctx context.Context, userID string, l
 			link = r.Link.String
 		}
 		notifications = append(notifications, oapi.ForumlineNotification{
-			Id:          pgUUID2OapiUUID(r.ID),
+			Id:          r.ID,
 			Type:        r.Type,
 			Title:       r.Title,
 			Body:        r.Message,
@@ -62,22 +64,22 @@ func (s *Store) ListForumlineNotifications(ctx context.Context, userID string, l
 }
 
 // MarkNotificationRead marks a single notification as read.
-func (s *Store) MarkNotificationRead(ctx context.Context, notifID, userID string) error {
+func (s *Store) MarkNotificationRead(ctx context.Context, notifID, userID uuid.UUID) error {
 	return s.Q.MarkNotificationRead(ctx, sqlcdb.MarkNotificationReadParams{
-		ID:     pgUUID(notifID),
-		UserID: pgUUID(userID),
+		ID:     notifID,
+		UserID: userID,
 	})
 }
 
 // MarkAllNotificationsRead marks all notifications as read for a user.
-func (s *Store) MarkAllNotificationsRead(ctx context.Context, userID string) error {
-	return s.Q.MarkAllNotificationsRead(ctx, pgUUID(userID))
+func (s *Store) MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) error {
+	return s.Q.MarkAllNotificationsRead(ctx, userID)
 }
 
 // InsertNotification inserts a notification.
-func (s *Store) InsertNotification(ctx context.Context, userID, notifType, title, message, link string) error {
+func (s *Store) InsertNotification(ctx context.Context, userID uuid.UUID, notifType, title, message, link string) error {
 	return s.Q.InsertNotification(ctx, sqlcdb.InsertNotificationParams{
-		UserID:  pgUUID(userID),
+		UserID:  userID,
 		Type:    notifType,
 		Title:   title,
 		Message: message,
@@ -86,24 +88,23 @@ func (s *Store) InsertNotification(ctx context.Context, userID, notifType, title
 }
 
 // CountUnread returns unread notification and chat_mention counts.
-func (s *Store) CountUnread(ctx context.Context, userID string) (notifs int, chatMentions int, err error) {
-	uid := pgUUID(userID)
-	n, err := s.Q.CountUnreadNotifications(ctx, uid)
+func (s *Store) CountUnread(ctx context.Context, userID uuid.UUID) (notifs int, chatMentions int, err error) {
+	n, err := s.Q.CountUnreadNotifications(ctx, userID)
 	if err != nil {
 		return 0, 0, err
 	}
-	c, err := s.Q.CountUnreadChatMentions(ctx, uid)
+	c, err := s.Q.CountUnreadChatMentions(ctx, userID)
 	if err != nil {
 		return 0, 0, err
 	}
 	return int(n), int(c), nil
 }
 
-// GetThreadTitleAndAuthor returns the thread title and OP author ID.
-func (s *Store) GetThreadTitleAndAuthor(ctx context.Context, threadID string) (title string, authorID string, err error) {
-	row, err := s.Q.GetThreadTitleAndAuthor(ctx, pgUUID(threadID))
+// GetThreadTitleAndAuthor returns the thread title and OP author UUID.
+func (s *Store) GetThreadTitleAndAuthor(ctx context.Context, threadID uuid.UUID) (title string, authorID uuid.UUID, err error) {
+	row, err := s.Q.GetThreadTitleAndAuthor(ctx, threadID)
 	if err != nil {
-		return "", "", err
+		return "", uuid.UUID{}, err
 	}
-	return row.Title, uuidStr(row.AuthorID), nil
+	return row.Title, row.AuthorID, nil
 }

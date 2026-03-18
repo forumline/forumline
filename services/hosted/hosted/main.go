@@ -244,6 +244,8 @@ func main() {
 	}
 }
 
+const indexHTML = "index.html"
+
 // spaHandler serves static files for tenant domains.
 // If a tenant has a custom site (HasCustomSite), files are served from R2
 // with an in-memory LRU cache. Otherwise, the default SPA from ./dist/ is served.
@@ -306,7 +308,7 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore, cache *plat.Si
 		// Default SPA path: serve from ./dist/
 		localPath := filepath.Join(distDir, r.URL.Path)
 		if info, err := os.Stat(localPath); err == nil && !info.IsDir() { // #nosec G703 -- path is cleaned by http.Dir
-			if filepath.Base(r.URL.Path) == "index.html" {
+			if filepath.Base(r.URL.Path) == indexHTML {
 				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			}
 			fileServer.ServeHTTP(w, r)
@@ -319,7 +321,7 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore, cache *plat.Si
 		}
 
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+		http.ServeFile(w, r, filepath.Join(distDir, indexHTML))
 	})
 }
 
@@ -329,12 +331,12 @@ func spaHandler(apiHandler http.Handler, store *plat.TenantStore, cache *plat.Si
 func serveCustomSite(w http.ResponseWriter, r *http.Request, tenant *plat.Tenant, cache *plat.SiteCache, client *minio.Client, r2Bucket string) {
 	reqPath := strings.TrimPrefix(r.URL.Path, "/")
 	if reqPath == "" {
-		reqPath = "index.html"
+		reqPath = indexHTML
 	}
 
 	// SPA fallback: if path has no extension, serve index.html
 	if path.Ext(reqPath) == "" {
-		reqPath = "index.html"
+		reqPath = indexHTML
 	}
 
 	// Try cache first
@@ -405,7 +407,7 @@ func serveCustomSite(w http.ResponseWriter, r *http.Request, tenant *plat.Tenant
 }
 
 func setCacheHeaders(w http.ResponseWriter, filePath, etag string) {
-	if filePath == "index.html" {
+	if filePath == indexHTML {
 		w.Header().Set("Cache-Control", "no-cache")
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=3600")

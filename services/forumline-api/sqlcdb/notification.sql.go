@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -64,7 +65,7 @@ type ListNotificationsParams struct {
 }
 
 type ListNotificationsRow struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	ForumDomain string             `json:"forum_domain"`
 	ForumName   string             `json:"forum_name"`
 	Type        string             `json:"type"`
@@ -119,8 +120,8 @@ UPDATE forumline_notifications SET read = true WHERE id = $1 AND user_id = $2
 `
 
 type MarkNotificationReadParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID string      `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID string    `json:"user_id"`
 }
 
 func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error {

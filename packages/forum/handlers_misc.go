@@ -4,9 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/forumline/forumline/backend/auth"
+
 	"github.com/forumline/forumline/forum/oapi"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // iconURLPtr returns a *string pointer if s is non-empty, nil otherwise.
@@ -62,27 +61,19 @@ func (h *Handlers) GetManifest(ctx context.Context, _ oapi.GetManifestRequestObj
 
 // ListChannelFollows handles GET /api/channel-follows.
 func (h *Handlers) ListChannelFollows(ctx context.Context, _ oapi.ListChannelFollowsRequestObject) (oapi.ListChannelFollowsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	ids, err := h.Store.ListChannelFollows(ctx, userID)
 	if err != nil {
 		return oapi.ListChannelFollows500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
-	// Convert []string to []openapi_types.UUID
-	uuids := make([]openapi_types.UUID, 0, len(ids))
-	for _, id := range ids {
-		var u openapi_types.UUID
-		if err := u.UnmarshalText([]byte(id)); err == nil {
-			uuids = append(uuids, u)
-		}
-	}
-	return oapi.ListChannelFollows200JSONResponse(uuids), nil
+	return oapi.ListChannelFollows200JSONResponse(ids), nil
 }
 
 // FollowChannel handles POST /api/channel-follows.
 func (h *Handlers) FollowChannel(ctx context.Context, request oapi.FollowChannelRequestObject) (oapi.FollowChannelResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.AddChannelFollow(ctx, userID, request.Body.CategoryId.String()); err != nil {
+	if err := h.Store.AddChannelFollow(ctx, userID, request.Body.CategoryId); err != nil {
 		return oapi.FollowChannel500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -91,9 +82,9 @@ func (h *Handlers) FollowChannel(ctx context.Context, request oapi.FollowChannel
 
 // UnfollowChannel handles DELETE /api/channel-follows.
 func (h *Handlers) UnfollowChannel(ctx context.Context, request oapi.UnfollowChannelRequestObject) (oapi.UnfollowChannelResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.RemoveChannelFollow(ctx, userID, request.Body.CategoryId.String()); err != nil {
+	if err := h.Store.RemoveChannelFollow(ctx, userID, request.Body.CategoryId); err != nil {
 		return oapi.UnfollowChannel500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -104,7 +95,7 @@ func (h *Handlers) UnfollowChannel(ctx context.Context, request oapi.UnfollowCha
 
 // ListNotificationPreferences handles GET /api/notification-preferences.
 func (h *Handlers) ListNotificationPreferences(ctx context.Context, _ oapi.ListNotificationPreferencesRequestObject) (oapi.ListNotificationPreferencesResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	prefs, err := h.Store.ListNotificationPrefs(ctx, userID)
 	if err != nil {
 		return oapi.ListNotificationPreferences500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -114,7 +105,7 @@ func (h *Handlers) ListNotificationPreferences(ctx context.Context, _ oapi.ListN
 
 // UpdateNotificationPreference handles PUT /api/notification-preferences.
 func (h *Handlers) UpdateNotificationPreference(ctx context.Context, request oapi.UpdateNotificationPreferenceRequestObject) (oapi.UpdateNotificationPreferenceResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	body := request.Body
 
 	if err := h.Store.UpsertNotificationPref(ctx, userID, string(body.Category), body.Enabled); err != nil {

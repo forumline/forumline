@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -21,12 +23,12 @@ func NewPostService(s *store.Store, notifSvc *NotificationService) *PostService 
 }
 
 // ListByThread returns posts for a thread.
-func (ps *PostService) ListByThread(ctx context.Context, threadID string) ([]oapi.Post, error) {
+func (ps *PostService) ListByThread(ctx context.Context, threadID uuid.UUID) ([]oapi.Post, error) {
 	return ps.Store.ListPostsByThread(ctx, threadID)
 }
 
 // ListByUser returns posts authored by a user.
-func (ps *PostService) ListByUser(ctx context.Context, userID string) ([]oapi.Post, error) {
+func (ps *PostService) ListByUser(ctx context.Context, userID uuid.UUID) ([]oapi.Post, error) {
 	return ps.Store.ListUserPosts(ctx, userID)
 }
 
@@ -40,20 +42,20 @@ func (ps *PostService) Search(ctx context.Context, query string) ([]oapi.Post, e
 
 // CreatePostInput holds input for creating a post.
 type CreatePostInput struct {
-	ThreadID  string
+	ThreadID  uuid.UUID
 	Content   string
-	ReplyToID *string
+	ReplyToID *uuid.UUID
 }
 
 // Create creates a new post, updates thread stats, and triggers notifications.
-func (ps *PostService) Create(ctx context.Context, userID string, input CreatePostInput) (string, error) {
-	if input.ThreadID == "" || input.Content == "" {
-		return "", &ValidationError{Msg: "thread_id and content are required"}
+func (ps *PostService) Create(ctx context.Context, userID uuid.UUID, input CreatePostInput) (uuid.UUID, error) {
+	if input.ThreadID == (uuid.UUID{}) || input.Content == "" {
+		return uuid.UUID{}, &ValidationError{Msg: "thread_id and content are required"}
 	}
 
 	id, err := ps.Store.CreatePost(ctx, input.ThreadID, userID, input.Content, input.ReplyToID)
 	if err != nil {
-		return "", err
+		return uuid.UUID{}, err
 	}
 
 	// Update thread stats (best-effort)

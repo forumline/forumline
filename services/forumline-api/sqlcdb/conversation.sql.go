@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,8 +19,8 @@ ON CONFLICT DO NOTHING
 `
 
 type AddConversationMembersParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	MemberIds      []string    `json:"member_ids"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	MemberIds      []string  `json:"member_ids"`
 }
 
 func (q *Queries) AddConversationMembers(ctx context.Context, arg AddConversationMembersParams) error {
@@ -37,9 +38,9 @@ type CreateConversationParams struct {
 	CreatedBy pgtype.Text `json:"created_by"`
 }
 
-func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (pgtype.UUID, error) {
+func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createConversation, arg.IsGroup, arg.Name, arg.CreatedBy)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -52,14 +53,14 @@ WHERE cm.conversation_id = ANY($1::uuid[])
 `
 
 type FetchConversationMembersRow struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
+	ConversationID uuid.UUID   `json:"conversation_id"`
 	UserID         string      `json:"user_id"`
 	Username       string      `json:"username"`
 	DisplayName    string      `json:"display_name"`
 	AvatarUrl      pgtype.Text `json:"avatar_url"`
 }
 
-func (q *Queries) FetchConversationMembers(ctx context.Context, conversationIds []pgtype.UUID) ([]FetchConversationMembersRow, error) {
+func (q *Queries) FetchConversationMembers(ctx context.Context, conversationIds []uuid.UUID) ([]FetchConversationMembersRow, error) {
 	rows, err := q.db.Query(ctx, fetchConversationMembers, conversationIds)
 	if err != nil {
 		return nil, err
@@ -98,9 +99,9 @@ type Find1to1ConversationParams struct {
 	OtherUserID string `json:"other_user_id"`
 }
 
-func (q *Queries) Find1to1Conversation(ctx context.Context, arg Find1to1ConversationParams) (pgtype.UUID, error) {
+func (q *Queries) Find1to1Conversation(ctx context.Context, arg Find1to1ConversationParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, find1to1Conversation, arg.UserID, arg.OtherUserID)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -121,12 +122,12 @@ WHERE c.id = $2
 `
 
 type GetConversationParams struct {
-	UserID         string      `json:"user_id"`
-	ConversationID pgtype.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
 }
 
 type GetConversationRow struct {
-	ID              pgtype.UUID        `json:"id"`
+	ID              uuid.UUID          `json:"id"`
 	IsGroup         bool               `json:"is_group"`
 	Name            pgtype.Text        `json:"name"`
 	LastMessage     string             `json:"last_message"`
@@ -156,9 +157,9 @@ ORDER BY dm.created_at DESC LIMIT $3
 `
 
 type GetMessagesBeforeParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	BeforeID       pgtype.UUID `json:"before_id"`
-	MsgLimit       int32       `json:"msg_limit"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	BeforeID       uuid.UUID `json:"before_id"`
+	MsgLimit       int32     `json:"msg_limit"`
 }
 
 func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforeParams) ([]ForumlineDirectMessage, error) {
@@ -194,8 +195,8 @@ WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT $2
 `
 
 type GetMessagesLatestParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	Limit          int32       `json:"limit"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	Limit          int32     `json:"limit"`
 }
 
 func (q *Queries) GetMessagesLatest(ctx context.Context, arg GetMessagesLatestParams) ([]ForumlineDirectMessage, error) {
@@ -229,9 +230,9 @@ INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1
 `
 
 type Insert1to1MembersParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
-	UserID_2       string      `json:"user_id_2"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	UserID_2       string    `json:"user_id_2"`
 }
 
 func (q *Queries) Insert1to1Members(ctx context.Context, arg Insert1to1MembersParams) error {
@@ -244,8 +245,8 @@ INSERT INTO forumline_conversation_members (conversation_id, user_id) VALUES ($1
 `
 
 type InsertConversationMemberParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
 }
 
 func (q *Queries) InsertConversationMember(ctx context.Context, arg InsertConversationMemberParams) error {
@@ -258,8 +259,8 @@ SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id
 `
 
 type IsConversationMemberParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
 }
 
 func (q *Queries) IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error) {
@@ -276,8 +277,8 @@ WHERE c.id = $2
 `
 
 type IsGroupConversationParams struct {
-	UserID         string      `json:"user_id"`
-	ConversationID pgtype.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
 }
 
 func (q *Queries) IsGroupConversation(ctx context.Context, arg IsGroupConversationParams) (bool, error) {
@@ -292,8 +293,8 @@ DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_i
 `
 
 type LeaveConversationParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
 }
 
 func (q *Queries) LeaveConversation(ctx context.Context, arg LeaveConversationParams) error {
@@ -322,7 +323,7 @@ LIMIT 100
 `
 
 type ListConversationsRow struct {
-	ID              pgtype.UUID        `json:"id"`
+	ID              uuid.UUID          `json:"id"`
 	IsGroup         bool               `json:"is_group"`
 	Name            pgtype.Text        `json:"name"`
 	LastMessage     string             `json:"last_message"`
@@ -363,8 +364,8 @@ WHERE conversation_id = $1 AND user_id = $2
 `
 
 type MarkReadParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	UserID         string      `json:"user_id"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	UserID         string    `json:"user_id"`
 }
 
 func (q *Queries) MarkRead(ctx context.Context, arg MarkReadParams) error {
@@ -377,8 +378,8 @@ DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_i
 `
 
 type RemoveConversationMembersParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	MemberIds      []string    `json:"member_ids"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	MemberIds      []string  `json:"member_ids"`
 }
 
 func (q *Queries) RemoveConversationMembers(ctx context.Context, arg RemoveConversationMembersParams) error {
@@ -393,9 +394,9 @@ RETURNING id, conversation_id, sender_id, content, created_at
 `
 
 type SendMessageParams struct {
-	ConversationID pgtype.UUID `json:"conversation_id"`
-	SenderID       string      `json:"sender_id"`
-	Content        string      `json:"content"`
+	ConversationID uuid.UUID `json:"conversation_id"`
+	SenderID       string    `json:"sender_id"`
+	Content        string    `json:"content"`
 }
 
 func (q *Queries) SendMessage(ctx context.Context, arg SendMessageParams) (ForumlineDirectMessage, error) {
@@ -415,7 +416,7 @@ const touchConversation = `-- name: TouchConversation :exec
 UPDATE forumline_conversations SET updated_at = now() WHERE id = $1
 `
 
-func (q *Queries) TouchConversation(ctx context.Context, id pgtype.UUID) error {
+func (q *Queries) TouchConversation(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchConversation, id)
 	return err
 }
@@ -426,7 +427,7 @@ UPDATE forumline_conversations SET name = $1 WHERE id = $2
 
 type UpdateConversationNameParams struct {
 	Name pgtype.Text `json:"name"`
-	ID   pgtype.UUID `json:"id"`
+	ID   uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateConversationName(ctx context.Context, arg UpdateConversationNameParams) error {

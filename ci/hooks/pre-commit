@@ -65,6 +65,36 @@ run_check "buf-gen-check" \
     fi
   '
 
+run_check "sqlc-gen-check" \
+  "(packages/forum/sqlc|services/forumline-api/sqlc)\.(yaml|sql)$" \
+  bash -c '
+    (cd packages/forum && sqlc generate)
+    (cd services/forumline-api && sqlc generate)
+    if ! git diff --quiet packages/forum/sqlcdb/ services/forumline-api/sqlcdb/; then
+      echo "sqlcdb/ is stale — run sqlc generate in the relevant package" >&2
+      echo "Then re-stage the generated files alongside the schema/query change." >&2
+      exit 1
+    fi
+  '
+
+run_check "no-pgtype-uuid-in-app-code" \
+  "\.go$" \
+  bash -c '
+    # pgtype.UUID was eliminated in the uuid migration. Do not re-introduce it.
+    # UUID columns must use uuid.UUID (github.com/google/uuid) throughout the stack.
+    # pgtype.Text and pgtype.Timestamptz helpers are still permitted until the text/ts migration.
+    if grep -rn "pgtype\.UUID" \
+      packages/forum/store/ packages/forum/service/ packages/forum/handlers*.go \
+      packages/forum/profile_uuid.go \
+      services/forumline-api/store/ services/forumline-api/service/ \
+      services/forumline-api/handler/ services/forumline-api/cmd/ \
+      services/hosted/hosted/ \
+      2>/dev/null | grep -v "^Binary" | grep -v "sqlcdb/"; then
+      echo "ERROR: pgtype.UUID found in application code — use uuid.UUID (github.com/google/uuid) instead." >&2
+      exit 1
+    fi
+  '
+
 run_check "api-gen-check" \
   "services/forumline-api/openapi\.yaml$" \
   bash -c '

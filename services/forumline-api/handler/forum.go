@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
@@ -145,9 +147,14 @@ func (h *ForumHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forumID := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
-	if forumID == "" {
+	forumIDStr := h.Store.GetForumIDByDomain(ctx, body.ForumDomain)
+	if forumIDStr == "" {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Forum not found"})
+		return
+	}
+	forumID, err := uuid.Parse(forumIDStr)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Invalid forum ID"})
 		return
 	}
 	ownerID, _ := h.Store.GetForumOwner(ctx, forumID)

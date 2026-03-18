@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/forumline/forumline/backend/auth"
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // ============================================================================
@@ -76,7 +76,7 @@ func (h *Handlers) ListThreads(ctx context.Context, request oapi.ListThreadsRequ
 
 // GetThread handles GET /api/threads/{id}
 func (h *Handlers) GetThread(ctx context.Context, request oapi.GetThreadRequestObject) (oapi.GetThreadResponseObject, error) {
-	t, err := h.ThreadSvc.Get(ctx, request.Id.String())
+	t, err := h.ThreadSvc.Get(ctx, request.Id)
 	if err != nil {
 		_, msg := serviceErrStatus(err)
 		return oapi.GetThread404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: msg}}, nil
@@ -95,7 +95,7 @@ func (h *Handlers) ListThreadsByCategory(ctx context.Context, request oapi.ListT
 
 // ListUserThreads handles GET /api/users/{id}/threads
 func (h *Handlers) ListUserThreads(ctx context.Context, request oapi.ListUserThreadsRequestObject) (oapi.ListUserThreadsResponseObject, error) {
-	threads, err := h.ThreadSvc.ListByUser(ctx, request.Id.String())
+	threads, err := h.ThreadSvc.ListByUser(ctx, request.Id)
 	if err != nil {
 		return oapi.ListUserThreads500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
@@ -118,7 +118,7 @@ func (h *Handlers) SearchThreads(ctx context.Context, request oapi.SearchThreads
 
 // ListPostsByThread handles GET /api/threads/{id}/posts
 func (h *Handlers) ListPostsByThread(ctx context.Context, request oapi.ListPostsByThreadRequestObject) (oapi.ListPostsByThreadResponseObject, error) {
-	posts, err := h.PostSvc.ListByThread(ctx, request.Id.String())
+	posts, err := h.PostSvc.ListByThread(ctx, request.Id)
 	if err != nil {
 		return oapi.ListPostsByThread500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
@@ -127,7 +127,7 @@ func (h *Handlers) ListPostsByThread(ctx context.Context, request oapi.ListPosts
 
 // ListUserPosts handles GET /api/users/{id}/posts
 func (h *Handlers) ListUserPosts(ctx context.Context, request oapi.ListUserPostsRequestObject) (oapi.ListUserPostsResponseObject, error) {
-	posts, err := h.PostSvc.ListByUser(ctx, request.Id.String())
+	posts, err := h.PostSvc.ListByUser(ctx, request.Id)
 	if err != nil {
 		return oapi.ListUserPosts500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
@@ -150,7 +150,7 @@ func (h *Handlers) SearchPosts(ctx context.Context, request oapi.SearchPostsRequ
 
 // GetProfile handles GET /api/profiles/{id}
 func (h *Handlers) GetProfile(ctx context.Context, request oapi.GetProfileRequestObject) (oapi.GetProfileResponseObject, error) {
-	p, err := h.ProfileSvc.Get(ctx, request.Id.String())
+	p, err := h.ProfileSvc.Get(ctx, request.Id)
 	if err != nil {
 		return oapi.GetProfile404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: "profile not found"}}, nil
 	}
@@ -172,7 +172,14 @@ func (h *Handlers) GetProfilesBatch(ctx context.Context, request oapi.GetProfile
 	if idsParam == "" {
 		return oapi.GetProfilesBatch200JSONResponse([]oapi.Profile{}), nil
 	}
-	ids := strings.Split(idsParam, ",")
+	parts := strings.Split(idsParam, ",")
+	ids := make([]uuid.UUID, 0, len(parts))
+	for _, s := range parts {
+		id, err := uuid.Parse(strings.TrimSpace(s))
+		if err == nil {
+			ids = append(ids, id)
+		}
+	}
 	profiles, err := h.ProfileSvc.GetBatch(ctx, ids)
 	if err != nil {
 		return oapi.GetProfilesBatch500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -212,7 +219,7 @@ func (h *Handlers) ListVoicePresence(ctx context.Context, _ oapi.ListVoicePresen
 
 // ListBookmarks handles GET /api/bookmarks
 func (h *Handlers) ListBookmarks(ctx context.Context, _ oapi.ListBookmarksRequestObject) (oapi.ListBookmarksResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	bookmarks, err := h.Store.ListBookmarks(ctx, userID)
 	if err != nil {
 		return oapi.ListBookmarks500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -222,20 +229,15 @@ func (h *Handlers) ListBookmarks(ctx context.Context, _ oapi.ListBookmarksReques
 
 // GetBookmarkStatus handles GET /api/bookmarks/{threadId}/status
 func (h *Handlers) GetBookmarkStatus(ctx context.Context, request oapi.GetBookmarkStatusRequestObject) (oapi.GetBookmarkStatusResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	id, err := h.Store.GetBookmarkStatus(ctx, userID, request.ThreadId.String())
+	id, err := h.Store.GetBookmarkStatus(ctx, userID, request.ThreadId)
 	if err != nil || id == nil {
 		f := false
 		return oapi.GetBookmarkStatus200JSONResponse{Bookmarked: &f}, nil
 	}
 	t := true
-	// Parse the bookmark ID string into a UUID
-	var bookmarkUUID openapi_types.UUID
-	if parseErr := bookmarkUUID.UnmarshalText([]byte(*id)); parseErr != nil {
-		f := false
-		return oapi.GetBookmarkStatus200JSONResponse{Bookmarked: &f}, nil
-	}
+	bookmarkUUID := *id
 	return oapi.GetBookmarkStatus200JSONResponse{Bookmarked: &t, Id: &bookmarkUUID}, nil
 }
 
@@ -245,7 +247,7 @@ func (h *Handlers) GetBookmarkStatus(ctx context.Context, request oapi.GetBookma
 
 // ListNotifications handles GET /api/notifications (data provider version)
 func (h *Handlers) ListNotifications(ctx context.Context, _ oapi.ListNotificationsRequestObject) (oapi.ListNotificationsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	notifications, err := h.Store.ListNotifications(ctx, userID, 20)
 	if err != nil {
 		return oapi.ListNotifications500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
@@ -259,7 +261,7 @@ func (h *Handlers) ListNotifications(ctx context.Context, _ oapi.ListNotificatio
 
 // GetAdminStats handles GET /api/admin/stats
 func (h *Handlers) GetAdminStats(ctx context.Context, _ oapi.GetAdminStatsRequestObject) (oapi.GetAdminStatsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	stats, err := h.AdminSvc.GetStats(ctx, userID)
 	if err != nil {
 		status, msg := serviceErrStatus(err)
@@ -273,7 +275,7 @@ func (h *Handlers) GetAdminStats(ctx context.Context, _ oapi.GetAdminStatsReques
 
 // ListAdminUsers handles GET /api/admin/users
 func (h *Handlers) ListAdminUsers(ctx context.Context, _ oapi.ListAdminUsersRequestObject) (oapi.ListAdminUsersResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 	profiles, err := h.AdminSvc.ListUsers(ctx, userID)
 	if err != nil {
 		status, msg := serviceErrStatus(err)

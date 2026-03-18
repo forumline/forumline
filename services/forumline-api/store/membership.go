@@ -4,9 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
-	"github.com/jackc/pgx/v5"
 )
 
 func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Membership, error) {
@@ -40,44 +42,44 @@ func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Mem
 	return memberships, nil
 }
 
-func (s *Store) UpsertMembership(ctx context.Context, userID, forumID string) error {
+func (s *Store) UpsertMembership(ctx context.Context, userID string, forumID uuid.UUID) error {
 	return s.Q.UpsertMembership(ctx, sqlcdb.UpsertMembershipParams{
 		UserID:  userID,
-		ForumID: pgUUID(forumID),
+		ForumID: forumID,
 	})
 }
 
-func (s *Store) DeleteMembership(ctx context.Context, userID, forumID string) error {
+func (s *Store) DeleteMembership(ctx context.Context, userID string, forumID uuid.UUID) error {
 	return s.Q.DeleteMembership(ctx, sqlcdb.DeleteMembershipParams{
 		UserID:  userID,
-		ForumID: pgUUID(forumID),
+		ForumID: forumID,
 	})
 }
 
-func (s *Store) UpdateMembershipAuth(ctx context.Context, userID, forumID string, authed bool) error {
+func (s *Store) UpdateMembershipAuth(ctx context.Context, userID string, forumID uuid.UUID, authed bool) error {
 	if authed {
 		return s.Q.SetMembershipAuthed(ctx, sqlcdb.SetMembershipAuthedParams{
 			UserID:  userID,
-			ForumID: pgUUID(forumID),
+			ForumID: forumID,
 		})
 	}
 	return s.Q.ClearMembershipAuthed(ctx, sqlcdb.ClearMembershipAuthedParams{
 		UserID:  userID,
-		ForumID: pgUUID(forumID),
+		ForumID: forumID,
 	})
 }
 
-func (s *Store) UpdateMembershipMute(ctx context.Context, userID, forumID string, muted bool) error {
+func (s *Store) UpdateMembershipMute(ctx context.Context, userID string, forumID uuid.UUID, muted bool) error {
 	return s.Q.UpdateMembershipMute(ctx, sqlcdb.UpdateMembershipMuteParams{
 		NotificationsMuted: muted,
 		UserID:             userID,
-		ForumID:            pgUUID(forumID),
+		ForumID:            forumID,
 	})
 }
 
-func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID, userID string) (map[string]interface{}, error) {
+func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID uuid.UUID, userID string) (map[string]interface{}, error) {
 	r, err := s.Q.GetMembershipJoinDetails(ctx, sqlcdb.GetMembershipJoinDetailsParams{
-		ID:     pgUUID(forumID),
+		ID:     forumID,
 		UserID: userID,
 	})
 	if err != nil {
@@ -91,10 +93,10 @@ func (s *Store) GetMembershipJoinDetails(ctx context.Context, forumID, userID st
 	}, nil
 }
 
-func (s *Store) IsNotificationsMuted(ctx context.Context, userID, forumID string) (bool, error) {
+func (s *Store) IsNotificationsMuted(ctx context.Context, userID string, forumID uuid.UUID) (bool, error) {
 	muted, err := s.Q.IsNotificationsMuted(ctx, sqlcdb.IsNotificationsMutedParams{
 		UserID:  userID,
-		ForumID: pgUUID(forumID),
+		ForumID: forumID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {

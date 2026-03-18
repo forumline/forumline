@@ -4,42 +4,36 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/sqlcdb"
 )
 
-// ListChannelFollows returns category IDs the user follows.
-func (s *Store) ListChannelFollows(ctx context.Context, userID string) ([]string, error) {
-	rows, err := s.Q.ListChannelFollows(ctx, pgUUID(userID))
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, uuidStr(r))
-	}
-	return ids, nil
+// ListChannelFollows returns category UUIDs the user follows.
+func (s *Store) ListChannelFollows(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	return s.Q.ListChannelFollows(ctx, userID)
 }
 
 // AddChannelFollow adds a channel follow.
-func (s *Store) AddChannelFollow(ctx context.Context, userID, categoryID string) error {
+func (s *Store) AddChannelFollow(ctx context.Context, userID, categoryID uuid.UUID) error {
 	return s.Q.AddChannelFollow(ctx, sqlcdb.AddChannelFollowParams{
-		UserID:     pgUUID(userID),
-		CategoryID: pgUUID(categoryID),
+		UserID:     userID,
+		CategoryID: categoryID,
 	})
 }
 
 // RemoveChannelFollow removes a channel follow.
-func (s *Store) RemoveChannelFollow(ctx context.Context, userID, categoryID string) error {
+func (s *Store) RemoveChannelFollow(ctx context.Context, userID, categoryID uuid.UUID) error {
 	return s.Q.RemoveChannelFollow(ctx, sqlcdb.RemoveChannelFollowParams{
-		UserID:     pgUUID(userID),
-		CategoryID: pgUUID(categoryID),
+		UserID:     userID,
+		CategoryID: categoryID,
 	})
 }
 
 // ListNotificationPrefs returns a user's notification preferences.
-func (s *Store) ListNotificationPrefs(ctx context.Context, userID string) ([]oapi.NotificationPreference, error) {
-	rows, err := s.Q.ListNotificationPrefs(ctx, pgUUID(userID))
+func (s *Store) ListNotificationPrefs(ctx context.Context, userID uuid.UUID) ([]oapi.NotificationPreference, error) {
+	rows, err := s.Q.ListNotificationPrefs(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -54,9 +48,9 @@ func (s *Store) ListNotificationPrefs(ctx context.Context, userID string) ([]oap
 }
 
 // UpsertNotificationPref creates or updates a notification preference.
-func (s *Store) UpsertNotificationPref(ctx context.Context, userID, category string, enabled bool) error {
+func (s *Store) UpsertNotificationPref(ctx context.Context, userID uuid.UUID, category string, enabled bool) error {
 	return s.Q.UpsertNotificationPref(ctx, sqlcdb.UpsertNotificationPrefParams{
-		UserID:    pgUUID(userID),
+		UserID:    userID,
 		Category:  category,
 		Enabled:   enabled,
 		UpdatedAt: pgTimestamp(time.Now().UTC()),

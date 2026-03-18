@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/forum/oapi"
 )
 
 // UploadAvatar accepts a multipart file upload and stores it via FileStorage.
 // POST /api/avatars/upload
 func (h *Handlers) UploadAvatar(ctx context.Context, request oapi.UploadAvatarRequestObject) (oapi.UploadAvatarResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
+	userIDStr := userID.String()
 
 	// request.Body is a *multipart.Reader; iterate parts to find "file" and "path"
 	mr := request.Body
@@ -68,9 +68,9 @@ func (h *Handlers) UploadAvatar(ctx context.Context, request oapi.UploadAvatarRe
 	}
 
 	if pathVal == "" {
-		pathVal = fmt.Sprintf("user/%s/custom.png", userID)
+		pathVal = fmt.Sprintf("user/%s/custom.png", userIDStr)
 	}
-	userPrefix := fmt.Sprintf("user/%s/", userID)
+	userPrefix := fmt.Sprintf("user/%s/", userIDStr)
 	if !strings.HasPrefix(pathVal, userPrefix) && !strings.HasPrefix(pathVal, "thread/") {
 		return oapi.UploadAvatar403TextResponse("Invalid path"), nil
 	}

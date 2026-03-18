@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/forumline/forumline/backend/auth"
+	"github.com/google/uuid"
+
 	"github.com/forumline/forumline/forum/oapi"
 )
 
@@ -30,8 +31,8 @@ func convertToLocalExportData(src *oapi.ExportData) (*ExportData, error) {
 // The forum-local ExportData used by Import() is a separate struct — we convert
 // by re-encoding through JSON (both are wire-compatible).
 func (h *Handlers) ImportData(ctx context.Context, request oapi.ImportDataRequestObject) (oapi.ImportDataResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	if userID == "" {
+	userID := ProfileUUIDFromContext(ctx)
+	if userID == (uuid.UUID{}) {
 		return oapi.ImportData401JSONResponse{UnauthorizedJSONResponse: oapi.UnauthorizedJSONResponse{Error: "authentication required"}}, nil
 	}
 

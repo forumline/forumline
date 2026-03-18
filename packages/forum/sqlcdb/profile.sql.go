@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -15,7 +16,7 @@ const clearForumlineID = `-- name: ClearForumlineID :exec
 UPDATE profiles SET forumline_id = NULL, updated_at = NOW() WHERE id = $1
 `
 
-func (q *Queries) ClearForumlineID(ctx context.Context, id pgtype.UUID) error {
+func (q *Queries) ClearForumlineID(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, clearForumlineID, id)
 	return err
 }
@@ -27,7 +28,7 @@ ON CONFLICT (id) DO UPDATE SET forumline_id = $5, display_name = $3
 `
 
 type CreateProfileHostedParams struct {
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 	Username    string      `json:"username"`
 	DisplayName pgtype.Text `json:"display_name"`
 	AvatarUrl   pgtype.Text `json:"avatar_url"`
@@ -52,7 +53,7 @@ ON CONFLICT (id) DO UPDATE SET username = $2, display_name = $3
 `
 
 type CreateProfileSimpleParams struct {
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 	Username    string      `json:"username"`
 	DisplayName pgtype.Text `json:"display_name"`
 }
@@ -69,7 +70,7 @@ ON CONFLICT (id) DO UPDATE SET forumline_id = $4, display_name = $3
 `
 
 type EnsureProfileWithForumlineIDParams struct {
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 	Username    string      `json:"username"`
 	DisplayName pgtype.Text `json:"display_name"`
 	ForumlineID pgtype.Text `json:"forumline_id"`
@@ -89,7 +90,7 @@ const getForumlineID = `-- name: GetForumlineID :one
 SELECT forumline_id FROM profiles WHERE id = $1
 `
 
-func (q *Queries) GetForumlineID(ctx context.Context, id pgtype.UUID) (pgtype.Text, error) {
+func (q *Queries) GetForumlineID(ctx context.Context, id uuid.UUID) (pgtype.Text, error) {
 	row := q.db.QueryRow(ctx, getForumlineID, id)
 	var forumline_id pgtype.Text
 	err := row.Scan(&forumline_id)
@@ -101,7 +102,7 @@ SELECT id, username, display_name, avatar_url, bio, website, is_admin, forumline
 FROM profiles WHERE id = $1
 `
 
-func (q *Queries) GetProfile(ctx context.Context, id pgtype.UUID) (Profile, error) {
+func (q *Queries) GetProfile(ctx context.Context, id uuid.UUID) (Profile, error) {
 	row := q.db.QueryRow(ctx, getProfile, id)
 	var i Profile
 	err := row.Scan(
@@ -146,9 +147,9 @@ const getProfileIDByForumlineID = `-- name: GetProfileIDByForumlineID :one
 SELECT id FROM profiles WHERE forumline_id = $1
 `
 
-func (q *Queries) GetProfileIDByForumlineID(ctx context.Context, forumlineID pgtype.Text) (pgtype.UUID, error) {
+func (q *Queries) GetProfileIDByForumlineID(ctx context.Context, forumlineID pgtype.Text) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getProfileIDByForumlineID, forumlineID)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -157,7 +158,7 @@ const getProfileIDByForumlineIDUnlinked = `-- name: GetProfileIDByForumlineIDUnl
 SELECT id FROM profiles WHERE id = $1 AND (forumline_id IS NULL OR forumline_id = '')
 `
 
-func (q *Queries) GetProfileIDByForumlineIDUnlinked(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+func (q *Queries) GetProfileIDByForumlineIDUnlinked(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getProfileIDByForumlineIDUnlinked, id)
 	err := row.Scan(&id)
 	return id, err
@@ -168,7 +169,7 @@ SELECT id, username, display_name, avatar_url, bio, website, is_admin, forumline
 FROM profiles WHERE id = ANY($1::uuid[])
 `
 
-func (q *Queries) GetProfilesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Profile, error) {
+func (q *Queries) GetProfilesByIDs(ctx context.Context, ids []uuid.UUID) ([]Profile, error) {
 	rows, err := q.db.Query(ctx, getProfilesByIDs, ids)
 	if err != nil {
 		return nil, err
@@ -203,9 +204,9 @@ const getUserIDByUsername = `-- name: GetUserIDByUsername :one
 SELECT id FROM profiles WHERE lower(username) = $1
 `
 
-func (q *Queries) GetUserIDByUsername(ctx context.Context, username string) (pgtype.UUID, error) {
+func (q *Queries) GetUserIDByUsername(ctx context.Context, username string) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getUserIDByUsername, username)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -214,7 +215,7 @@ const getUsername = `-- name: GetUsername :one
 SELECT username FROM profiles WHERE id = $1
 `
 
-func (q *Queries) GetUsername(ctx context.Context, id pgtype.UUID) (string, error) {
+func (q *Queries) GetUsername(ctx context.Context, id uuid.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getUsername, id)
 	var username string
 	err := row.Scan(&username)
@@ -225,7 +226,7 @@ const isAdmin = `-- name: IsAdmin :one
 SELECT is_admin FROM profiles WHERE id = $1
 `
 
-func (q *Queries) IsAdmin(ctx context.Context, id pgtype.UUID) (bool, error) {
+func (q *Queries) IsAdmin(ctx context.Context, id uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, isAdmin, id)
 	var is_admin bool
 	err := row.Scan(&is_admin)
@@ -274,7 +275,7 @@ UPDATE profiles SET forumline_id = $1 WHERE id = $2
 
 type SetForumlineIDParams struct {
 	ForumlineID pgtype.Text `json:"forumline_id"`
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) SetForumlineID(ctx context.Context, arg SetForumlineIDParams) error {
@@ -288,7 +289,7 @@ UPDATE profiles SET display_name = $1 WHERE id = $2
 
 type UpdateDisplayNameParams struct {
 	DisplayName pgtype.Text `json:"display_name"`
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateDisplayName(ctx context.Context, arg UpdateDisplayNameParams) error {
@@ -303,7 +304,7 @@ UPDATE profiles SET display_name = $1, avatar_url = $2, updated_at = now() WHERE
 type UpdateDisplayNameAndAvatarParams struct {
 	DisplayName pgtype.Text `json:"display_name"`
 	AvatarUrl   pgtype.Text `json:"avatar_url"`
-	ID          pgtype.UUID `json:"id"`
+	ID          uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) UpdateDisplayNameAndAvatar(ctx context.Context, arg UpdateDisplayNameAndAvatarParams) error {
@@ -322,7 +323,7 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertProfileFullParams struct {
-	ID          pgtype.UUID        `json:"id"`
+	ID          uuid.UUID          `json:"id"`
 	Username    string             `json:"username"`
 	DisplayName pgtype.Text        `json:"display_name"`
 	AvatarUrl   pgtype.Text        `json:"avatar_url"`

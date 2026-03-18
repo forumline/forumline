@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/forumline/forumline/backend/auth"
+
 	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/forum/oapi"
 )
 
 // ListForumlineNotifications handles GET /api/forumline/notifications.
 func (h *Handlers) ListForumlineNotifications(ctx context.Context, _ oapi.ListForumlineNotificationsRequestObject) (oapi.ListForumlineNotificationsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
 	notifications, err := h.Store.ListForumlineNotifications(ctx, userID, 50, h.Config.Domain)
 	if err != nil {
@@ -25,9 +25,9 @@ func (h *Handlers) ListForumlineNotifications(ctx context.Context, _ oapi.ListFo
 
 // MarkNotificationRead handles POST /api/forumline/notifications/read.
 func (h *Handlers) MarkNotificationRead(ctx context.Context, request oapi.MarkNotificationReadRequestObject) (oapi.MarkNotificationReadResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
-	if err := h.Store.MarkNotificationRead(ctx, request.Body.Id.String(), userID); err != nil {
+	if err := h.Store.MarkNotificationRead(ctx, request.Body.Id, userID); err != nil {
 		return oapi.MarkNotificationRead500JSONResponse{InternalErrorJSONResponse: oapi.InternalErrorJSONResponse{Error: err.Error()}}, nil
 	}
 	t := true
@@ -36,7 +36,7 @@ func (h *Handlers) MarkNotificationRead(ctx context.Context, request oapi.MarkNo
 
 // GetUnreadCounts handles GET /api/forumline/unread.
 func (h *Handlers) GetUnreadCounts(ctx context.Context, _ oapi.GetUnreadCountsRequestObject) (oapi.GetUnreadCountsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
+	userID := ProfileUUIDFromContext(ctx)
 
 	notifCount, chatMentionCount, err := h.Store.CountUnread(ctx, userID)
 	if err != nil {
@@ -133,7 +133,6 @@ func (s notificationSSEStream) VisitStreamNotificationsResponse(w http.ResponseW
 
 // StreamNotifications handles GET /api/forumline/notifications/stream (SSE).
 func (h *Handlers) StreamNotifications(ctx context.Context, _ oapi.StreamNotificationsRequestObject) (oapi.StreamNotificationsResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	return notificationSSEStream{ctx: ctx, h: h, userID: userID}, nil
+	userID := ProfileUUIDFromContext(ctx)
+	return notificationSSEStream{ctx: ctx, h: h, userID: userID.String()}, nil
 }
-

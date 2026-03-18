@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -27,7 +28,7 @@ const countForumMembers = `-- name: CountForumMembers :one
 SELECT COUNT(*)::int FROM forumline_memberships WHERE forum_id = $1
 `
 
-func (q *Queries) CountForumMembers(ctx context.Context, forumID pgtype.UUID) (int32, error) {
+func (q *Queries) CountForumMembers(ctx context.Context, forumID uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countForumMembers, forumID)
 	var column_1 int32
 	err := row.Scan(&column_1)
@@ -50,7 +51,7 @@ DELETE FROM forumline_forums WHERE id = $1 AND owner_id = $2
 `
 
 type DeleteForumParams struct {
-	ID      pgtype.UUID `json:"id"`
+	ID      uuid.UUID   `json:"id"`
 	OwnerID pgtype.Text `json:"owner_id"`
 }
 
@@ -66,7 +67,7 @@ const deleteForumByID = `-- name: DeleteForumByID :exec
 DELETE FROM forumline_forums WHERE id = $1
 `
 
-func (q *Queries) DeleteForumByID(ctx context.Context, id pgtype.UUID) error {
+func (q *Queries) DeleteForumByID(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteForumByID, id)
 	return err
 }
@@ -98,7 +99,7 @@ const getForumDomainByID = `-- name: GetForumDomainByID :one
 SELECT domain FROM forumline_forums WHERE id = $1
 `
 
-func (q *Queries) GetForumDomainByID(ctx context.Context, id pgtype.UUID) (string, error) {
+func (q *Queries) GetForumDomainByID(ctx context.Context, id uuid.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getForumDomainByID, id)
 	var domain string
 	err := row.Scan(&domain)
@@ -109,9 +110,9 @@ const getForumIDByDomain = `-- name: GetForumIDByDomain :one
 SELECT id FROM forumline_forums WHERE domain = $1
 `
 
-func (q *Queries) GetForumIDByDomain(ctx context.Context, domain string) (pgtype.UUID, error) {
+func (q *Queries) GetForumIDByDomain(ctx context.Context, domain string) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getForumIDByDomain, domain)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -120,7 +121,7 @@ const getForumName = `-- name: GetForumName :one
 SELECT COALESCE(name, domain) AS name FROM forumline_forums WHERE id = $1
 `
 
-func (q *Queries) GetForumName(ctx context.Context, id pgtype.UUID) (string, error) {
+func (q *Queries) GetForumName(ctx context.Context, id uuid.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getForumName, id)
 	var name string
 	err := row.Scan(&name)
@@ -142,7 +143,7 @@ const getForumOwner = `-- name: GetForumOwner :one
 SELECT owner_id FROM forumline_forums WHERE id = $1
 `
 
-func (q *Queries) GetForumOwner(ctx context.Context, id pgtype.UUID) (pgtype.Text, error) {
+func (q *Queries) GetForumOwner(ctx context.Context, id uuid.UUID) (pgtype.Text, error) {
 	row := q.db.QueryRow(ctx, getForumOwner, id)
 	var owner_id pgtype.Text
 	err := row.Scan(&owner_id)
@@ -173,7 +174,7 @@ FROM forumline_forums ORDER BY domain
 `
 
 type ListAllForumsRow struct {
-	ID                  pgtype.UUID        `json:"id"`
+	ID                  uuid.UUID          `json:"id"`
 	Domain              string             `json:"domain"`
 	Name                string             `json:"name"`
 	IconUrl             pgtype.Text        `json:"icon_url"`
@@ -252,7 +253,7 @@ ORDER BY created_at DESC
 `
 
 type ListOwnedForumsRow struct {
-	ID                  pgtype.UUID        `json:"id"`
+	ID                  uuid.UUID          `json:"id"`
 	Domain              string             `json:"domain"`
 	Name                string             `json:"name"`
 	IconUrl             pgtype.Text        `json:"icon_url"`
@@ -321,7 +322,7 @@ LIMIT 10
 `
 
 type ListRecommendedForumsRow struct {
-	ID                pgtype.UUID `json:"id"`
+	ID                uuid.UUID   `json:"id"`
 	Domain            string      `json:"domain"`
 	Name              string      `json:"name"`
 	IconUrl           pgtype.Text `json:"icon_url"`
@@ -407,7 +408,7 @@ type RegisterForumParams struct {
 	OwnerID      pgtype.Text `json:"owner_id"`
 }
 
-func (q *Queries) RegisterForum(ctx context.Context, arg RegisterForumParams) (pgtype.UUID, error) {
+func (q *Queries) RegisterForum(ctx context.Context, arg RegisterForumParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, registerForum,
 		arg.Domain,
 		arg.Name,
@@ -418,7 +419,7 @@ func (q *Queries) RegisterForum(ctx context.Context, arg RegisterForumParams) (p
 		arg.Tags,
 		arg.OwnerID,
 	)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -478,7 +479,7 @@ type UpsertForumFromManifestParams struct {
 	Tags         []string    `json:"tags"`
 }
 
-func (q *Queries) UpsertForumFromManifest(ctx context.Context, arg UpsertForumFromManifestParams) (pgtype.UUID, error) {
+func (q *Queries) UpsertForumFromManifest(ctx context.Context, arg UpsertForumFromManifestParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, upsertForumFromManifest,
 		arg.Domain,
 		arg.Name,
@@ -488,7 +489,7 @@ func (q *Queries) UpsertForumFromManifest(ctx context.Context, arg UpsertForumFr
 		arg.Capabilities,
 		arg.Tags,
 	)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }

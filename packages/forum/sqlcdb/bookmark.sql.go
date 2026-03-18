@@ -8,6 +8,7 @@ package sqlcdb
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -16,8 +17,8 @@ INSERT INTO bookmarks (user_id, thread_id) VALUES ($1, $2) ON CONFLICT DO NOTHIN
 `
 
 type AddBookmarkParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	ThreadID pgtype.UUID `json:"thread_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	ThreadID uuid.UUID `json:"thread_id"`
 }
 
 func (q *Queries) AddBookmark(ctx context.Context, arg AddBookmarkParams) error {
@@ -30,13 +31,13 @@ SELECT id FROM bookmarks WHERE user_id = $1 AND thread_id = $2
 `
 
 type GetBookmarkStatusParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	ThreadID pgtype.UUID `json:"thread_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	ThreadID uuid.UUID `json:"thread_id"`
 }
 
-func (q *Queries) GetBookmarkStatus(ctx context.Context, arg GetBookmarkStatusParams) (pgtype.UUID, error) {
+func (q *Queries) GetBookmarkStatus(ctx context.Context, arg GetBookmarkStatusParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getBookmarkStatus, arg.UserID, arg.ThreadID)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -61,11 +62,11 @@ ORDER BY b.created_at DESC
 `
 
 type ListBookmarksRow struct {
-	ID                pgtype.UUID        `json:"id"`
+	ID                uuid.UUID          `json:"id"`
 	BookmarkCreatedAt pgtype.Timestamptz `json:"bookmark_created_at"`
-	ThreadID          pgtype.UUID        `json:"thread_id"`
-	CategoryID        pgtype.UUID        `json:"category_id"`
-	AuthorID          pgtype.UUID        `json:"author_id"`
+	ThreadID          uuid.UUID          `json:"thread_id"`
+	CategoryID        uuid.UUID          `json:"category_id"`
+	AuthorID          uuid.UUID          `json:"author_id"`
 	Title             string             `json:"title"`
 	Slug              string             `json:"slug"`
 	Content           pgtype.Text        `json:"content"`
@@ -77,7 +78,7 @@ type ListBookmarksRow struct {
 	LastPostAt        pgtype.Timestamptz `json:"last_post_at"`
 	ThreadCreatedAt   pgtype.Timestamptz `json:"thread_created_at"`
 	ThreadUpdatedAt   pgtype.Timestamptz `json:"thread_updated_at"`
-	AuthorID2         pgtype.UUID        `json:"author_id_2"`
+	AuthorID2         uuid.UUID          `json:"author_id_2"`
 	AuthorUsername    string             `json:"author_username"`
 	AuthorDisplayName pgtype.Text        `json:"author_display_name"`
 	AuthorAvatarUrl   pgtype.Text        `json:"author_avatar_url"`
@@ -87,7 +88,7 @@ type ListBookmarksRow struct {
 	AuthorForumlineID pgtype.Text        `json:"author_forumline_id"`
 	AuthorCreatedAt   pgtype.Timestamptz `json:"author_created_at"`
 	AuthorUpdatedAt   pgtype.Timestamptz `json:"author_updated_at"`
-	CatID             pgtype.UUID        `json:"cat_id"`
+	CatID             uuid.UUID          `json:"cat_id"`
 	CatName           string             `json:"cat_name"`
 	CatSlug           string             `json:"cat_slug"`
 	CatDescription    pgtype.Text        `json:"cat_description"`
@@ -95,7 +96,7 @@ type ListBookmarksRow struct {
 	CatCreatedAt      pgtype.Timestamptz `json:"cat_created_at"`
 }
 
-func (q *Queries) ListBookmarks(ctx context.Context, userID pgtype.UUID) ([]ListBookmarksRow, error) {
+func (q *Queries) ListBookmarks(ctx context.Context, userID uuid.UUID) ([]ListBookmarksRow, error) {
 	rows, err := q.db.Query(ctx, listBookmarks, userID)
 	if err != nil {
 		return nil, err
@@ -153,8 +154,8 @@ DELETE FROM bookmarks WHERE user_id = $1 AND thread_id = $2
 `
 
 type RemoveBookmarkParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	ThreadID pgtype.UUID `json:"thread_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	ThreadID uuid.UUID `json:"thread_id"`
 }
 
 func (q *Queries) RemoveBookmark(ctx context.Context, arg RemoveBookmarkParams) error {
@@ -167,8 +168,8 @@ DELETE FROM bookmarks WHERE id = $1 AND user_id = $2
 `
 
 type RemoveBookmarkByIDParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 func (q *Queries) RemoveBookmarkByID(ctx context.Context, arg RemoveBookmarkByIDParams) error {

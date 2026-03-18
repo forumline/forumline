@@ -8,6 +8,7 @@ require (
 	github.com/forumline/forumline/forum v0.0.0-00010101000000-000000000000
 	github.com/forumline/forumline/rpc v0.0.0-00010101000000-000000000000
 	github.com/getkin/kin-openapi v0.134.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/oapi-codegen/runtime v1.2.0
@@ -40,7 +41,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/google/cel-go v0.27.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	// github.com/google/uuid -- now direct dep above
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.4 // indirect
