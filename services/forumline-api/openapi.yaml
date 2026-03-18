@@ -29,6 +29,91 @@ components:
         error:
           type: string
 
+    # --- SSE event payloads (used by GET /api/events/stream) ---
+
+    DmEvent:
+      description: SSE event payload for direct message activity (event type `dm`).
+      type: object
+      required: [conversation_id, sender_id, member_ids, id, content, created_at]
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+        member_ids:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationEvent:
+      description: SSE event payload for a notification (event type `notification`).
+      type: object
+      required: [id, user_id, forum_domain, forum_name, type, title, body, link, read, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        forum_domain:
+          type: string
+        forum_name:
+          type: string
+        type:
+          type: string
+          enum: [reply, mention, chat_mention, dm, custom]
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+        read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CallSignalType:
+      type: string
+      enum: [incoming_call, call_accepted, call_declined, call_ended]
+
+    CallSignal:
+      description: SSE event payload for call signaling (event type `call`).
+      type: object
+      required: [type, call_id, target_user_id]
+      properties:
+        type:
+          $ref: '#/components/schemas/CallSignalType'
+        call_id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        caller_id:
+          type: string
+        caller_username:
+          type: string
+        caller_display_name:
+          type: string
+        caller_avatar_url:
+          type: string
+          nullable: true
+        ended_by:
+          type: string
+        target_user_id:
+          type: string
+
     SuccessResponse:
       type: object
       required: [success]
@@ -1049,14 +1134,22 @@ paths:
     get:
       operationId: getEventStream
       summary: Server-sent event stream (DMs, notifications, calls)
+      description: |
+        Multiplexed SSE stream carrying three event types:
+        - `dm` — DmEvent payload (new direct message)
+        - `notification` — NotificationEvent payload (forum notification)
+        - `call` — CallSignal payload (call signaling)
       tags: [Events]
       responses:
         '200':
-          description: SSE stream
+          description: SSE stream with typed event payloads
           content:
             text/event-stream:
               schema:
-                type: string
+                oneOf:
+                  - $ref: '#/components/schemas/DmEvent'
+                  - $ref: '#/components/schemas/NotificationEvent'
+                  - $ref: '#/components/schemas/CallSignal'
 
   /api/calls:
     post:

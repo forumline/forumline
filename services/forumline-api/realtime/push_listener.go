@@ -5,86 +5,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
 // PushListener sends web push notifications for new DMs.
-// It can consume events from NATS (production) or PG LISTEN (local dev).
+// Subscription wiring is done via Watermill Router in main.go.
 type PushListener struct {
-	Pool        *pgxpool.Pool
 	Store       *store.Store
 	PushService *service.PushService
 }
 
-func NewPushListener(pool *pgxpool.Pool, s *store.Store, ps *service.PushService) *PushListener {
-	return &PushListener{Pool: pool, Store: s, PushService: ps}
+func NewPushListener(s *store.Store, ps *service.PushService) *PushListener {
+	return &PushListener{Store: s, PushService: ps}
 }
 
-// SubscribeNATS registers a NATS handler for push_dm events.
-// This replaces the PG LISTEN path when NATS is available.
-func (pl *PushListener) SubscribeNATS(ctx context.Context, bus pubsub.EventBus) error {
-	return bus.Subscribe("push_dm", func(data []byte) {
-		pl.handlePayload(ctx, data)
-	})
-}
-
-// Start listens on the push_dm PG NOTIFY channel directly.
-// This is the fallback path when NATS is not configured.
-func (pl *PushListener) Start(ctx context.Context) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		pl.listenOnce(ctx)
-		if ctx.Err() != nil {
-			return
-		}
-		log.Println("PushListener: reconnecting in 3s...")
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(3 * time.Second):
-		}
-	}
-}
-
-func (pl *PushListener) listenOnce(ctx context.Context) {
-	conn, err := pl.Pool.Acquire(ctx)
-	if err != nil {
-		log.Printf("PushListener: failed to acquire connection: %v", err)
-		return
-	}
-	defer conn.Release()
-
-	_, err = conn.Exec(ctx, "LISTEN push_dm")
-	if err != nil {
-		log.Printf("PushListener: LISTEN push_dm failed: %v", err)
-		return
-	}
-
-	log.Println("PushListener: listening on push_dm channel")
-
-	for {
-		notification, err := conn.Conn().WaitForNotification(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			log.Printf("PushListener: WaitForNotification error: %v", err)
-			return
-		}
-
-		pl.handlePayload(ctx, []byte(notification.Payload))
-	}
-}
-
-func (pl *PushListener) handlePayload(ctx context.Context, raw []byte) {
+// HandlePayload processes a push_dm event payload and sends web push notifications.
+// Returns an error on parse failure so Watermill's retry middleware can re-attempt.
+func (pl *PushListener) HandlePayload(ctx context.Context, raw []byte) error {
 	var payload struct {
 		ConversationID string   `json:"conversation_id"`
 		SenderID       string   `json:"sender_id"`
@@ -92,8 +31,7 @@ func (pl *PushListener) handlePayload(ctx context.Context, raw []byte) {
 		Content        string   `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		log.Printf("PushListener: failed to parse payload: %v", err)
-		return
+		return fmt.Errorf("parse payload: %w", err)
 	}
 
 	senderUsername := pl.Store.GetSenderUsername(ctx, payload.SenderID)
@@ -112,4 +50,5 @@ func (pl *PushListener) handlePayload(ctx context.Context, raw []byte) {
 			log.Printf("PushListener: sent %d push notifications for DM to %s", sent, memberID)
 		}
 	}
+	return nil
 }

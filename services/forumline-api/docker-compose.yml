@@ -1,10 +1,10 @@
-# Local dev stack — Postgres only.
+# Local dev stack — Postgres + NATS + Valkey.
 # Zitadel runs separately: cd ../zitadel && docker compose up -d
 services:
   db:
     image: postgres:17-alpine
     ports:
-      - "5433:5432"
+      - "${FORUMLINE_PG_PORT:-5433}:5432"
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
@@ -16,10 +16,21 @@ services:
       timeout: 5s
       retries: 10
 
+  nats:
+    image: nats:2-alpine
+    ports:
+      - "4222:4222"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   valkey:
     image: valkey/valkey:8-alpine
     ports:
-      - "6379:6379"
+      - "${FORUMLINE_VALKEY_PORT:-6379}:6379"
     command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]

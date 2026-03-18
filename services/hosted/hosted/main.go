@@ -27,6 +27,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
+	wmmetrics "github.com/ThreeDotsLabs/watermill/components/metrics"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/httpkit"
@@ -88,37 +94,47 @@ func main() {
 
 	sseChannels := []string{"notification_changes", "chat_message_changes", "voice_presence_changes", "post_changes"}
 
-	listenDSN := os.Getenv("DATABASE_URL_DIRECT")
-	if listenDSN == "" {
-		listenDSN = os.Getenv("DATABASE_URL")
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		log.Fatal("NATS_URL is required — realtime events need NATS")
 	}
 
-	var eventBus pubsub.EventBus
-	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		bus, err := pubsub.NewNATSBus(natsURL)
-		if err != nil {
-			log.Fatalf("failed to connect to NATS: %v", err)
-		}
-		defer bus.Close()
-		eventBus = bus
-
-		// NATS → SSE Hub (Go service code publishes directly to NATS)
-		for _, ch := range sseChannels {
-			ch := ch
-			if err := bus.Subscribe(ch, func(data []byte) {
-				sseHub.Feed(ch, data)
-			}); err != nil {
-				log.Fatalf("NATS subscribe %s: %v", ch, err)
-			}
-		}
-
-		log.Println("realtime: NATS event bus active")
-	} else {
-		for _, ch := range sseChannels {
-			sseHub.Listen(ctx, ch)
-		}
-		sseHub.StartListening(ctx, listenDSN)
+	bus, err := pubsub.NewWatermillBus(natsURL)
+	if err != nil {
+		log.Fatalf("failed to connect to NATS: %v", err)
 	}
+	defer bus.Close()
+	var eventBus pubsub.EventBus = bus
+
+	// Watermill Router for subscriptions
+	wmLogger := watermill.NewStdLogger(false, false)
+	wmRouter, err := message.NewRouter(message.RouterConfig{}, wmLogger)
+	if err != nil {
+		log.Fatalf("failed to create Watermill router: %v", err)
+	}
+	wmRouter.AddMiddleware(middleware.Recoverer)
+	wmRouter.AddMiddleware(middleware.CorrelationID)
+
+	// Prometheus metrics for Watermill handlers (handler duration, message counts)
+	wmMetrics := wmmetrics.NewPrometheusMetricsBuilder(prometheus.DefaultRegisterer, "hosted", "watermill")
+	wmMetrics.AddPrometheusRouterMetrics(wmRouter)
+
+	// SSE Hub subscriptions
+	for _, ch := range sseChannels {
+		ch := ch
+		wmRouter.AddConsumerHandler("sse-"+ch, ch, bus.Sub, func(msg *message.Message) error {
+			sseHub.Feed(ch, msg.Payload)
+			return nil
+		})
+	}
+
+	go func() {
+		if err := wmRouter.Run(ctx); err != nil {
+			log.Printf("Watermill router stopped: %v", err)
+		}
+	}()
+
+	log.Println("realtime: Watermill event bus active")
 
 	var routerMu sync.RWMutex
 	routerCache := make(map[string]http.Handler) // domain -> cached router

@@ -1,15 +1,11 @@
 package sse
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sync"
-	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // Client represents a connected SSE client with a filter.
@@ -22,81 +18,16 @@ type Client struct {
 }
 
 // Hub manages SSE client subscriptions and fans out events to connected
-// browsers. Events can arrive from any source via Feed() — NATS in
-// production, or direct PG LISTEN for local development.
+// browsers. Events arrive via Feed() from an external source (NATS).
 type Hub struct {
-	mu       sync.RWMutex
-	clients  map[string][]*Client // channel -> clients
-	channels []string             // channels for PG LISTEN fallback
+	mu      sync.RWMutex
+	clients map[string][]*Client // channel -> clients
 }
 
-// NewHub creates an empty Hub. Call Feed() to push events in, or use
-// Listen()+StartListening() for the legacy PG LISTEN fallback path.
+// NewHub creates an empty Hub. Call Feed() to push events in.
 func NewHub() *Hub {
 	return &Hub{
 		clients: make(map[string][]*Client),
-	}
-}
-
-// Listen registers a channel for the PG LISTEN fallback path.
-// Call StartListening after all channels are registered.
-func (h *Hub) Listen(_ context.Context, channel string) {
-	h.channels = append(h.channels, channel)
-}
-
-// StartListening opens a single Postgres connection and LISTENs on all
-// registered channels, feeding events into the hub via broadcast().
-// This is the fallback path for local development without NATS.
-func (h *Hub) StartListening(ctx context.Context, listenDSN string) {
-	go func() {
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			h.listenAll(ctx, listenDSN)
-			if ctx.Err() != nil {
-				return
-			}
-			log.Printf("SSEHub: reconnecting all channels in 3s...")
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(3 * time.Second):
-			}
-		}
-	}()
-}
-
-func (h *Hub) listenAll(ctx context.Context, dsn string) {
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		log.Printf("SSEHub: failed to connect for LISTEN: %v", err)
-		return
-	}
-	defer func() { _ = conn.Close(ctx) }()
-
-	for _, channel := range h.channels {
-		quoted := pgx.Identifier{channel}.Sanitize()
-		_, err = conn.Exec(ctx, fmt.Sprintf("LISTEN %s", quoted))
-		if err != nil {
-			log.Printf("SSEHub: LISTEN %s failed: %v", channel, err)
-			return
-		}
-	}
-
-	log.Printf("SSEHub: listening on %d channels via single connection", len(h.channels))
-
-	for {
-		notification, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			log.Printf("SSEHub: WaitForNotification error: %v", err)
-			return
-		}
-
-		h.broadcast(notification.Channel, []byte(notification.Payload))
 	}
 }
 

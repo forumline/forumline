@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/forum/store"
 )
@@ -87,18 +88,17 @@ func (ns *NotificationService) GeneratePostNotifications(threadID, postID, autho
 
 		// Publish notification_changes event
 		if ns.EventBus != nil {
-			payload, _ := json.Marshal(map[string]interface{}{
-				"schema":     ns.Schema,
-				"id":         id,
-				"user_id":    userID,
-				"type":       notifType,
-				"title":      title,
-				"message":    body,
-				"link":       link,
-				"read":       false,
-				"created_at": createdAt,
-			})
-			if pubErr := ns.EventBus.Publish(context.Background(), "notification_changes", payload); pubErr != nil {
+			if pubErr := events.Publish(ns.EventBus, context.Background(), "notification_changes", events.NotificationChangeEvent{
+				Schema:    ns.Schema,
+				ID:        id,
+				UserID:    userID,
+				Type:      notifType,
+				Title:     title,
+				Message:   body,
+				Link:      link,
+				Read:      false,
+				CreatedAt: createdAt,
+			}); pubErr != nil {
 				log.Printf("[notifications] EventBus publish error: %v", pubErr)
 			}
 		}

@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
@@ -67,15 +67,14 @@ func (cs *ChatService) publishChatMessage(channelID, id, authorID uuid.UUID, con
 	if cs.EventBus == nil {
 		return
 	}
-	payload, _ := json.Marshal(map[string]interface{}{
-		"schema":     cs.Schema,
-		"id":         id,
-		"channel_id": channelID,
-		"author_id":  authorID,
-		"content":    content,
-		"created_at": createdAt,
-	})
-	if err := cs.EventBus.Publish(context.Background(), "chat_message_changes", payload); err != nil {
+	if err := events.Publish(cs.EventBus, context.Background(), "chat_message_changes", events.ChatMessageEvent{
+		Schema:    cs.Schema,
+		ID:        id,
+		ChannelID: channelID,
+		AuthorID:  authorID,
+		Content:   content,
+		CreatedAt: createdAt,
+	}); err != nil {
 		log.Printf("[chat] EventBus publish error: %v", err)
 	}
 }

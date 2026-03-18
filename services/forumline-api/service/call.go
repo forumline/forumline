@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/store"
@@ -23,10 +23,9 @@ func NewCallService(s *store.Store, ps *PushService, bus pubsub.EventBus) *CallS
 	return &CallService{Store: s, PushService: ps, EventBus: bus}
 }
 
-// InitiateResult contains the call record and the callee ID for SSE notification.
+// InitiateResult contains the call record returned to the caller.
 type InitiateResult struct {
-	Call    *oapi.CallRecord
-	Signal []byte // JSON signal payload to broadcast via SSE
+	Call *oapi.CallRecord
 }
 
 // Initiate starts a call in a 1:1 conversation.
@@ -70,14 +69,17 @@ func (cs *CallService) Initiate(ctx context.Context, callerID string, conversati
 		callerAvatarURL = callerProfile.AvatarURL
 	}
 
-	signalData, _ := json.Marshal(map[string]interface{}{
-		"type": "incoming_call", "call_id": call.Id, "conversation_id": call.ConversationId,
-		"caller_id": callerID, "caller_username": callerUsername,
-		"caller_display_name": displayName, "caller_avatar_url": callerAvatarURL,
-		"target_user_id": calleeID,
-	})
 	if cs.EventBus != nil {
-		_ = cs.EventBus.Publish(ctx, "call_signal", signalData)
+		_ = events.Publish(cs.EventBus, ctx, "call_signal", events.CallSignalEvent{
+			Type:              "incoming_call",
+			CallID:            call.Id,
+			ConversationID:    call.ConversationId,
+			CallerID:          callerID,
+			CallerUsername:    callerUsername,
+			CallerDisplayName: displayName,
+			CallerAvatarURL:   callerAvatarURL,
+			TargetUserID:      calleeID,
+		})
 	}
 
 	// Send push in background (intentionally detached from request context)
@@ -89,7 +91,7 @@ func (cs *CallService) Initiate(ctx context.Context, callerID string, conversati
 		}
 	}()
 
-	return &InitiateResult{Call: call, Signal: signalData}, nil
+	return &InitiateResult{Call: call}, nil
 }
 
 // RespondResult contains the outcome of a call response.
@@ -119,11 +121,12 @@ func (cs *CallService) Respond(ctx context.Context, userID string, callID uuid.U
 		return nil, fmt.Errorf("failed to update call: %w", err)
 	}
 
-	signalData, _ := json.Marshal(map[string]interface{}{
-		"type": signalType, "call_id": callID, "target_user_id": callerID,
-	})
 	if cs.EventBus != nil {
-		_ = cs.EventBus.Publish(ctx, "call_signal", signalData)
+		_ = events.Publish(cs.EventBus, ctx, "call_signal", events.CallSignalEvent{
+			Type:         signalType,
+			CallID:       callID,
+			TargetUserID: callerID,
+		})
 	}
 
 	return &RespondResult{Status: action + "ed"}, nil
@@ -141,11 +144,13 @@ func (cs *CallService) End(ctx context.Context, userID string, callID uuid.UUID)
 		return nil, &NotFoundError{Msg: "Active call not found"}
 	}
 
-	signalData, _ := json.Marshal(map[string]interface{}{
-		"type": "call_ended", "call_id": callID, "ended_by": userID, "target_user_id": otherUserID,
-	})
 	if cs.EventBus != nil {
-		_ = cs.EventBus.Publish(ctx, "call_signal", signalData)
+		_ = events.Publish(cs.EventBus, ctx, "call_signal", events.CallSignalEvent{
+			Type:         "call_ended",
+			CallID:       callID,
+			EndedBy:      userID,
+			TargetUserID: otherUserID,
+		})
 	}
 
 	return &EndResult{Status: newStatus}, nil

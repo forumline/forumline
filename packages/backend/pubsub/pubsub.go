@@ -1,23 +1,18 @@
 // Package pubsub provides a transport-agnostic event bus for realtime events.
 //
-// The EventBus interface decouples event producers (database triggers, service
-// layer code) from consumers (SSE hub, push notification listeners). This
-// allows swapping Postgres LISTEN/NOTIFY for NATS (or anything else) without
-// changing handler or service code.
+// The EventBus interface decouples event producers (service layer code) from
+// the transport layer (NATS via Watermill). Consumers (SSE hub, push listener)
+// subscribe via Watermill Router in main.go — not through this interface.
 package pubsub
 
 import "context"
 
-// EventBus is the core publish/subscribe interface for realtime events.
+// EventBus is the publish-side interface for realtime events.
+// Services call Publish to send events; subscriptions are wired
+// separately via Watermill Router in each service's main.go.
 type EventBus interface {
-	// Publish sends data on the given subject. Subject names match the
-	// Postgres LISTEN/NOTIFY channel names (e.g. "dm_changes").
-	Publish(ctx context.Context, subject string, data []byte) error
-
-	// Subscribe registers a handler for messages on the given subject.
-	// The handler is called synchronously per message — launch a goroutine
-	// inside the handler if processing is expensive.
-	Subscribe(subject string, handler func(data []byte)) error
+	// Publish sends data on the given topic (e.g. "dm_changes").
+	Publish(ctx context.Context, topic string, data []byte) error
 
 	// Close tears down the connection. Safe to call multiple times.
 	Close()

@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/store"
@@ -69,16 +69,15 @@ func (ps *PostService) Create(ctx context.Context, userID uuid.UUID, input Creat
 
 	// Publish post_changes event
 	if ps.EventBus != nil {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"schema":      ps.Schema,
-			"id":          id,
-			"thread_id":   input.ThreadID,
-			"author_id":   userID,
-			"content":     input.Content,
-			"reply_to_id": input.ReplyToID,
-			"created_at":  time.Now(),
-		})
-		if err := ps.EventBus.Publish(context.Background(), "post_changes", payload); err != nil {
+		if err := events.Publish(ps.EventBus, context.Background(), "post_changes", events.PostEvent{
+			Schema:    ps.Schema,
+			ID:        id,
+			ThreadID:  input.ThreadID,
+			AuthorID:  userID,
+			Content:   input.Content,
+			ReplyToID: input.ReplyToID,
+			CreatedAt: time.Now(),
+		}); err != nil {
 			log.Printf("[post] EventBus publish error: %v", err)
 		}
 	}

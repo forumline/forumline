@@ -2,13 +2,13 @@ package forum
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/forum/oapi"
 	"github.com/forumline/forumline/forum/service"
 )
@@ -295,17 +295,13 @@ func (h *Handlers) publishVoiceEvent(event string, userID uuid.UUID, roomSlug st
 	if h.Config.EventBus == nil {
 		return
 	}
-	data := map[string]interface{}{
-		"schema":    h.Config.Schema,
-		"event":     event,
-		"user_id":   userID,
-		"room_slug": roomSlug,
-	}
-	if event != "DELETE" {
-		data["joined_at"] = joinedAt
-	}
-	payload, _ := json.Marshal(data)
-	if err := h.Config.EventBus.Publish(context.Background(), "voice_presence_changes", payload); err != nil {
+	if err := events.Publish(h.Config.EventBus, context.Background(), "voice_presence_changes", events.VoicePresenceEvent{
+		Schema:   h.Config.Schema,
+		Event:    event,
+		UserID:   userID,
+		RoomSlug: roomSlug,
+		JoinedAt: joinedAt,
+	}); err != nil {
 		log.Printf("[voice] EventBus publish error: %v", err)
 	}
 }

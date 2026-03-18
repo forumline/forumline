@@ -2,12 +2,13 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/store"
@@ -161,25 +162,23 @@ func (cs *ConversationService) SendMessage(ctx context.Context, userID string, c
 	// Publish dm_changes and push_dm events
 	if cs.EventBus != nil {
 		memberIDs, _ := cs.Store.GetConversationMemberIDs(ctx, conversationID)
-		dmPayload, _ := json.Marshal(map[string]interface{}{
-			"conversation_id": msg.ConversationId,
-			"sender_id":       msg.SenderId,
-			"member_ids":      memberIDs,
-			"id":              msg.Id,
-			"content":         msg.Content,
-			"created_at":      msg.CreatedAt,
-		})
-		if pubErr := cs.EventBus.Publish(ctx, "dm_changes", dmPayload); pubErr != nil {
+		if pubErr := events.Publish(cs.EventBus, ctx, "dm_changes", events.DmEvent{
+			ConversationID: msg.ConversationId,
+			SenderID:       msg.SenderId,
+			MemberIDs:      memberIDs,
+			ID:             msg.Id,
+			Content:        msg.Content,
+			CreatedAt:      msg.CreatedAt.Format(time.RFC3339Nano),
+		}); pubErr != nil {
 			log.Printf("[dm] EventBus publish error: %v", pubErr)
 		}
 
-		pushPayload, _ := json.Marshal(map[string]interface{}{
-			"conversation_id": msg.ConversationId,
-			"sender_id":       msg.SenderId,
-			"member_ids":      memberIDs,
-			"content":         msg.Content,
-		})
-		if pubErr := cs.EventBus.Publish(ctx, "push_dm", pushPayload); pubErr != nil {
+		if pubErr := events.Publish(cs.EventBus, ctx, "push_dm", events.PushDmEvent{
+			ConversationID: msg.ConversationId,
+			SenderID:       msg.SenderId,
+			MemberIDs:      memberIDs,
+			Content:        msg.Content,
+		}); pubErr != nil {
 			log.Printf("[dm] EventBus push publish error: %v", pubErr)
 		}
 	}

@@ -75,6 +75,30 @@ func (e CallRecordStatus) Valid() bool {
 	}
 }
 
+// Defines values for CallSignalType.
+const (
+	CallAccepted CallSignalType = "call_accepted"
+	CallDeclined CallSignalType = "call_declined"
+	CallEnded    CallSignalType = "call_ended"
+	IncomingCall CallSignalType = "incoming_call"
+)
+
+// Valid indicates whether the value is a known member of the CallSignalType enum.
+func (e CallSignalType) Valid() bool {
+	switch e {
+	case CallAccepted:
+		return true
+	case CallDeclined:
+		return true
+	case CallEnded:
+		return true
+	case IncomingCall:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationType.
 const (
 	NotificationTypeChatMention NotificationType = "chat_mention"
@@ -96,6 +120,33 @@ func (e NotificationType) Valid() bool {
 	case NotificationTypeMention:
 		return true
 	case NotificationTypeReply:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationEventType.
+const (
+	NotificationEventTypeChatMention NotificationEventType = "chat_mention"
+	NotificationEventTypeCustom      NotificationEventType = "custom"
+	NotificationEventTypeDm          NotificationEventType = "dm"
+	NotificationEventTypeMention     NotificationEventType = "mention"
+	NotificationEventTypeReply       NotificationEventType = "reply"
+)
+
+// Valid indicates whether the value is a known member of the NotificationEventType enum.
+func (e NotificationEventType) Valid() bool {
+	switch e {
+	case NotificationEventTypeChatMention:
+		return true
+	case NotificationEventTypeCustom:
+		return true
+	case NotificationEventTypeDm:
+		return true
+	case NotificationEventTypeMention:
+		return true
+	case NotificationEventTypeReply:
 		return true
 	default:
 		return false
@@ -209,25 +260,25 @@ func (e WebhookNotificationJSONBodyType) Valid() bool {
 
 // Defines values for WebhookNotificationBatchJSONBodyItemsType.
 const (
-	ChatMention WebhookNotificationBatchJSONBodyItemsType = "chat_mention"
-	Custom      WebhookNotificationBatchJSONBodyItemsType = "custom"
-	Dm          WebhookNotificationBatchJSONBodyItemsType = "dm"
-	Mention     WebhookNotificationBatchJSONBodyItemsType = "mention"
-	Reply       WebhookNotificationBatchJSONBodyItemsType = "reply"
+	WebhookNotificationBatchJSONBodyItemsTypeChatMention WebhookNotificationBatchJSONBodyItemsType = "chat_mention"
+	WebhookNotificationBatchJSONBodyItemsTypeCustom      WebhookNotificationBatchJSONBodyItemsType = "custom"
+	WebhookNotificationBatchJSONBodyItemsTypeDm          WebhookNotificationBatchJSONBodyItemsType = "dm"
+	WebhookNotificationBatchJSONBodyItemsTypeMention     WebhookNotificationBatchJSONBodyItemsType = "mention"
+	WebhookNotificationBatchJSONBodyItemsTypeReply       WebhookNotificationBatchJSONBodyItemsType = "reply"
 )
 
 // Valid indicates whether the value is a known member of the WebhookNotificationBatchJSONBodyItemsType enum.
 func (e WebhookNotificationBatchJSONBodyItemsType) Valid() bool {
 	switch e {
-	case ChatMention:
+	case WebhookNotificationBatchJSONBodyItemsTypeChatMention:
 		return true
-	case Custom:
+	case WebhookNotificationBatchJSONBodyItemsTypeCustom:
 		return true
-	case Dm:
+	case WebhookNotificationBatchJSONBodyItemsTypeDm:
 		return true
-	case Mention:
+	case WebhookNotificationBatchJSONBodyItemsTypeMention:
 		return true
-	case Reply:
+	case WebhookNotificationBatchJSONBodyItemsTypeReply:
 		return true
 	default:
 		return false
@@ -266,6 +317,22 @@ type CallRecord struct {
 // CallRecordStatus defines model for CallRecord.Status.
 type CallRecordStatus string
 
+// CallSignal SSE event payload for call signaling (event type `call`).
+type CallSignal struct {
+	CallId            openapi_types.UUID  `json:"call_id"`
+	CallerAvatarUrl   *string             `json:"caller_avatar_url,omitempty"`
+	CallerDisplayName *string             `json:"caller_display_name,omitempty"`
+	CallerId          *string             `json:"caller_id,omitempty"`
+	CallerUsername    *string             `json:"caller_username,omitempty"`
+	ConversationId    *openapi_types.UUID `json:"conversation_id,omitempty"`
+	EndedBy           *string             `json:"ended_by,omitempty"`
+	TargetUserId      string              `json:"target_user_id"`
+	Type              CallSignalType      `json:"type"`
+}
+
+// CallSignalType defines model for CallSignalType.
+type CallSignalType string
+
 // Conversation defines model for Conversation.
 type Conversation struct {
 	Id              openapi_types.UUID   `json:"id"`
@@ -291,6 +358,16 @@ type DirectMessage struct {
 	ConversationId openapi_types.UUID `json:"conversation_id"`
 	CreatedAt      time.Time          `json:"created_at"`
 	Id             openapi_types.UUID `json:"id"`
+	SenderId       string             `json:"sender_id"`
+}
+
+// DmEvent SSE event payload for direct message activity (event type `dm`).
+type DmEvent struct {
+	Content        string             `json:"content"`
+	ConversationId openapi_types.UUID `json:"conversation_id"`
+	CreatedAt      time.Time          `json:"created_at"`
+	Id             openapi_types.UUID `json:"id"`
+	MemberIds      []string           `json:"member_ids"`
 	SenderId       string             `json:"sender_id"`
 }
 
@@ -348,6 +425,23 @@ type Notification struct {
 
 // NotificationType defines model for Notification.Type.
 type NotificationType string
+
+// NotificationEvent SSE event payload for a notification (event type `notification`).
+type NotificationEvent struct {
+	Body        string                `json:"body"`
+	CreatedAt   time.Time             `json:"created_at"`
+	ForumDomain string                `json:"forum_domain"`
+	ForumName   string                `json:"forum_name"`
+	Id          openapi_types.UUID    `json:"id"`
+	Link        string                `json:"link"`
+	Read        bool                  `json:"read"`
+	Title       string                `json:"title"`
+	Type        NotificationEventType `json:"type"`
+	UserId      string                `json:"user_id"`
+}
+
+// NotificationEventType defines model for NotificationEvent.Type.
+type NotificationEventType string
 
 // OkResponse defines model for OkResponse.
 type OkResponse struct {
@@ -4024,64 +4118,70 @@ func (sh *strictHandler) WebhookNotificationBatch(w http.ResponseWriter, r *http
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+wc227cuPVXCLVAt4DscXa3fZg3r51kvRsnRuxgHwJjwJHOjBhLpEJSdt3AQJ/6AUW/",
-	"cL+kIKkLJZGSZjIee3f7ZI94RPHcLzzklyBiWc4oUCmC+ZdARAlkWP97HElyS+T9mYRM/c45y4FLAnoU",
-	"R5Iwqv4DWmTB/GOQMyEhDkI9dAvBdRjI+xyCeSAkJ3QdPIQBLmTCuHqrP3SLJeaLgqdqmBZpipcpBHPJ",
-	"C3DMFGEJa8bvnXOtGC+yRcwyTOgAAMUZOIdlwgHHCxIPjUoiU8/rJAMhcZY7Rh/CgMPngnCIFdGaL3Xm",
-	"rWkVVqRurbqDo0UP+/MNC9jyE0RSLe4Ep+l7iBiP+0yNcJoC+PDWo9w7yugtcIHVWkuYFeMZlsE8KAqD",
-	"YO8dDlhCvFBAjinjgpvpBESMxmJAMAiVsAau3gIa11OOitHEhQqJuZw+q5BYFsJWDjWiBmvtCLXipWBU",
-	"JoYoJVT/mxEhIHZoT0dy9EK7RLeZFFrsrJfUorlTPKwZ+wIykVxEvOassMV/yVgKmKrBFAt5DkLgtVt7",
-	"rPEr4lHQDLIlcLMkCZn+588cVsE8+NOssWiz0pzNbKzO9btaT820mHN8r35X9mCUvwVVmnrCCmoLbi2D",
-	"Lk5VJCm/0qDQJkgf/fbXxlhWItc319q6fphoXGMi8hTfv/XZR48JKARwj011kaQGb38wtBbrQveUcIhs",
-	"CerYMEYlUPlINqoGj7GEA2kYtLVVUabKY1CnaXszQ1gjPqriLzln/D2InFHhICCo4fEVGTDX/K+UZ3KI",
-	"YE4WSyzcEoXznLNbiN0mI8I5XpKU1Gao0vm+6+2odKRwjAplchcrTNKCg3Cp7HZ8jkFEnOSVrRzXK39E",
-	"QiJGJwc/E+VLmZKFAKBDSI1+zBiqReSzdo3d7L3K7mgt3+NOM+IAVCRMTqaDxOsN5eEOlj4hdGlcHV6V",
-	"dqqWYWumjniWq+rQzZJwl8oYsy0Skm+oN9trhokfVZA5Pa6ZGFdvJMsjofgnpuIiX4Q4QTaZJCsSaZsp",
-	"FlkhfTZmumR0Iu9WVD5JQDqS0aDoXq5LYN5acH2RWbL4cRIjj+NPCb1xDqjAxU3uoRxJjXpzK/3ACqwh",
-	"T+81TWmZJUUJlovmZ5ypZ4WQLJsYVGuQag2hIWaJY4mRvfxwQB5cnHt343e97MZFrM4a2Y1z3gvOViQF",
-	"X+hX6WOPoEvC3MmXCcn8sqDxVFmLLyNkVI/2kyEzoLTlDivSstVKP3BVDETC7ha9mfryZMYW2UBiMT08",
-	"baHmClRrdW9o21tClwBOXAY4eQmYR8l7EEUqx7g6NaJfTE5xdhziu/C8LKIIhPCrgzAAE3SignR95kM7",
-	"WetmC9NyuMiTfekoPio4kfeXKtcs7S9gDvy4kEnz61UVfP30y5WSBQ2tUNKjTfiWSJmb5IDfkgh+Bm3J",
-	"W5FmcGnGEI70utDF8RVaMY603B5IdpCnWKpoD0U4TcX45xQehK5Y/1NXCaBXlTqget6kWKJf//VfdHou",
-	"QvNZEaKsjmJEiFqeLDQLCRGmMco5CKARHNZGdh40nzi+OAvCQOU5ZgEvDo8Oj7Q5yYHinATz4LvDo8Pv",
-	"gjDIsUw0vWc4JzNc1ivVgzVopipO6wWcxcE8eA2yqmlqQ27ETk/w7dFRJ3fEeZ6Wq599EsbJmmrC5KJD",
-	"q4Dai8AeuvlDXXBFZnYtW0WWYX5vFo84REAlqhBFK4AY4YgzIRBOU2QCiZIdVSA6/1hPHFyrOQ2xCpnM",
-	"UrZmhVEKJhwEe2PGv5JWAy7OYzqcHq5PrzdsvYYYqSXaehjMP17blHvD1sigUdNDKWaHFgKEKGMpn/Bc",
-	"liA7pYeykL4626iBddojG0bPPoWWiiQqZIpUDozUa6iiyEMYfH/0YiMUh7SiXX1wLOUtkwjby3FoQlRw",
-	"rlWhkEm9UC+DjRH0ivkZJZJgCSc4TQNDPxDyhzKG3pKvm5eaeh6nPYGbi80byo8/9ERzd3yz9g0cTFOj",
-	"qCyhdPhVkRdh7QQQoeo/u8zcMO5Ec6rDudkX9ecsfpgBjf1sfEnjkoM55jgDqQvEH78EKtXRvqLK4+eB",
-	"mTDo0i+0aDHGreudmoFeaOuRCm/Y6GGJ3gzpMOQljRGmxo2A5sl0DhiUB7hgNDu+YnvnxS60tr+riaMI",
-	"ctls0YznkOUc2+nrM5Ohyk6r0IPxvigda+ogxlFJnlLJpwuUZDdA/eL0GqSa4EpD/SY1u0awn0s5M/Lu",
-	"BnGJeeHcDXEEReQWfiYS6fd0uP3h/RuHB8WogsQ6dSpfUFnEOAst4y28EdMbIuRJC3IfQXdr/3JC0N1e",
-	"YZtOCgMdWLcQ1jSSCdRBiA6yLGq1Zrx+CD2ifaK9pd4VPGl7w93YMpONncUb1oWnZffN5E8el7QY7mCw",
-	"MygxTxFGa0V/bzjSYaVTAWZxNmi/3nHzsdPznbFWSdzZhBShhNu/K9om4PXGuH6FRWenDtPGeBmJIoxe",
-	"zF+g0/Ov4+8X++dZ/DCUI3Y0eYK/as39pH7rq7SsY3a/P/p+vxnjihU0dvo5m8Joea9kZtBYYxklfd5+",
-	"yGOVIj41e3cS5MbxuaN/ZrJnGK0dc8jYLWzxjYc9GKohSetWpB2yZuSgK2nmaVfYvuGgaBYiHMczQ5Sq",
-	"RvrXr7ZCs3KmmWFKDClIcERhgG/h92qVJvDrDaxkN6xTJBmoQWzLDr3tI4a8w3kFs2cehN2q/knBBeO6",
-	"gs9BFpyiavlVEQctYcU4IJkQUQ0a06mX+rkA3WtartUAB/aaHGtwvZmSjEjXi81OzPU+8oZ2V9mExKHm",
-	"Zd/n1LQcLHVNTBMugcZNd+Bv0+P4e/L6RU8N+NRJRUcavNxHQn2qLQGKYQjXOrOJDEw0NVVXhVtgzjG/",
-	"sSd+bzoW/khGX5EAYoQF0qRq80cN6qzer6b1m+OsgluzOMkBZ0O2/6UCvDRgo9SR8A9ppj5oZvbb1h4B",
-	"Li9fovLFrnDyW+AHSmyRnr8EQ9/onVzXpq0dqmgkbPTLvcaBAORUPzc9obuyJyNtTEP9WvvPhcs4bWEC",
-	"wNjdpja18yfsTTclZzY86CqCeYqw2TC2uPzKMFX5JG9l71W1yeyyKx0f/3mbwEDi9TavCcblI8UhnjfZ",
-	"aiXgOYQwRscmhC4aEKVEjGycEyFnQnchobxYpiTqtxZYouLbD1oTIXX7yw4NwCP1xHb6uTfp3/afJXvE",
-	"HuUt2pP3b/+GW/vLjuHY097r6+ZzmngditSfa16fYiKNTvBSWnu2shJjhBGFO7/FbPvFGbujBnFfVPBO",
-	"AdS29BnZCL2wSt/7KY4ZQBo/tLz37YX46MIhYllmNqcHqPO+AXuONLKW56dUDlwwilPyzwoK1djX+2Jj",
-	"9KqMyLA7vjIHD3ZDobFSXY8aV3g9zafo4NtQojwq4UU/AZyaJkqfiPxoIJ77RrqJuxERCKfkFgZpZFBC",
-	"UQLRjUWcEtOGOCQGKsuGx+Ho+6yCfO5kGgxUbRvzF1E1v1oUqtH0Rq6vQe6KFkMWpOrFd2DYDPl62kr0",
-	"8hLQg15eSN8mRQvDXURbo0cBnlen/8PvofNmcJ9hE1GprIXVnD26X/CHytaHFNk6rLPZ3kI3QDy3qD9k",
-	"nWy4fcQ61sHDSTXvZnWOVpmOWBoXn7Uw8tHDnTwacW9gdV/vznJIffRxKCvZSmTDauLnLbuD9sVwzjRX",
-	"y/KBLmnXwjLASZdjumLrdWox8ryQsC/7EgbeU5/DfPSdvnz+bDTkblVzUVZIQtfTOenwG7NPjAz0av7E",
-	"CP2/53AY1j7bfjIndZr9V2GxBMUgMUm7Jla9U3kWlXLXcjrMv1ZJfyiTetsC3IfzaR1inuB+2ivsR9At",
-	"VLWke8oS7Yk8tJqwzWbPU26z7Ubwtz//89z6ZSZsxbXtVH/rbTq3DnCaDnPsOE1b09VcezoKHacpyiZt",
-	"WLble1tCmeuEhiyBfWL2EWljf8bl2vQwisrxrrIbNNqy0y0I+AhSnUCdJYC5XAIeOAR5UcL+WIM+mbN/",
-	"97Or1aBCBiXWCisKVKt3Id9krT5BqN6+rE6wdzb7uj2gWYYPBCggCbEuBiK2MqcJz06Fp3fINCmLwX6D",
-	"XfcX4DgmaginF+3DGv17KsYS9Xe6YoEMMVGG8w6PfsAySg5WIKMEsRasCcUcVBpknk71Rbkv52WeuTyg",
-	"LDZtsE27PxZMihBcVyFMCBQMPOL6BdFTGj2o6V2RU8VT1V0F+jSTqXihcl9toKySFyIZcjkUr+GiEMll",
-	"sWxWOIkd9bWPfp5UZTZhJl+a2+KaX9eP2NMFNM4Z8Vy0dgP3wp1xO8Hzb//29ziZVsrr3EJWreJ5p2l9",
-	"y13xSEmbxTK04ixDSqja3t62CkriGgG8g2XC2I1oeXm/RP5iwFuh965E4iuvHdKVX6WFi02vGXqq64Jc",
-	"N/+0sBi8TOh3cULUFiT0uYCiKkY0m1tfWneZfLx+aO12mY33X//9H+uaEUFor36hDW2jBaUcizFNEBup",
-	"gnbW+ytMjd22VbnI+p9N9O03qk5foz+O8yRTL24zJH6Ck3JUAJfutsBuwl+BTtFLLckqvlHp5y50cqkn",
-	"nKqS3a/ZNyKVX9M74q484oKzuKiCH31IWt9SJOazGc7zw1pKDinI4OH64X8BAAD//4FYp8fEXAAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

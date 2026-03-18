@@ -58,10 +58,8 @@ type Config struct {
 	// If nil, rate limiting falls back to in-memory and caching is disabled.
 	ValkeyClient *redis.Client
 
-	// EventBus is the optional pub/sub bus for realtime events.
-	// When set, events are published directly to NATS after successful DB
-	// operations. When nil, PG LISTEN/NOTIFY triggers handle event delivery
-	// (local dev fallback).
+	// EventBus is the pub/sub bus for realtime events.
+	// Events are published to NATS via Watermill after successful DB operations.
 	EventBus pubsub.EventBus
 
 	// --- Optional features ---

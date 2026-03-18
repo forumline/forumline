@@ -429,7 +429,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Server-sent event stream (DMs, notifications, calls) */
+        /**
+         * Server-sent event stream (DMs, notifications, calls)
+         * @description Multiplexed SSE stream carrying three event types:
+         *     - `dm` — DmEvent payload (new direct message)
+         *     - `notification` — NotificationEvent payload (forum notification)
+         *     - `call` — CallSignal payload (call signaling)
+         */
         get: operations["getEventStream"];
         put?: never;
         post?: never;
@@ -564,6 +570,50 @@ export interface components {
     schemas: {
         ErrorResponse: {
             error: string;
+        };
+        /** @description SSE event payload for direct message activity (event type `dm`). */
+        DmEvent: {
+            /** Format: uuid */
+            conversation_id: string;
+            sender_id: string;
+            member_ids: string[];
+            /** Format: uuid */
+            id: string;
+            content: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description SSE event payload for a notification (event type `notification`). */
+        NotificationEvent: {
+            /** Format: uuid */
+            id: string;
+            user_id: string;
+            forum_domain: string;
+            forum_name: string;
+            /** @enum {string} */
+            type: "reply" | "mention" | "chat_mention" | "dm" | "custom";
+            title: string;
+            body: string;
+            link: string;
+            read: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @enum {string} */
+        CallSignalType: "incoming_call" | "call_accepted" | "call_declined" | "call_ended";
+        /** @description SSE event payload for call signaling (event type `call`). */
+        CallSignal: {
+            type: components["schemas"]["CallSignalType"];
+            /** Format: uuid */
+            call_id: string;
+            /** Format: uuid */
+            conversation_id?: string;
+            caller_id?: string;
+            caller_username?: string;
+            caller_display_name?: string;
+            caller_avatar_url?: string | null;
+            ended_by?: string;
+            target_user_id: string;
         };
         SuccessResponse: {
             success: boolean;
@@ -1542,13 +1592,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description SSE stream */
+            /** @description SSE stream with typed event payloads */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "text/event-stream": components["schemas"]["DmEvent"] | components["schemas"]["NotificationEvent"] | components["schemas"]["CallSignal"];
                 };
             };
         };

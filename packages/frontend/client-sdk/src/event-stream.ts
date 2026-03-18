@@ -16,37 +16,16 @@
 
 import { ForumlineAuth } from './auth.js';
 import { ForumlineAPI } from './client.js';
+import type { components } from './api.gen.js';
 
-/** SSE event payload for direct message activity. */
-export interface DmEvent {
-  /** Conversation that received a new message. */
-  conversation_id: string;
-  /** User who sent the message. */
-  sender_id: string;
-  [key: string]: unknown;
-}
+/** SSE event payload for direct message activity (generated from OpenAPI spec). */
+export type DmEvent = components['schemas']['DmEvent'];
 
-/** SSE event payload for a notification. */
-export interface NotificationEvent {
-  /** Notification ID. */
-  id: string;
-  /** Notification type (e.g. `"reply"`, `"mention"`). */
-  type: string;
-  [key: string]: unknown;
-}
+/** SSE event payload for a notification (generated from OpenAPI spec). */
+export type NotificationEvent = components['schemas']['NotificationEvent'];
 
-/** SSE event payload for call signaling (incoming, accepted, declined, ended). */
-export interface CallSignal {
-  /** Signal type: `"incoming_call"`, `"call_accepted"`, `"call_declined"`, or `"call_ended"`. */
-  type: string;
-  call_id?: string;
-  conversation_id?: string;
-  caller_id?: string;
-  caller_display_name?: string;
-  caller_username?: string;
-  caller_avatar_url?: string | null;
-  [key: string]: unknown;
-}
+/** SSE event payload for call signaling (generated from OpenAPI spec). */
+export type CallSignal = components['schemas']['CallSignal'];
 
 /** Callback for {@link EventStream.subscribeDm}. */
 export type DmListener = (event: DmEvent) => void;
@@ -93,13 +72,12 @@ function connect(): void {
   };
 
   eventSource.addEventListener('dm', (e: MessageEvent) => {
-    let parsed: DmEvent | null = null;
     try {
-      parsed = JSON.parse(e.data);
+      const data: DmEvent = JSON.parse(e.data);
+      for (const fn of dmListeners) fn(data);
     } catch (e) {
-      console.error('[SSE] malformed event data:', e);
+      console.error('[SSE] malformed dm event:', e);
     }
-    for (const fn of dmListeners) fn(parsed || { conversation_id: '', sender_id: '' });
   });
 
   eventSource.addEventListener('notification', (e: MessageEvent) => {

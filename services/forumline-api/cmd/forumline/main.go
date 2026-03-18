@@ -13,6 +13,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
+	wmmetrics "github.com/ThreeDotsLabs/watermill/components/metrics"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/httpkit"
@@ -70,51 +76,63 @@ func main() {
 	}
 
 	pushSvc := service.NewPushService(s)
-	pushListener := realtime.NewPushListener(rawPool, s, pushSvc)
+	pushListener := realtime.NewPushListener(s, pushSvc)
 
-	// Event bus: NATS (production) or direct PG LISTEN (local dev fallback).
-	sseChannels := []string{"dm_changes", "push_dm", "call_signal", "forumline_notification_changes"}
-
-	listenDSN := os.Getenv("DATABASE_URL_DIRECT")
-	if listenDSN == "" {
-		listenDSN = os.Getenv("DATABASE_URL")
+	// Event bus: NATS via Watermill (required for all realtime events).
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		log.Fatal("NATS_URL is required — realtime events need NATS")
 	}
 
-	var eventBus pubsub.EventBus
-	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		bus, err := pubsub.NewNATSBus(natsURL)
-		if err != nil {
-			log.Fatalf("failed to connect to NATS: %v", err)
-		}
-		defer bus.Close()
-		eventBus = bus
-
-		// NATS → SSE Hub (Go service code publishes directly to NATS)
-		for _, ch := range sseChannels {
-			ch := ch
-			if err := bus.Subscribe(ch, func(data []byte) {
-				sseHub.Feed(ch, data)
-			}); err != nil {
-				log.Fatalf("NATS subscribe %s: %v", ch, err)
-			}
-		}
-
-		// Push notifications via NATS
-		if err := pushListener.SubscribeNATS(ctx, bus); err != nil {
-			log.Fatalf("NATS subscribe push_dm (push): %v", err)
-		}
-
-		log.Println("realtime: NATS event bus active")
-	} else {
-		// Fallback: direct PG LISTEN → Hub (no NATS needed for local dev)
-		for _, ch := range sseChannels {
-			sseHub.Listen(ctx, ch)
-		}
-		sseHub.StartListening(ctx, listenDSN)
-
-		// Push notifications via direct PG LISTEN
-		go pushListener.Start(ctx)
+	bus, err := pubsub.NewWatermillBus(natsURL)
+	if err != nil {
+		log.Fatalf("failed to connect to NATS: %v", err)
 	}
+	defer bus.Close()
+	var eventBus pubsub.EventBus = bus
+
+	// Watermill Router for subscriptions
+	wmLogger := watermill.NewStdLogger(false, false)
+	wmRouter, err := message.NewRouter(message.RouterConfig{}, wmLogger)
+	if err != nil {
+		log.Fatalf("failed to create Watermill router: %v", err)
+	}
+	wmRouter.AddMiddleware(middleware.Recoverer)
+	wmRouter.AddMiddleware(middleware.CorrelationID)
+
+	// Prometheus metrics for Watermill handlers (handler duration, message counts)
+	wmMetrics := wmmetrics.NewPrometheusMetricsBuilder(prometheus.DefaultRegisterer, "forumline_api", "watermill")
+	wmMetrics.AddPrometheusRouterMetrics(wmRouter)
+
+	// SSE Hub subscriptions
+	for _, ch := range []string{"dm_changes", "call_signal", "forumline_notification_changes"} {
+		ch := ch
+		wmRouter.AddConsumerHandler("sse-"+ch, ch, bus.Sub, func(msg *message.Message) error {
+			sseHub.Feed(ch, msg.Payload)
+			return nil
+		})
+	}
+
+	// Push notification subscription (with retry — missed push = missed DM notification)
+	retryMw := middleware.Retry{
+		MaxRetries:      3,
+		InitialInterval: 500 * time.Millisecond,
+		MaxInterval:     5 * time.Second,
+		Multiplier:      2,
+		Logger:          wmLogger,
+	}
+	pushHandler := wmRouter.AddConsumerHandler("push-dm", "push_dm", bus.Sub, func(msg *message.Message) error {
+		return pushListener.HandlePayload(ctx, msg.Payload)
+	})
+	pushHandler.AddMiddleware(retryMw.Middleware)
+
+	go func() {
+		if err := wmRouter.Run(ctx); err != nil {
+			log.Printf("Watermill router stopped: %v", err)
+		}
+	}()
+
+	log.Println("realtime: Watermill event bus active")
 
 	// Router
 	router := newRouter(s, sseHub, valkeyClient, eventBus)
