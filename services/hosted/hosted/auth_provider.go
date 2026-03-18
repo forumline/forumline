@@ -117,7 +117,7 @@ func (p *ForumlineAuthProvider) HandleCallback(w http.ResponseWriter, r *http.Re
 	})
 
 	accessToken := userInfo.AccessToken
-	redirectURL := p.SiteURL + "/#access_token=" + url.QueryEscape(accessToken) + "&type=bearer"
+	redirectURL := p.SiteURL + "/#access_token=" + url.QueryEscape(accessToken) + "&type=bearer&local_user_id=" + url.QueryEscape(localUserID)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 

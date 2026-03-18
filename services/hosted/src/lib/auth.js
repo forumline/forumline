@@ -132,11 +132,16 @@ async function restoreSessionFromUrl() {
     const userId = payload.sub;
     if (!userId) return false;
 
+    // The callback includes local_user_id (the forum profile UUID) alongside
+    // the access token. Use it as the canonical user ID for profile operations
+    // since the JWT subject is a Zitadel numeric ID that doesn't work as a UUID.
+    const localUserId = params.get('local_user_id') || userId;
+
     const session = {
       access_token: accessToken,
       expires_in: payload.exp - payload.iat || 86400,
       expires_at: payload.exp || Math.floor(Date.now() / 1000) + 86400,
-      user: { id: userId },
+      user: { id: localUserId },
     };
     saveSession(session);
     window.history.replaceState({}, '', window.location.pathname);
