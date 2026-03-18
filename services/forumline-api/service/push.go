@@ -25,10 +25,16 @@ func NewPushService(s *store.Store) *PushService {
 func (ps *PushService) SendToUser(ctx context.Context, userID, title, body, link, forumDomain string) int {
 	vapidPublicKey := os.Getenv("VAPID_PUBLIC_KEY")
 	vapidPrivateKey := os.Getenv("VAPID_PRIVATE_KEY")
-	vapidSubject := os.Getenv("VAPID_SUBJECT")
+	vapidEmail := os.Getenv("VAPID_EMAIL")
 
 	if vapidPublicKey == "" || vapidPrivateKey == "" {
 		return 0
+	}
+
+	// Web Push spec requires mailto: prefix on subscriber contact
+	vapidSubject := vapidEmail
+	if vapidSubject != "" && vapidSubject[0] != 'm' {
+		vapidSubject = "mailto:" + vapidSubject
 	}
 
 	subs, err := ps.Store.ListPushSubscriptions(ctx, userID)
@@ -72,6 +78,7 @@ func (ps *PushService) SendToUser(ctx context.Context, userID, title, body, link
 				VAPIDPrivateKey: vapidPrivateKey,
 			})
 			if err != nil {
+				log.Printf("[push] send error to %s: %v", endpoint[:min(len(endpoint), 60)], err)
 				return
 			}
 			_ = resp.Body.Close()
@@ -82,6 +89,8 @@ func (ps *PushService) SendToUser(ctx context.Context, userID, title, body, link
 				mu.Unlock()
 			} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				atomic.AddInt32(&sent, 1)
+			} else {
+				log.Printf("[push] unexpected status %d for %s", resp.StatusCode, endpoint[:min(len(endpoint), 60)])
 			}
 		}(s.Endpoint, s.P256dh, s.Auth)
 	}
