@@ -27,4 +27,4 @@ jobs:
 
       - name: Smoke test critical paths
         if: success()
-        run: pnpm test:e2e:smoke -- --grep "critical paths"
+        run: pnpm install --ignore-scripts && pnpm exec playwright install chromium && pnpm test:e2e:smoke -- --grep "critical paths"

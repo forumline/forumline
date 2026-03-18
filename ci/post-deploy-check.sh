@@ -23,11 +23,20 @@ declare -A URLS=(
   [auth]="https://id.forumline.net"
 )
 
+# Health endpoint path differs per service
+declare -A HEALTH_PATHS=(
+  [forumline]="/api/health"
+  [hosted]="/api/health"
+  [auth]="/health"
+)
+
 BASE_URL="${URLS[$SERVICE]:-}"
 if [ -z "$BASE_URL" ]; then
   echo "No health check configured for $SERVICE — skipping"
   exit 0
 fi
+
+HEALTH_PATH="${HEALTH_PATHS[$SERVICE]:-/api/health}"
 
 fail() {
   echo "DEPLOY CHECK FAILED: $1" >&2
@@ -35,16 +44,23 @@ fail() {
   exit 1
 }
 
+# get_status <url> — returns HTTP status code, or "000" on connection failure.
+# Uses -o /dev/null to discard body, -w to print status code only.
+# Does NOT use -f (which causes curl to exit non-zero on 4xx/5xx and breaks capture).
+get_status() {
+  curl -s -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || echo "000"
+}
+
 # --- Check 1: Health endpoint ---
 echo "Checking $SERVICE health endpoint..."
 for i in $(seq 1 "$MAX_RETRIES"); do
-  status=$(curl -sf -o /dev/null -w '%{http_code}' "$BASE_URL/api/health" 2>/dev/null || echo "000")
+  status=$(get_status "$BASE_URL$HEALTH_PATH")
   if [ "$status" = "200" ]; then
     echo "  Health check passed (attempt $i)"
     break
   fi
   if [ "$i" -eq "$MAX_RETRIES" ]; then
-    fail "$BASE_URL/api/health returned $status after $MAX_RETRIES attempts"
+    fail "$BASE_URL$HEALTH_PATH returned $status after $MAX_RETRIES attempts"
   fi
   echo "  Attempt $i: got $status, retrying in ${RETRY_DELAY}s..."
   sleep "$RETRY_DELAY"
@@ -55,7 +71,7 @@ done
 # We don't send an auth token, so we expect 401 — anything else is a problem.
 if [ "$SERVICE" = "forumline" ]; then
   echo "Checking SSE endpoint accepts connections..."
-  sse_status=$(curl -sf -o /dev/null -w '%{http_code}' "$BASE_URL/api/events/stream" 2>/dev/null || echo "000")
+  sse_status=$(get_status "$BASE_URL/api/events/stream")
   if [ "$sse_status" = "401" ]; then
     echo "  SSE check passed (got expected 401 without auth)"
   elif [ "$sse_status" = "500" ]; then
@@ -68,7 +84,7 @@ fi
 # --- Check 3: Key API endpoints return non-5xx ---
 if [ "$SERVICE" = "hosted" ]; then
   echo "Checking platform API..."
-  api_status=$(curl -sf -o /dev/null -w '%{http_code}' "$BASE_URL/api/platform/forums" 2>/dev/null || echo "000")
+  api_status=$(get_status "$BASE_URL/api/platform/forums")
   if [ "${api_status:0:1}" = "5" ]; then
     fail "$BASE_URL/api/platform/forums returned $api_status"
   fi
@@ -77,7 +93,7 @@ fi
 
 if [ "$SERVICE" = "auth" ]; then
   echo "Checking identity service..."
-  auth_status=$(curl -sf -o /dev/null -w '%{http_code}' "$BASE_URL/health" 2>/dev/null || echo "000")
+  auth_status=$(get_status "$BASE_URL/health")
   if [ "${auth_status:0:1}" = "5" ]; then
     fail "$BASE_URL/health returned $auth_status"
   fi
