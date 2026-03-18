@@ -3,9 +3,15 @@ package store
 import (
 	"context"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
+
+// PushSubscription is an internal type for push subscription data (not in the OpenAPI spec).
+type PushSubscription struct {
+	Endpoint string
+	P256dh   string
+	Auth     string
+}
 
 func (s *Store) UpsertPushSubscription(ctx context.Context, userID, endpoint, p256dh, auth string) error {
 	return s.Q.UpsertPushSubscription(ctx, sqlcdb.UpsertPushSubscriptionParams{
@@ -23,14 +29,14 @@ func (s *Store) DeletePushSubscription(ctx context.Context, userID, endpoint str
 	})
 }
 
-func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) ([]model.PushSubscription, error) {
+func (s *Store) ListPushSubscriptions(ctx context.Context, userID string) ([]PushSubscription, error) {
 	rows, err := s.Q.ListPushSubscriptions(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	subs := make([]model.PushSubscription, len(rows))
+	subs := make([]PushSubscription, len(rows))
 	for i, r := range rows {
-		subs[i] = model.PushSubscription{
+		subs[i] = PushSubscription{
 			Endpoint: r.Endpoint,
 			P256dh:   r.P256dh,
 			Auth:     r.Auth,

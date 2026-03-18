@@ -157,7 +157,7 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client) *http.Serv
 	mux.HandleFunc("POST /api/push/notify", pushH.HandleNotify)
 
 	// Legacy /api/dms/* routes (backward compatibility)
-	convoH := handler.NewConversationHandler(convoSvc)
+	convoH := handler.NewConversationHandler(convoSvc, s)
 	mux.Handle("GET /api/dms", use(convoH.HandleList, authMW))
 	mux.Handle("GET /api/dms/{userId}", use(convoH.HandleLegacyGetMessages, authMW))
 	mux.Handle("POST /api/dms/{userId}", use(convoH.HandleLegacySendMessage, authMW,

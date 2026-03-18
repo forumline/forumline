@@ -5,12 +5,25 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
 )
 
-func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, error) {
+// Profile is a lightweight internal type for profile data that doesn't map 1:1
+// to the oapi.Profile response shape (which has ForumlineId instead of ID, etc.).
+type Profile struct {
+	ID               string
+	Username         string
+	DisplayName      string
+	AvatarURL        *string
+	Bio              *string
+	StatusMessage    string
+	OnlineStatus     string
+	ShowOnlineStatus bool
+}
+
+func (s *Store) GetProfile(ctx context.Context, id string) (*Profile, error) {
 	row, err := s.Q.GetProfile(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -18,7 +31,7 @@ func (s *Store) GetProfile(ctx context.Context, id string) (*model.Profile, erro
 	if err != nil {
 		return nil, err
 	}
-	return &model.Profile{
+	return &Profile{
 		ID:               row.ID,
 		Username:         row.Username,
 		DisplayName:      row.DisplayName,
@@ -70,7 +83,7 @@ func (s *Store) DeleteUser(ctx context.Context, id string) error {
 	return s.Q.DeleteUser(ctx, id)
 }
 
-func (s *Store) SearchProfiles(ctx context.Context, query, excludeUserID string) ([]model.ProfileSearchResult, error) {
+func (s *Store) SearchProfiles(ctx context.Context, query, excludeUserID string) ([]oapi.ProfileSearchResult, error) {
 	pattern := "%" + query + "%"
 	rows, err := s.Q.SearchProfiles(ctx, sqlcdb.SearchProfilesParams{
 		ID:       excludeUserID,
@@ -79,17 +92,17 @@ func (s *Store) SearchProfiles(ctx context.Context, query, excludeUserID string)
 	if err != nil {
 		return nil, err
 	}
-	results := make([]model.ProfileSearchResult, len(rows))
+	results := make([]oapi.ProfileSearchResult, len(rows))
 	for i, r := range rows {
 		var displayNamePtr *string
 		if r.DisplayName != "" {
 			displayNamePtr = &r.DisplayName
 		}
-		results[i] = model.ProfileSearchResult{
-			ID:          r.ID,
+		results[i] = oapi.ProfileSearchResult{
+			Id:          r.ID,
 			Username:    r.Username,
 			DisplayName: displayNamePtr,
-			AvatarURL:   r.AvatarUrl,
+			AvatarUrl:   r.AvatarUrl,
 		}
 	}
 	return results, nil
@@ -99,8 +112,8 @@ func (s *Store) ProfileExists(ctx context.Context, id string) (bool, error) {
 	return s.Q.ProfileExists(ctx, id)
 }
 
-func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[string]*model.Profile, error) {
-	profiles := make(map[string]*model.Profile)
+func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[string]*Profile, error) {
+	profiles := make(map[string]*Profile)
 	if len(ids) == 0 {
 		return profiles, nil
 	}
@@ -109,7 +122,7 @@ func (s *Store) FetchProfilesByIDs(ctx context.Context, ids []string) (map[strin
 		return profiles, err
 	}
 	for _, r := range rows {
-		profiles[r.ID] = &model.Profile{
+		profiles[r.ID] = &Profile{
 			ID:          r.ID,
 			Username:    r.Username,
 			DisplayName: r.DisplayName,

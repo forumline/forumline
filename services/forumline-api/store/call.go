@@ -2,11 +2,10 @@ package store
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
 
@@ -25,7 +24,7 @@ func (s *Store) IsUserInCall(ctx context.Context, userID string) (bool, error) {
 	return s.Q.IsUserInCall(ctx, userID)
 }
 
-func (s *Store) CreateCall(ctx context.Context, conversationID uuid.UUID, callerID, calleeID string) (*model.CallRecord, error) {
+func (s *Store) CreateCall(ctx context.Context, conversationID uuid.UUID, callerID, calleeID string) (*oapi.CallRecord, error) {
 	row, err := s.Q.CreateCall(ctx, sqlcdb.CreateCallParams{
 		ConversationID: conversationID,
 		CallerID:       callerID,
@@ -34,13 +33,14 @@ func (s *Store) CreateCall(ctx context.Context, conversationID uuid.UUID, caller
 	if err != nil {
 		return nil, err
 	}
-	return &model.CallRecord{
-		ID:             row.ID,
-		ConversationID: row.ConversationID,
-		CallerID:       row.CallerID,
-		CalleeID:       row.CalleeID,
-		Status:         row.Status,
-		CreatedAt:      row.CreatedAt.Format(time.RFC3339),
+	createdAt := row.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
+	return &oapi.CallRecord{
+		Id:             row.ID,
+		ConversationId: row.ConversationID,
+		CallerId:       row.CallerID,
+		CalleeId:       row.CalleeID,
+		Status:         oapi.CallRecordStatus(row.Status),
+		CreatedAt:      createdAt,
 	}, nil
 }
 

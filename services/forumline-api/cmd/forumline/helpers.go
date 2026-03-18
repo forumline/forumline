@@ -21,7 +21,7 @@ import (
 	"github.com/forumline/forumline/rpc/forumline/platform/v1/platformv1connect"
 	"github.com/forumline/forumline/rpc/servicekey"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
@@ -61,7 +61,7 @@ type activityItem struct {
 }
 
 // fetchActivityItems fetches recent thread activity from each joined forum concurrently.
-func fetchActivityItems(ctx context.Context, memberships []model.Membership) ([]activityItem, error) {
+func fetchActivityItems(ctx context.Context, memberships []oapi.Membership) ([]activityItem, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -151,7 +151,7 @@ func init() {
 }
 
 // provisionProfileFromZitadel fetches user info from Zitadel and creates a local profile.
-func provisionProfileFromZitadel(ctx context.Context, s *store.Store, userID, authHeader string) (*model.Profile, error) {
+func provisionProfileFromZitadel(ctx context.Context, s *store.Store, userID, authHeader string) (*store.Profile, error) {
 	if zitadelUserinfoURL == "" {
 		return nil, fmt.Errorf("ZITADEL_URL not set")
 	}
@@ -198,7 +198,7 @@ func provisionProfileFromZitadel(ctx context.Context, s *store.Store, userID, au
 	if err := s.CreateProfile(ctx, userID, username, displayName, info.Picture); err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
-	return &model.Profile{
+	return &store.Profile{
 		ID: userID, Username: username, DisplayName: displayName,
 		StatusMessage: "", OnlineStatus: "online", ShowOnlineStatus: true,
 	}, nil

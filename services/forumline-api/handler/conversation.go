@@ -11,19 +11,21 @@ import (
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-api/service"
+	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
 type ConversationHandler struct {
 	Service *service.ConversationService
+	Store   *store.Store
 }
 
-func NewConversationHandler(svc *service.ConversationService) *ConversationHandler {
-	return &ConversationHandler{Service: svc}
+func NewConversationHandler(svc *service.ConversationService, s *store.Store) *ConversationHandler {
+	return &ConversationHandler{Service: svc, Store: s}
 }
 
 func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convos, err := h.Service.List(r.Context(), userID)
+	convos, err := h.Store.ListConversations(r.Context(), userID)
 	if err != nil {
 		log.Printf("[Conversations] list failed for user %s: %v", userID, err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch conversations"})
@@ -39,7 +41,7 @@ func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
-	c, err := h.Service.Get(r.Context(), userID, convoID)
+	c, err := h.Store.GetConversation(r.Context(), userID, convoID)
 	if err != nil || c == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
@@ -158,7 +160,7 @@ func (h *ConversationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
-	if err := h.Service.MarkRead(r.Context(), userID, convoID); err != nil {
+	if err := h.Store.MarkRead(r.Context(), convoID, userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
 		return
 	}

@@ -8,10 +8,21 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 	"github.com/jackc/pgx/v5"
 )
+
+// ForumManifest represents a forum's manifest from /.well-known/forumline-manifest.json.
+type ForumManifest struct {
+	ForumlineVersion string   `json:"forumline_version"`
+	Name             string   `json:"name"`
+	Domain           string   `json:"domain"`
+	IconURL          string   `json:"icon_url"`
+	APIBase          string   `json:"api_base"`
+	WebBase          string   `json:"web_base"`
+	Capabilities     []string `json:"capabilities"`
+	Tags             []string `json:"tags"`
+}
 
 // ListForums uses dynamic SQL (search, tag, sort) — stays hand-written.
 func (s *Store) ListForums(ctx context.Context, search, tag, sort string, limit, offset int) ([]map[string]interface{}, error) {
@@ -144,7 +155,7 @@ func (s *Store) RegisterForum(ctx context.Context, domain, name, apiBase, webBas
 	return id, nil
 }
 
-func (s *Store) UpsertForumFromManifest(ctx context.Context, m *model.ForumManifest, tags []string) (uuid.UUID, error) {
+func (s *Store) UpsertForumFromManifest(ctx context.Context, m *ForumManifest, tags []string) (uuid.UUID, error) {
 	id, err := s.Q.UpsertForumFromManifest(ctx, sqlcdb.UpsertForumFromManifestParams{
 		Domain: m.Domain, Name: m.Name, IconUrl: &m.IconURL,
 		ApiBase: m.APIBase, WebBase: m.WebBase, Capabilities: m.Capabilities, Tags: tags,

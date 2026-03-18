@@ -60,216 +60,157 @@ func categoryFromThreadRow(
 	}
 }
 
-// threadRowToOapi converts a GetThreadRow to oapi.Thread.
+// --- Thread row conversion via common struct ---
+//
+// All 5 thread query row types (GetThreadRow, ListThreadsRow,
+// ListThreadsByCategoryRow, ListUserThreadsRow, SearchThreadsRow)
+// have identical struct layouts. We define threadFields with matching
+// field names/types so that Go's struct conversion (e.g.,
+// threadFields(row)) works without unsafe or reflection.
+
+type threadFields struct {
+	ID                uuid.UUID
+	CategoryID        uuid.UUID
+	AuthorID          uuid.UUID
+	Title             string
+	Slug              string
+	Content           *string
+	ImageUrl          *string
+	IsPinned          bool
+	IsLocked          bool
+	ViewCount         int32
+	PostCount         int32
+	LastPostAt        time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	AuthorID2         uuid.UUID
+	AuthorUsername    string
+	AuthorDisplayName *string
+	AuthorAvatarUrl   *string
+	AuthorBio         *string
+	AuthorWebsite     *string
+	AuthorIsAdmin     bool
+	AuthorForumlineID *string
+	AuthorCreatedAt   time.Time
+	AuthorUpdatedAt   time.Time
+	CatID             uuid.UUID
+	CatName           string
+	CatSlug           string
+	CatDescription    *string
+	CatSortOrder      int32
+	CatCreatedAt      time.Time
+}
+
+func threadToOapi(r threadFields) oapi.Thread {
+	return oapi.Thread{
+		Id:         r.ID,
+		CategoryId: r.CategoryID,
+		AuthorId:   r.AuthorID,
+		Title:      r.Title,
+		Slug:       r.Slug,
+		Content:    r.Content,
+		ImageUrl:   r.ImageUrl,
+		IsPinned:   r.IsPinned,
+		IsLocked:   r.IsLocked,
+		ViewCount:  int(r.ViewCount),
+		PostCount:  int(r.PostCount),
+		LastPostAt: &r.LastPostAt,
+		CreatedAt:  r.CreatedAt,
+		UpdatedAt:  r.UpdatedAt,
+		Author: authorProfileFromThreadRow(
+			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
+			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
+			r.AuthorCreatedAt, r.AuthorUpdatedAt,
+		),
+		Category: categoryFromThreadRow(
+			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
+		),
+	}
+}
+
+// Thin wrappers that do the struct conversion for each sqlcdb row type.
+
 func threadRowToOapi(r sqlcdb.GetThreadRow) oapi.Thread {
-	return oapi.Thread{
-		Id:         r.ID,
-		CategoryId: r.CategoryID,
-		AuthorId:   r.AuthorID,
-		Title:      r.Title,
-		Slug:       r.Slug,
-		Content:    r.Content,
-		ImageUrl:   r.ImageUrl,
-		IsPinned:   r.IsPinned,
-		IsLocked:   r.IsLocked,
-		ViewCount:  int(r.ViewCount),
-		PostCount:  int(r.PostCount),
-		LastPostAt: &r.LastPostAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-		Category: categoryFromThreadRow(
-			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
-		),
-	}
+	return threadToOapi(threadFields(r))
 }
 
-// listThreadsRowToOapi converts a ListThreadsRow to oapi.Thread.
 func listThreadsRowToOapi(r sqlcdb.ListThreadsRow) oapi.Thread {
-	return oapi.Thread{
-		Id:         r.ID,
-		CategoryId: r.CategoryID,
-		AuthorId:   r.AuthorID,
-		Title:      r.Title,
-		Slug:       r.Slug,
-		Content:    r.Content,
-		ImageUrl:   r.ImageUrl,
-		IsPinned:   r.IsPinned,
-		IsLocked:   r.IsLocked,
-		ViewCount:  int(r.ViewCount),
-		PostCount:  int(r.PostCount),
-		LastPostAt: &r.LastPostAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-		Category: categoryFromThreadRow(
-			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
-		),
-	}
+	return threadToOapi(threadFields(r))
 }
 
-// listThreadsByCategoryRowToOapi converts a ListThreadsByCategoryRow to oapi.Thread.
 func listThreadsByCategoryRowToOapi(r sqlcdb.ListThreadsByCategoryRow) oapi.Thread {
-	return oapi.Thread{
-		Id:         r.ID,
-		CategoryId: r.CategoryID,
-		AuthorId:   r.AuthorID,
-		Title:      r.Title,
-		Slug:       r.Slug,
-		Content:    r.Content,
-		ImageUrl:   r.ImageUrl,
-		IsPinned:   r.IsPinned,
-		IsLocked:   r.IsLocked,
-		ViewCount:  int(r.ViewCount),
-		PostCount:  int(r.PostCount),
-		LastPostAt: &r.LastPostAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-		Category: categoryFromThreadRow(
-			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
-		),
-	}
+	return threadToOapi(threadFields(r))
 }
 
-// listUserThreadsRowToOapi converts a ListUserThreadsRow to oapi.Thread.
 func listUserThreadsRowToOapi(r sqlcdb.ListUserThreadsRow) oapi.Thread {
-	return oapi.Thread{
-		Id:         r.ID,
-		CategoryId: r.CategoryID,
-		AuthorId:   r.AuthorID,
-		Title:      r.Title,
-		Slug:       r.Slug,
-		Content:    r.Content,
-		ImageUrl:   r.ImageUrl,
-		IsPinned:   r.IsPinned,
-		IsLocked:   r.IsLocked,
-		ViewCount:  int(r.ViewCount),
-		PostCount:  int(r.PostCount),
-		LastPostAt: &r.LastPostAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-		Category: categoryFromThreadRow(
-			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
-		),
-	}
+	return threadToOapi(threadFields(r))
 }
 
-// searchThreadsRowToOapi converts a SearchThreadsRow to oapi.Thread.
 func searchThreadsRowToOapi(r sqlcdb.SearchThreadsRow) oapi.Thread {
-	return oapi.Thread{
-		Id:         r.ID,
-		CategoryId: r.CategoryID,
-		AuthorId:   r.AuthorID,
-		Title:      r.Title,
-		Slug:       r.Slug,
-		Content:    r.Content,
-		ImageUrl:   r.ImageUrl,
-		IsPinned:   r.IsPinned,
-		IsLocked:   r.IsLocked,
-		ViewCount:  int(r.ViewCount),
-		PostCount:  int(r.PostCount),
-		LastPostAt: &r.LastPostAt,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
+	return threadToOapi(threadFields(r))
+}
+
+// --- Post row conversion via common struct ---
+//
+// All 3 post query row types (ListPostsByThreadRow, ListUserPostsRow,
+// SearchPostsRow) have identical struct layouts.
+
+type postFields struct {
+	ID                uuid.UUID
+	ThreadID          uuid.UUID
+	AuthorID          uuid.UUID
+	Content           string
+	ReplyToID         *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	AuthorID2         uuid.UUID
+	AuthorUsername    string
+	AuthorDisplayName *string
+	AuthorAvatarUrl   *string
+	AuthorBio         *string
+	AuthorWebsite     *string
+	AuthorIsAdmin     bool
+	AuthorForumlineID *string
+	AuthorCreatedAt   time.Time
+	AuthorUpdatedAt   time.Time
+}
+
+func postToOapi(r postFields) oapi.Post {
+	var replyToID *openapi_types.UUID
+	if r.ReplyToID != nil {
+		v := *r.ReplyToID
+		replyToID = &v
+	}
+	return oapi.Post{
+		Id:        r.ID,
+		ThreadId:  r.ThreadID,
+		AuthorId:  r.AuthorID,
+		Content:   r.Content,
+		ReplyToId: replyToID,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
 		Author: authorProfileFromThreadRow(
 			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
 			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
 			r.AuthorCreatedAt, r.AuthorUpdatedAt,
 		),
-		Category: categoryFromThreadRow(
-			r.CatID, r.CatName, r.CatSlug, r.CatDescription, r.CatSortOrder, r.CatCreatedAt,
-		),
 	}
 }
 
-// postRowToOapi converts a ListPostsByThreadRow to oapi.Post.
 func postRowToOapi(r sqlcdb.ListPostsByThreadRow) oapi.Post {
-	var replyToID *openapi_types.UUID
-	if r.ReplyToID != nil {
-		v := *r.ReplyToID
-		replyToID = &v
-	}
-	return oapi.Post{
-		Id:        r.ID,
-		ThreadId:  r.ThreadID,
-		AuthorId:  r.AuthorID,
-		Content:   r.Content,
-		ReplyToId: replyToID,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-	}
+	return postToOapi(postFields(r))
 }
 
-// listUserPostsRowToOapi converts a ListUserPostsRow to oapi.Post.
 func listUserPostsRowToOapi(r sqlcdb.ListUserPostsRow) oapi.Post {
-	var replyToID *openapi_types.UUID
-	if r.ReplyToID != nil {
-		v := *r.ReplyToID
-		replyToID = &v
-	}
-	return oapi.Post{
-		Id:        r.ID,
-		ThreadId:  r.ThreadID,
-		AuthorId:  r.AuthorID,
-		Content:   r.Content,
-		ReplyToId: replyToID,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-	}
+	return postToOapi(postFields(r))
 }
 
-// searchPostsRowToOapi converts a SearchPostsRow to oapi.Post.
 func searchPostsRowToOapi(r sqlcdb.SearchPostsRow) oapi.Post {
-	var replyToID *openapi_types.UUID
-	if r.ReplyToID != nil {
-		v := *r.ReplyToID
-		replyToID = &v
-	}
-	return oapi.Post{
-		Id:        r.ID,
-		ThreadId:  r.ThreadID,
-		AuthorId:  r.AuthorID,
-		Content:   r.Content,
-		ReplyToId: replyToID,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
-		Author: authorProfileFromThreadRow(
-			r.AuthorID2, r.AuthorUsername, r.AuthorDisplayName, r.AuthorAvatarUrl,
-			r.AuthorBio, r.AuthorWebsite, r.AuthorIsAdmin, r.AuthorForumlineID,
-			r.AuthorCreatedAt, r.AuthorUpdatedAt,
-		),
-	}
+	return postToOapi(postFields(r))
 }
 
 // bookmarkRowToOapi converts a ListBookmarksRow to oapi.Bookmark.
+// This has a unique structure (thread + bookmark fields), so it stays as-is.
 func bookmarkRowToOapi(r sqlcdb.ListBookmarksRow) oapi.Bookmark {
 	return oapi.Bookmark{
 		Id:        r.ID,

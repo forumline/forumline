@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/forumline/forumline/backend/auth"
-	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/service"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
@@ -162,7 +161,7 @@ func init() {
 
 // provisionProfile fetches user info from Zitadel's OIDC userinfo endpoint
 // and creates a local profile.
-func (h *IdentityHandler) provisionProfile(ctx context.Context, userID, authHeader string) (*model.Profile, error) {
+func (h *IdentityHandler) provisionProfile(ctx context.Context, userID, authHeader string) (*store.Profile, error) {
 	if zitadelUserinfoURL == "" {
 		return nil, fmt.Errorf("ZITADEL_URL not set")
 	}
@@ -219,7 +218,7 @@ func (h *IdentityHandler) provisionProfile(ctx context.Context, userID, authHead
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
 
-	return &model.Profile{
+	return &store.Profile{
 		ID: userID, Username: username, DisplayName: displayName,
 		StatusMessage: "", OnlineStatus: "online", ShowOnlineStatus: true,
 	}, nil

@@ -7,23 +7,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
 
-func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Membership, error) {
+func (s *Store) ListMemberships(ctx context.Context, userID string) ([]oapi.Membership, error) {
 	rows, err := s.Q.ListMemberships(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	memberships := make([]model.Membership, 0, len(rows))
+	memberships := make([]oapi.Membership, 0, len(rows))
 	for _, r := range rows {
-		m := model.Membership{
+		m := oapi.Membership{
 			ForumDomain:        r.Domain,
 			ForumName:          r.Name,
-			ForumIconURL:       r.IconUrl,
-			APIBase:            r.ApiBase,
+			ForumIconUrl:       r.IconUrl,
+			ApiBase:            r.ApiBase,
 			WebBase:            r.WebBase,
 			Capabilities:       r.Capabilities,
 			MemberCount:        int(r.MemberCount),
@@ -31,13 +31,13 @@ func (s *Store) ListMemberships(ctx context.Context, userID string) ([]model.Mem
 			NotificationsMuted: r.NotificationsMuted,
 		}
 		if r.ForumAuthedAt != nil {
-			s := r.ForumAuthedAt.Format(time.RFC3339)
-			m.ForumAuthedAt = &s
+			ts := r.ForumAuthedAt.Format(time.RFC3339)
+			m.ForumAuthedAt = &ts
 		}
 		memberships = append(memberships, m)
 	}
 	if len(memberships) == 0 {
-		memberships = []model.Membership{}
+		memberships = []oapi.Membership{}
 	}
 	return memberships, nil
 }

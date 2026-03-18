@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
@@ -80,7 +79,7 @@ func ValidateDomain(domain string) error {
 }
 
 // FetchForumManifest fetches a forum's manifest from /.well-known/forumline-manifest.json.
-func FetchForumManifest(domain string) (*model.ForumManifest, error) {
+func FetchForumManifest(domain string) (*store.ForumManifest, error) {
 	if err := ValidateDomain(domain); err != nil {
 		return nil, fmt.Errorf("invalid domain: %w", err)
 	}
@@ -102,7 +101,7 @@ func FetchForumManifest(domain string) (*model.ForumManifest, error) {
 	}
 
 	limitedBody := io.LimitReader(resp.Body, 1<<20) // 1 MB max
-	var manifest model.ForumManifest
+	var manifest store.ForumManifest
 	if err := json.NewDecoder(limitedBody).Decode(&manifest); err != nil {
 		return nil, fmt.Errorf("failed to decode manifest: %w", err)
 	}

@@ -10,18 +10,18 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/sqlcdb"
 )
 
-func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.Conversation, error) {
+func (s *Store) ListConversations(ctx context.Context, userID string) ([]oapi.Conversation, error) {
 	rows, err := s.Q.ListConversations(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(rows) == 0 {
-		return []model.Conversation{}, nil
+		return []oapi.Conversation{}, nil
 	}
 
 	convoIDs := make([]uuid.UUID, len(rows))
@@ -34,14 +34,14 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 		return nil, err
 	}
 
-	conversations := make([]model.Conversation, 0, len(rows))
+	conversations := make([]oapi.Conversation, 0, len(rows))
 	for _, r := range rows {
 		members := membersMap[r.ID]
 		if members == nil {
-			members = []model.ConversationMember{}
+			members = []oapi.ConversationMember{}
 		}
-		conversations = append(conversations, model.Conversation{
-			ID: r.ID, IsGroup: r.IsGroup, Name: r.Name,
+		conversations = append(conversations, oapi.Conversation{
+			Id: r.ID, IsGroup: r.IsGroup, Name: r.Name,
 			Members: members, LastMessage: r.LastMessage,
 			LastMessageTime: r.LastMessageTime.Format(time.RFC3339),
 			UnreadCount:     int(r.UnreadCount),
@@ -50,7 +50,7 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]model.C
 	return conversations, nil
 }
 
-func (s *Store) GetConversation(ctx context.Context, userID string, conversationID uuid.UUID) (*model.Conversation, error) {
+func (s *Store) GetConversation(ctx context.Context, userID string, conversationID uuid.UUID) (*oapi.Conversation, error) {
 	row, err := s.Q.GetConversation(ctx, sqlcdb.GetConversationParams{
 		UserID:         userID,
 		ConversationID: conversationID,
@@ -65,30 +65,30 @@ func (s *Store) GetConversation(ctx context.Context, userID string, conversation
 	}
 	members := membersMap[conversationID]
 	if members == nil {
-		members = []model.ConversationMember{}
+		members = []oapi.ConversationMember{}
 	}
-	return &model.Conversation{
-		ID: row.ID, IsGroup: row.IsGroup, Name: row.Name,
+	return &oapi.Conversation{
+		Id: row.ID, IsGroup: row.IsGroup, Name: row.Name,
 		Members: members, LastMessage: row.LastMessage,
 		LastMessageTime: row.LastMessageTime.Format(time.RFC3339),
 		UnreadCount:     int(row.UnreadCount),
 	}, nil
 }
 
-func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UUID) (map[uuid.UUID][]model.ConversationMember, error) {
+func (s *Store) fetchConversationMembers(ctx context.Context, convoIDs []uuid.UUID) (map[uuid.UUID][]oapi.ConversationMember, error) {
 	rows, err := s.Q.FetchConversationMembers(ctx, convoIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[uuid.UUID][]model.ConversationMember)
+	result := make(map[uuid.UUID][]oapi.ConversationMember)
 	for _, r := range rows {
 		name := r.DisplayName
 		if name == "" {
 			name = r.Username
 		}
-		result[r.ConversationID] = append(result[r.ConversationID], model.ConversationMember{
-			ID: r.UserID, Username: r.Username, DisplayName: name, AvatarURL: r.AvatarUrl,
+		result[r.ConversationID] = append(result[r.ConversationID], oapi.ConversationMember{
+			Id: r.UserID, Username: r.Username, DisplayName: name, AvatarUrl: r.AvatarUrl,
 		})
 	}
 	return result, nil
@@ -101,7 +101,7 @@ func (s *Store) IsConversationMember(ctx context.Context, conversationID uuid.UU
 	})
 }
 
-func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, before string, limitStr string) ([]model.DirectMessage, error) {
+func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, before string, limitStr string) ([]oapi.DirectMessage, error) {
 	limit := 50
 	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 		limit = int(math.Min(float64(l), 100))
@@ -134,12 +134,12 @@ func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, befor
 		dbMessages = rows
 	}
 
-	messages := make([]model.DirectMessage, len(dbMessages))
+	messages := make([]oapi.DirectMessage, len(dbMessages))
 	for i, m := range dbMessages {
-		messages[i] = model.DirectMessage{
-			ID:             m.ID,
-			ConversationID: m.ConversationID,
-			SenderID:       m.SenderID,
+		messages[i] = oapi.DirectMessage{
+			Id:             m.ID,
+			ConversationId: m.ConversationID,
+			SenderId:       m.SenderID,
 			Content:        m.Content,
 			CreatedAt:      m.CreatedAt,
 		}
@@ -152,7 +152,7 @@ func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, befor
 	return messages, nil
 }
 
-func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, senderID, content string) (*model.DirectMessage, error) {
+func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, senderID, content string) (*oapi.DirectMessage, error) {
 	row, err := s.Q.SendMessage(ctx, sqlcdb.SendMessageParams{
 		ConversationID: conversationID,
 		SenderID:       senderID,
@@ -163,10 +163,10 @@ func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, sende
 	}
 	// Update conversation timestamp (fire-and-forget)
 	_ = s.Q.TouchConversation(ctx, conversationID)
-	return &model.DirectMessage{
-		ID:             row.ID,
-		ConversationID: row.ConversationID,
-		SenderID:       row.SenderID,
+	return &oapi.DirectMessage{
+		Id:             row.ID,
+		ConversationId: row.ConversationID,
+		SenderId:       row.SenderID,
 		Content:        row.Content,
 		CreatedAt:      row.CreatedAt,
 	}, nil

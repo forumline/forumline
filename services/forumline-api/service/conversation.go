@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
@@ -16,16 +16,6 @@ type ConversationService struct {
 
 func NewConversationService(s *store.Store) *ConversationService {
 	return &ConversationService{Store: s}
-}
-
-// List returns conversations for a user, ordered by most recent activity.
-func (cs *ConversationService) List(ctx context.Context, userID string) ([]model.Conversation, error) {
-	return cs.Store.ListConversations(ctx, userID)
-}
-
-// Get returns a single conversation if the user is a member.
-func (cs *ConversationService) Get(ctx context.Context, userID string, conversationID uuid.UUID) (*model.Conversation, error) {
-	return cs.Store.GetConversation(ctx, userID, conversationID)
 }
 
 // GetOrCreateDM finds an existing 1:1 conversation or creates one.
@@ -53,8 +43,8 @@ type CreateGroupInput struct {
 	MemberIDs []string // excluding the creator
 }
 
-// CreateGroup creates a group conversation. Returns the full conversation model.
-func (cs *ConversationService) CreateGroup(ctx context.Context, userID string, input CreateGroupInput) (*model.Conversation, error) {
+// CreateGroup creates a group conversation. Returns the full conversation.
+func (cs *ConversationService) CreateGroup(ctx context.Context, userID string, input CreateGroupInput) (*oapi.Conversation, error) {
 	if len(input.MemberIDs) < 2 {
 		return nil, &ValidationError{Msg: "group must have at least 2 other members"}
 	}
@@ -83,8 +73,8 @@ func (cs *ConversationService) CreateGroup(ctx context.Context, userID string, i
 	profiles, _ := cs.Store.FetchProfilesByIDs(ctx, allMembers)
 	members := buildMemberList(allMembers, profiles)
 
-	return &model.Conversation{
-		ID:      convoID,
+	return &oapi.Conversation{
+		Id:      convoID,
 		IsGroup: true,
 		Name:    &input.Name,
 		Members: members,
@@ -141,7 +131,7 @@ func (cs *ConversationService) Update(ctx context.Context, userID string, conver
 
 // GetMessages returns paginated messages for a conversation.
 // Enforces membership before returning messages.
-func (cs *ConversationService) GetMessages(ctx context.Context, userID string, conversationID uuid.UUID, before, limit string) ([]model.DirectMessage, error) {
+func (cs *ConversationService) GetMessages(ctx context.Context, userID string, conversationID uuid.UUID, before, limit string) ([]oapi.DirectMessage, error) {
 	isMember, _ := cs.Store.IsConversationMember(ctx, conversationID, userID)
 	if !isMember {
 		return nil, &NotFoundError{Msg: "conversation not found"}
@@ -150,7 +140,7 @@ func (cs *ConversationService) GetMessages(ctx context.Context, userID string, c
 }
 
 // SendMessage sends a message to a conversation. Enforces membership.
-func (cs *ConversationService) SendMessage(ctx context.Context, userID string, conversationID uuid.UUID, content string) (*model.DirectMessage, error) {
+func (cs *ConversationService) SendMessage(ctx context.Context, userID string, conversationID uuid.UUID, content string) (*oapi.DirectMessage, error) {
 	isMember, _ := cs.Store.IsConversationMember(ctx, conversationID, userID)
 	if !isMember {
 		return nil, &NotFoundError{Msg: "conversation not found"}
@@ -160,11 +150,6 @@ func (cs *ConversationService) SendMessage(ctx context.Context, userID string, c
 		return nil, &ValidationError{Msg: "message must be 1-2000 characters"}
 	}
 	return cs.Store.SendMessage(ctx, conversationID, userID, content)
-}
-
-// MarkRead marks a conversation as read for the user.
-func (cs *ConversationService) MarkRead(ctx context.Context, userID string, conversationID uuid.UUID) error {
-	return cs.Store.MarkRead(ctx, conversationID, userID)
 }
 
 // Leave removes the user from a group conversation.
@@ -201,17 +186,17 @@ func deduplicateMembers(creatorID string, memberIDs []string) []string {
 	return unique
 }
 
-func buildMemberList(ids []string, profiles map[string]*model.Profile) []model.ConversationMember {
-	members := make([]model.ConversationMember, 0, len(ids))
+func buildMemberList(ids []string, profiles map[string]*store.Profile) []oapi.ConversationMember {
+	members := make([]oapi.ConversationMember, 0, len(ids))
 	for _, id := range ids {
-		m := model.ConversationMember{ID: id}
+		m := oapi.ConversationMember{Id: id}
 		if p := profiles[id]; p != nil {
 			m.Username = p.Username
 			m.DisplayName = p.DisplayName
 			if m.DisplayName == "" {
 				m.DisplayName = p.Username
 			}
-			m.AvatarURL = p.AvatarURL
+			m.AvatarUrl = p.AvatarURL
 		}
 		members = append(members, m)
 	}

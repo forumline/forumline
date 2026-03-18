@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/forumline/forumline/services/forumline-api/model"
+	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
@@ -23,7 +23,7 @@ func NewCallService(s *store.Store, ps *PushService) *CallService {
 
 // InitiateResult contains the call record and the callee ID for SSE notification.
 type InitiateResult struct {
-	Call    *model.CallRecord
+	Call    *oapi.CallRecord
 	Signal []byte // JSON signal payload to broadcast via SSE
 }
 
@@ -69,7 +69,7 @@ func (cs *CallService) Initiate(ctx context.Context, callerID string, conversati
 	}
 
 	signalData, _ := json.Marshal(map[string]interface{}{
-		"type": "incoming_call", "call_id": call.ID, "conversation_id": call.ConversationID,
+		"type": "incoming_call", "call_id": call.Id, "conversation_id": call.ConversationId,
 		"caller_id": callerID, "caller_username": callerUsername,
 		"caller_display_name": displayName, "caller_avatar_url": callerAvatarURL,
 		"target_user_id": calleeID,

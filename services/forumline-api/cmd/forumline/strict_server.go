@@ -68,7 +68,8 @@ func strictErrorHandler(w http.ResponseWriter, _ *http.Request, err error) {
 }
 
 // jsonConvert converts any value to T via JSON marshal/unmarshal.
-// Used to convert between model types and oapi types that share the same JSON shape.
+// Only used for map[string]interface{} results from dynamic-SQL store methods
+// (ListForums, ListOwnedForums, etc.) that can't return typed structs.
 func jsonConvert[T any](src any) (T, error) {
 	b, err := json.Marshal(src)
 	if err != nil {
@@ -243,39 +244,27 @@ func (s *StrictServer) SearchProfiles(ctx context.Context, req oapi.SearchProfil
 	if err != nil {
 		return nil, fmt.Errorf("failed to search profiles: %w", err)
 	}
-	result, err := jsonConvert[oapi.SearchProfiles200JSONResponse](profiles)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.SearchProfiles200JSONResponse(profiles), nil
 }
 
 // --- Conversations ---
 
 func (s *StrictServer) ListConversations(ctx context.Context, _ oapi.ListConversationsRequestObject) (oapi.ListConversationsResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	convos, err := s.convoSvc.List(ctx, userID)
+	convos, err := s.store.ListConversations(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list conversations: %w", err)
 	}
-	result, err := jsonConvert[oapi.ListConversations200JSONResponse](convos)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.ListConversations200JSONResponse(convos), nil
 }
 
 func (s *StrictServer) GetConversation(ctx context.Context, req oapi.GetConversationRequestObject) (oapi.GetConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	c, err := s.convoSvc.Get(ctx, userID, uuid.UUID(req.ConversationId))
+	c, err := s.store.GetConversation(ctx, userID, uuid.UUID(req.ConversationId))
 	if err != nil || c == nil {
 		return oapi.GetConversation404JSONResponse{Error: "conversation not found"}, nil
 	}
-	result, err := jsonConvert[oapi.GetConversation200JSONResponse](*c)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.GetConversation200JSONResponse(*c), nil
 }
 
 func (s *StrictServer) GetOrCreateDM(ctx context.Context, req oapi.GetOrCreateDMRequestObject) (oapi.GetOrCreateDMResponseObject, error) {
@@ -304,11 +293,7 @@ func (s *StrictServer) CreateGroupConversation(ctx context.Context, req oapi.Cre
 		return nil, err
 	}
 	convo.LastMessageTime = time.Now().Format(time.RFC3339)
-	result, err := jsonConvert[oapi.CreateGroupConversation201JSONResponse](*convo)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.CreateGroupConversation201JSONResponse(*convo), nil
 }
 
 func (s *StrictServer) UpdateConversation(ctx context.Context, req oapi.UpdateConversationRequestObject) (oapi.UpdateConversationResponseObject, error) {
@@ -350,11 +335,7 @@ func (s *StrictServer) GetMessages(ctx context.Context, req oapi.GetMessagesRequ
 	if err != nil {
 		return nil, err
 	}
-	result, err := jsonConvert[oapi.GetMessages200JSONResponse](msgs)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.GetMessages200JSONResponse(msgs), nil
 }
 
 func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequestObject) (oapi.SendMessageResponseObject, error) {
@@ -369,16 +350,12 @@ func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequ
 	if err != nil {
 		return nil, err
 	}
-	result, err := jsonConvert[oapi.SendMessage201JSONResponse](*msg)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.SendMessage201JSONResponse(*msg), nil
 }
 
 func (s *StrictServer) MarkConversationRead(ctx context.Context, req oapi.MarkConversationReadRequestObject) (oapi.MarkConversationReadResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if err := s.convoSvc.MarkRead(ctx, userID, uuid.UUID(req.ConversationId)); err != nil {
+	if err := s.store.MarkRead(ctx, uuid.UUID(req.ConversationId), userID); err != nil {
 		return nil, fmt.Errorf("failed to mark as read: %w", err)
 	}
 	return oapi.MarkConversationRead200JSONResponse{Success: true}, nil
@@ -525,11 +502,7 @@ func (s *StrictServer) GetMemberships(ctx context.Context, _ oapi.GetMemberships
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch memberships: %w", err)
 	}
-	result, err := jsonConvert[oapi.GetMemberships200JSONResponse](memberships)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return oapi.GetMemberships200JSONResponse(memberships), nil
 }
 
 func (s *StrictServer) UpdateMembershipAuth(ctx context.Context, req oapi.UpdateMembershipAuthRequestObject) (oapi.UpdateMembershipAuthResponseObject, error) {
@@ -724,11 +697,7 @@ func (s *StrictServer) InitiateCall(ctx context.Context, req oapi.InitiateCallRe
 	if err != nil {
 		return nil, err
 	}
-	call, err := jsonConvert[oapi.CallRecord](*result.Call)
-	if err != nil {
-		return nil, err
-	}
-	return oapi.InitiateCall201JSONResponse(call), nil
+	return oapi.InitiateCall201JSONResponse(*result.Call), nil
 }
 
 func (s *StrictServer) RespondToCall(ctx context.Context, req oapi.RespondToCallRequestObject) (oapi.RespondToCallResponseObject, error) {
