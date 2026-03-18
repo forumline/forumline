@@ -114,7 +114,7 @@ elif [ "$SERVICE" = "logs" ] || [ "$SERVICE" = "livekit" ]; then
   ssh "$HOST" "cd $REMOTE && docker compose pull && docker compose up -d --force-recreate --wait && docker compose ps"
 else
   echo "Building and restarting..."
-  ssh "$HOST" "cd $REMOTE && docker compose up -d --build $SERVICE && docker compose ps"
+  ssh "$HOST" "cd $REMOTE && docker compose build --no-cache $SERVICE && docker compose up -d $SERVICE && docker compose ps"
 fi
 
 echo "=== $SERVICE deployed ==="
