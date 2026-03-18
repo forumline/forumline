@@ -9,7 +9,7 @@ let _deps = {
 };
 
 let hoverCardTimeout = null;
-let hoverCardVisible = false;
+let _hoverCardVisible = false;
 
 export function showHoverCard(username, anchorEl) {
   const profile = data.profiles[username];
@@ -38,7 +38,7 @@ export function showHoverCard(username, anchorEl) {
   card.style.left = left + 'px';
   card.style.top = top + 'px';
   card.classList.remove('hidden');
-  hoverCardVisible = true;
+  _hoverCardVisible = true;
 
   // Wire up buttons
   $('hoverCardViewProfile').onclick = () => {
@@ -70,7 +70,7 @@ export function showHoverCard(username, anchorEl) {
 
 export function hideHoverCard() {
   $('hoverCard').classList.add('hidden');
-  hoverCardVisible = false;
+  _hoverCardVisible = false;
 }
 
 export function initHoverCard(deps) {

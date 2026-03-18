@@ -13,7 +13,7 @@
  * ```
  */
 
-import { ForumlineAPI, type Conversation } from './client.js';
+import { type Conversation, ForumlineAPI } from './client.js';
 import { EventStream } from './event-stream.js';
 
 type ChangeListener = () => void;

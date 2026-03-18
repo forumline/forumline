@@ -10,7 +10,7 @@ let _showView, _renderForumList, _renderDmList, _showToast;
 // Discovery state for real API integration
 let discoveryQuery = '';
 let discoveryActiveTag = null;
-let discoveryTags = [];
+let _discoveryTags = [];
 let discoveryForumsApi = null; // null = not loaded, [] = empty results
 let discoveryRecommended = [];
 let discoveryLoading = false;
@@ -206,7 +206,7 @@ async function fetchDiscoveryRecommended() {
 }
 
 async function fetchDiscoveryTags() {
-  discoveryTags = await ForumDiscoveryAPI.fetchTags();
+  _discoveryTags = await ForumDiscoveryAPI.fetchTags();
   renderDiscoverTags();
 }
 

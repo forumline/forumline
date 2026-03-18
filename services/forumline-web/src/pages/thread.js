@@ -1,6 +1,6 @@
 import { avatarUrl } from '../lib/avatar.js';
-import { escapeHtml, renderMarkdown } from '../lib/markdown.js';
-import { $, plural } from '../lib/utils.js';
+import { renderMarkdown } from '../lib/markdown.js';
+import { $ } from '../lib/utils.js';
 import * as data from '../state/data.js';
 import store from '../state/store.js';
 

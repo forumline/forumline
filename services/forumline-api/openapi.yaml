@@ -385,7 +385,7 @@ paths:
             schema:
               type: object
               properties:
-                username:
+                display_name:
                   type: string
                 status_message:
                   type: string

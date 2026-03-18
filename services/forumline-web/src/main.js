@@ -26,11 +26,7 @@ import { hideHoverCard, initHoverCard } from './components/hover-card.js';
 import { closeLightbox, initLightbox } from './components/lightbox.js';
 import { initMemberPanel } from './components/member-panel.js';
 import { closeAllDropdowns, initNav } from './components/nav.js';
-import {
-  initNotifications,
-  renderNotifications,
-  startNotificationUpdates,
-} from './components/notifications.js';
+import { initNotifications, startNotificationUpdates } from './components/notifications.js';
 import { initOnboarding, showOnboarding } from './components/onboarding.js';
 import { closeSearch, initSearch, openSearch } from './components/search.js';
 import {
@@ -57,9 +53,9 @@ import { initMobile } from './lib/mobile.js';
 import { initSafeStorage } from './lib/storage.js';
 import { initThemePicker, setTheme } from './lib/theme.js';
 import { $ } from './lib/utils.js';
-import { initConversation, renderMessages, showDm } from './pages/conversation.js';
+import { initConversation, showDm } from './pages/conversation.js';
 import { initCreateForum, showCreateForum } from './pages/create-forum.js';
-import { initDiscover, renderDiscover, showDiscover } from './pages/discover.js';
+import { initDiscover, showDiscover } from './pages/discover.js';
 import { initForum, renderFilteredThreads, renderOnlineBar, showForum } from './pages/forum.js';
 import { initHome, renderActivityFeed, showHome } from './pages/home.js';
 import { hideLogin, initLogin, showLogin } from './pages/login.js';
@@ -71,7 +67,7 @@ import {
   showProfile,
 } from './pages/profile.js';
 import { initSettings, showSettings } from './pages/settings.js';
-import { initThread, renderPosts, showThread } from './pages/thread.js';
+import { initThread, showThread } from './pages/thread.js';
 
 import { consumePendingRoute, initRouter, pushState } from './router.js';
 import * as data from './state/data.js';

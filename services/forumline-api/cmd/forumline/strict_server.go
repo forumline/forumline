@@ -186,8 +186,8 @@ func (s *StrictServer) UpdateIdentity(ctx context.Context, req oapi.UpdateIdenti
 	}
 
 	sets := make(map[string]interface{})
-	if b.Username != nil {
-		name := strings.TrimSpace(*b.Username)
+	if b.DisplayName != nil {
+		name := strings.TrimSpace(*b.DisplayName)
 		if name == "" || len([]rune(name)) > 50 {
 			return nil, &service.ValidationError{Msg: "display name must be 1-50 characters"}
 		}

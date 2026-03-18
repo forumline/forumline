@@ -12,12 +12,7 @@
 
 import { authStore } from '../lib/auth.js';
 import { cleanupHeader, renderHeader } from './header.js';
-import {
-  closeMobileSidebar,
-  loadSidebarData,
-  renderMobileSidebar,
-  renderSidebar,
-} from './sidebar.js';
+import { loadSidebarData, renderMobileSidebar, renderSidebar } from './sidebar.js';
 
 export function renderLayout(container) {
   container.innerHTML = `

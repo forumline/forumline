@@ -84,7 +84,7 @@ export function initCreateForum(deps) {
       if (ForumlineAPI.isAuthenticated()) {
         try {
           const domain = subdomain + '.forumline.net';
-          const result = await ForumRegistrationAPI.registerForum(
+          const _result = await ForumRegistrationAPI.registerForum(
             {
               name,
               domain,

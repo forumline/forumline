@@ -804,7 +804,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    username?: string;
+                    display_name?: string;
                     status_message?: string;
                     /** @enum {string} */
                     online_status?: "online" | "away" | "offline";

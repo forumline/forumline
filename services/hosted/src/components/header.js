@@ -13,7 +13,7 @@
  */
 
 import { api } from '../lib/api.js';
-import { authStore, getAccessToken, signOut } from '../lib/auth.js';
+import { authStore, signOut } from '../lib/auth.js';
 import { getConfig } from '../lib/config.js';
 import { formatRelativeTime } from '../lib/date.js';
 import { connectSSE } from '../lib/sse.js';

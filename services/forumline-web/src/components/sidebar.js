@@ -11,7 +11,7 @@ let bookmarks = [];
 
 try {
   bookmarks = JSON.parse(localStorage.getItem('forumline-bookmarks') || '[]');
-} catch (e) {
+} catch (_e) {
   bookmarks = [];
 }
 

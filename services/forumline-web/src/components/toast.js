@@ -18,7 +18,7 @@ function playNotifSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
     osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + 0.3);
-  } catch (e) {
+  } catch (_e) {
     // Audio context may not be available
   }
 }

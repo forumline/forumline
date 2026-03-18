@@ -5,7 +5,7 @@ export function isMobile() {
 }
 
 export function initMobile(navFunctions) {
-  const { $, showHome, showForum, showThread, showDm, showDiscover } = navFunctions;
+  const { $, showHome, _showForum, _showThread, _showDm, showDiscover } = navFunctions;
 
   const hamburger = $('hamburger');
   const sidebar = $('sidebar');

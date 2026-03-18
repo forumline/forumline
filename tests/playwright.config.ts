@@ -16,7 +16,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [['html', { open: 'never', outputFolder: path.join(__dirname, 'playwright-report') }], ['github']]
+    ? [
+        ['html', { open: 'never', outputFolder: path.join(__dirname, 'playwright-report') }],
+        ['github'],
+      ]
     : [['html', { open: 'on-failure', outputFolder: path.join(__dirname, 'playwright-report') }]],
   use: {
     trace: 'on-first-retry',

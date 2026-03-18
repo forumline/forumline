@@ -11,14 +11,14 @@
 
 export function avatarHTML(opts = {}) {
   const {
-    seed = '',
-    type = 'user',
+    _seed = '',
+    _type = 'user',
     size = 40,
     avatarUrl = null,
     showGlobe = false,
     className = '',
   } = opts;
-  const sizeClass = `w-${Math.round(size / 4)} h-${Math.round(size / 4)}`;
+  const _sizeClass = `w-${Math.round(size / 4)} h-${Math.round(size / 4)}`;
   const sizeStyle = `width:${size}px;height:${size}px;min-width:${size}px;`;
 
   const fallback = `<div class="rounded-full bg-slate-600 flex items-center justify-center ${className}" style="${sizeStyle}">

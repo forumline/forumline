@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { expect, test as setup } from '@playwright/test';
+
 const APP_URL = 'https://app.forumline.net';
 
 /**

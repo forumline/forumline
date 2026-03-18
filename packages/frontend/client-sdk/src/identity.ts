@@ -10,11 +10,12 @@
  * ```
  */
 
-import { ForumlineAPI } from './client.js';
 import type { paths } from './api.gen.js';
+import { ForumlineAPI } from './client.js';
 
 /** The current user's full profile (as returned by GET /api/identity). */
-export type UserProfile = paths['/api/identity']['get']['responses']['200']['content']['application/json'];
+export type UserProfile =
+  paths['/api/identity']['get']['responses']['200']['content']['application/json'];
 
 export interface ProfileUpdateData {
   /**
@@ -42,7 +43,7 @@ export const Identity = {
   async updateProfile(data: ProfileUpdateData): Promise<void> {
     // The handler field for display_name is confusingly called "username" — map here until Go is fixed.
     const body: Record<string, unknown> = {};
-    if (data.display_name !== undefined) body['username'] = data.display_name;
+    if (data.display_name !== undefined) body['display_name'] = data.display_name;
     if (data.status_message !== undefined) body['status_message'] = data.status_message;
     if (data.online_status !== undefined) body['online_status'] = data.online_status;
     if (data.show_online_status !== undefined) body['show_online_status'] = data.show_online_status;

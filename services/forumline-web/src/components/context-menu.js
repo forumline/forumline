@@ -8,11 +8,11 @@ let _deps = {
 };
 
 let contextThreadId = null;
-let contextForumId = null;
+let _contextForumId = null;
 
 export function showContextMenu(x, y, threadId, forumId) {
   contextThreadId = threadId;
-  contextForumId = forumId;
+  _contextForumId = forumId;
   const menu = $('contextMenu');
   menu.classList.remove('hidden');
   menu.style.left = Math.min(x, window.innerWidth - 200) + 'px';

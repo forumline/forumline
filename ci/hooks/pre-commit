@@ -102,6 +102,10 @@ run_check "go-test-hosted" \
   "(services/hosted|packages/backend|packages/forum)/.*\.go$" \
   bash -c 'cd services/hosted && go test ./...'
 
+run_check "ts-build" \
+  "packages/frontend/.*\.(ts|tsx)$" \
+  bash -c 'pnpm --filter @forumline/protocol build && pnpm --filter @forumline/client-sdk build && pnpm --filter @forumline/server-sdk build'
+
 run_check "ts-test" \
   "(services/forumline-web|packages/frontend)/.*\.(ts|tsx|js|mjs)$" \
   pnpm test

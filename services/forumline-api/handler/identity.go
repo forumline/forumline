@@ -62,7 +62,7 @@ func (h *IdentityHandler) HandleUpdateIdentity(w http.ResponseWriter, r *http.Re
 	userID := auth.UserIDFromContext(r.Context())
 
 	var body struct {
-		Username         *string `json:"username"`
+		DisplayName      *string `json:"display_name"`
 		StatusMessage    *string `json:"status_message"`
 		OnlineStatus     *string `json:"online_status"`
 		ShowOnlineStatus *bool   `json:"show_online_status"`
@@ -74,8 +74,8 @@ func (h *IdentityHandler) HandleUpdateIdentity(w http.ResponseWriter, r *http.Re
 
 	sets := make(map[string]interface{})
 
-	if body.Username != nil {
-		name := strings.TrimSpace(*body.Username)
+	if body.DisplayName != nil {
+		name := strings.TrimSpace(*body.DisplayName)
 		if name == "" || utf8.RuneCountInString(name) > 50 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Display name must be 1-50 characters"})
 			return

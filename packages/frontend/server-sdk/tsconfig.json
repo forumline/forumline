@@ -6,7 +6,10 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "preserveSymlinks": true
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

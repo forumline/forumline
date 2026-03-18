@@ -12,10 +12,8 @@
  */
 
 import { api } from '../lib/api.js';
-import { authStore } from '../lib/auth.js';
 import { leaveRoom, voiceStore } from '../lib/voice.js';
 import { getCurrentPath, onRouteChange } from '../router.js';
-import { avatarHTML } from './avatar.js';
 
 let categories = [];
 let channels = [];
@@ -33,7 +31,6 @@ export async function loadSidebarData() {
 
 export function renderSidebarContent(container) {
   const path = getCurrentPath();
-  const { user } = authStore.get();
   const voice = voiceStore.get();
 
   // eslint-disable-next-line no-unsanitized/property -- static template, user content escaped via escapeHTML()
