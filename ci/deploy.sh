@@ -133,7 +133,7 @@ elif [ "$SERVICE" = "logs" ] || [ "$SERVICE" = "livekit" ] || [ "$SERVICE" = "gl
 else
   echo "Building and restarting..."
   if [ "$SERVICE" = "forumline" ]; then
-    ssh "$HOST" "cd $REMOTE && docker compose build --no-cache hub comm && docker compose up -d && docker compose ps"
+    ssh "$HOST" "cd $REMOTE && docker compose build --no-cache hub comm push && docker compose up -d && docker compose ps"
   else
     ssh "$HOST" "cd $REMOTE && docker compose build --no-cache $SERVICE && docker compose up -d $SERVICE && docker compose ps"
   fi

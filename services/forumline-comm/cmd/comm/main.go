@@ -27,7 +27,6 @@ import (
 	localdb "github.com/forumline/forumline/services/forumline-comm/db"
 	"github.com/forumline/forumline/services/forumline-comm/handler"
 	"github.com/forumline/forumline/services/forumline-comm/presence"
-	"github.com/forumline/forumline/services/forumline-comm/realtime"
 	"github.com/forumline/forumline/services/forumline-comm/service"
 	"github.com/forumline/forumline/services/forumline-comm/store"
 )
@@ -56,17 +55,7 @@ func main() {
 
 	s := store.New(pool)
 
-	// Clean up stale calls from previous server run
-	if tag, err := pool.Exec(ctx,
-		`UPDATE forumline_calls SET status = CASE WHEN status = 'ringing' THEN 'missed' ELSE 'completed' END, ended_at = now()
-		 WHERE status IN ('ringing', 'active')`); err != nil {
-		log.Printf("Warning: failed to clean up stale calls: %v", err)
-	} else if tag.RowsAffected() > 0 {
-		log.Printf("Cleaned up %d stale call(s) from previous run", tag.RowsAffected())
-	}
-
 	pushSvc := service.NewPushService(s)
-	pushListener := realtime.NewPushListener(s, pushSvc)
 
 	natsURL := os.Getenv("NATS_URL")
 	if natsURL == "" {
@@ -99,18 +88,6 @@ func main() {
 		})
 	}
 
-	retryMw := middleware.Retry{
-		MaxRetries:      3,
-		InitialInterval: 500 * time.Millisecond,
-		MaxInterval:     5 * time.Second,
-		Multiplier:      2,
-		Logger:          wmLogger,
-	}
-	pushHandler := wmRouter.AddConsumerHandler("push-dm", "push_dm", bus.Sub, func(msg *message.Message) error {
-		return pushListener.HandlePayload(ctx, msg.Payload)
-	})
-	pushHandler.AddMiddleware(retryMw.Middleware)
-
 	go func() {
 		if err := wmRouter.Run(ctx); err != nil {
 			log.Printf("Watermill router stopped: %v", err)
@@ -120,9 +97,14 @@ func main() {
 	log.Println("realtime: Watermill event bus active")
 
 	convoSvc := service.NewConversationService(s, eventBus)
-	callSvc := service.NewCallService(s, pushSvc, eventBus)
-	presenceTracker := presence.NewTracker(90*time.Second, valkeyClient)
 	lkCfg := handler.NewLiveKitConfigFromEnv()
+	var lkClient *service.LiveKitClient
+	if lkCfg.URL != "" && lkCfg.APIKey != "" && lkCfg.APISecret != "" {
+		lkClient = service.NewLiveKitClient(lkCfg.URL, lkCfg.APIKey, lkCfg.APISecret)
+		log.Println("LiveKit client initialized for call room management")
+	}
+	callSvc := service.NewCallService(s, pushSvc, eventBus, lkClient)
+	presenceTracker := presence.NewTracker(90*time.Second, valkeyClient)
 
 	r := newRouter(s, sseHub, valkeyClient, eventBus, convoSvc, callSvc, pushSvc, presenceTracker, lkCfg)
 
@@ -251,6 +233,7 @@ func newRouter(
 		r.Use(webhookRL)
 		r.Post("/api/webhooks/notification", notifH.HandleWebhookNotification)
 		r.Post("/api/webhooks/notifications", notifH.HandleWebhookNotificationBatch)
+		r.Post("/api/webhooks/livekit", callH.HandleLiveKitWebhook)
 	})
 
 	// SSE stream (auth required, direct handler for HTTP flushing)

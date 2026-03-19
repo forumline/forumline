@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS forumline_calls (
   caller_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   callee_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'ringing',
+  room_name TEXT,
   started_at TIMESTAMPTZ,
   ended_at TIMESTAMPTZ,
   duration_seconds INTEGER,

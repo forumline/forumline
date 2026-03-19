@@ -10,86 +10,73 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const acceptCall = `-- name: AcceptCall :exec
+const activateCall = `-- name: ActivateCall :exec
 UPDATE forumline_calls SET status = 'active', started_at = now() WHERE id = $1
 `
 
-func (q *Queries) AcceptCall(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, acceptCall, id)
+func (q *Queries) ActivateCall(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, activateCall, id)
 	return err
 }
 
-const cleanupStaleCalls = `-- name: CleanupStaleCalls :execrows
-UPDATE forumline_calls SET status = CASE WHEN status = 'ringing' THEN 'missed' ELSE 'completed' END, ended_at = now()
-WHERE status IN ('ringing', 'active')
+const createCallRecord = `-- name: CreateCallRecord :one
+INSERT INTO forumline_calls (conversation_id, caller_id, callee_id, status, room_name)
+VALUES ($1, $2, $3, 'ringing', $4)
+RETURNING id, conversation_id, caller_id, callee_id, status, room_name, created_at
 `
 
-func (q *Queries) CleanupStaleCalls(ctx context.Context) (int64, error) {
-	result, err := q.db.Exec(ctx, cleanupStaleCalls)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const createCall = `-- name: CreateCall :one
-INSERT INTO forumline_calls (conversation_id, caller_id, callee_id, status)
-VALUES ($1, $2, $3, 'ringing')
-RETURNING id, conversation_id, caller_id, callee_id, status, created_at
-`
-
-type CreateCallParams struct {
+type CreateCallRecordParams struct {
 	ConversationID uuid.UUID `json:"conversation_id"`
 	CallerID       string    `json:"caller_id"`
 	CalleeID       string    `json:"callee_id"`
+	RoomName       *string   `json:"room_name"`
 }
 
-type CreateCallRow struct {
+type CreateCallRecordRow struct {
 	ID             uuid.UUID `json:"id"`
 	ConversationID uuid.UUID `json:"conversation_id"`
 	CallerID       string    `json:"caller_id"`
 	CalleeID       string    `json:"callee_id"`
 	Status         string    `json:"status"`
+	RoomName       *string   `json:"room_name"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-func (q *Queries) CreateCall(ctx context.Context, arg CreateCallParams) (CreateCallRow, error) {
-	row := q.db.QueryRow(ctx, createCall, arg.ConversationID, arg.CallerID, arg.CalleeID)
-	var i CreateCallRow
+func (q *Queries) CreateCallRecord(ctx context.Context, arg CreateCallRecordParams) (CreateCallRecordRow, error) {
+	row := q.db.QueryRow(ctx, createCallRecord,
+		arg.ConversationID,
+		arg.CallerID,
+		arg.CalleeID,
+		arg.RoomName,
+	)
+	var i CreateCallRecordRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationID,
 		&i.CallerID,
 		&i.CalleeID,
 		&i.Status,
+		&i.RoomName,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const declineCall = `-- name: DeclineCall :exec
-UPDATE forumline_calls SET status = 'declined', ended_at = now() WHERE id = $1
-`
-
-func (q *Queries) DeclineCall(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, declineCall, id)
-	return err
-}
-
 const endCallWithDuration = `-- name: EndCallWithDuration :exec
-UPDATE forumline_calls SET status = $1, ended_at = now(), duration_seconds = EXTRACT(EPOCH FROM now() - started_at)::integer
-WHERE id = $2
+UPDATE forumline_calls SET status = $1, ended_at = now(), duration_seconds = $2 WHERE id = $3
 `
 
 type EndCallWithDurationParams struct {
-	Status string    `json:"status"`
-	ID     uuid.UUID `json:"id"`
+	Status          string      `json:"status"`
+	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
+	ID              uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) EndCallWithDuration(ctx context.Context, arg EndCallWithDurationParams) error {
-	_, err := q.db.Exec(ctx, endCallWithDuration, arg.Status, arg.ID)
+	_, err := q.db.Exec(ctx, endCallWithDuration, arg.Status, arg.DurationSeconds, arg.ID)
 	return err
 }
 
@@ -107,31 +94,74 @@ func (q *Queries) EndCallWithoutDuration(ctx context.Context, arg EndCallWithout
 	return err
 }
 
-const getCallForEnd = `-- name: GetCallForEnd :one
-SELECT caller_id, callee_id, status, started_at FROM forumline_calls
-WHERE id = $1 AND (caller_id = $2 OR callee_id = $2) AND status IN ('ringing', 'active')
+const getCallByID = `-- name: GetCallByID :one
+SELECT id, conversation_id, caller_id, callee_id, status, room_name, created_at, started_at, ended_at, duration_seconds
+FROM forumline_calls WHERE id = $1
 `
 
-type GetCallForEndParams struct {
-	CallID uuid.UUID `json:"call_id"`
-	UserID string    `json:"user_id"`
+type GetCallByIDRow struct {
+	ID              uuid.UUID   `json:"id"`
+	ConversationID  uuid.UUID   `json:"conversation_id"`
+	CallerID        string      `json:"caller_id"`
+	CalleeID        string      `json:"callee_id"`
+	Status          string      `json:"status"`
+	RoomName        *string     `json:"room_name"`
+	CreatedAt       time.Time   `json:"created_at"`
+	StartedAt       *time.Time  `json:"started_at"`
+	EndedAt         *time.Time  `json:"ended_at"`
+	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
 }
 
-type GetCallForEndRow struct {
-	CallerID  string     `json:"caller_id"`
-	CalleeID  string     `json:"callee_id"`
-	Status    string     `json:"status"`
-	StartedAt *time.Time `json:"started_at"`
-}
-
-func (q *Queries) GetCallForEnd(ctx context.Context, arg GetCallForEndParams) (GetCallForEndRow, error) {
-	row := q.db.QueryRow(ctx, getCallForEnd, arg.CallID, arg.UserID)
-	var i GetCallForEndRow
+func (q *Queries) GetCallByID(ctx context.Context, id uuid.UUID) (GetCallByIDRow, error) {
+	row := q.db.QueryRow(ctx, getCallByID, id)
+	var i GetCallByIDRow
 	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
 		&i.CallerID,
 		&i.CalleeID,
 		&i.Status,
+		&i.RoomName,
+		&i.CreatedAt,
 		&i.StartedAt,
+		&i.EndedAt,
+		&i.DurationSeconds,
+	)
+	return i, err
+}
+
+const getCallByRoomName = `-- name: GetCallByRoomName :one
+SELECT id, conversation_id, caller_id, callee_id, status, room_name, created_at, started_at, ended_at, duration_seconds
+FROM forumline_calls WHERE room_name = $1 AND status IN ('ringing', 'active')
+`
+
+type GetCallByRoomNameRow struct {
+	ID              uuid.UUID   `json:"id"`
+	ConversationID  uuid.UUID   `json:"conversation_id"`
+	CallerID        string      `json:"caller_id"`
+	CalleeID        string      `json:"callee_id"`
+	Status          string      `json:"status"`
+	RoomName        *string     `json:"room_name"`
+	CreatedAt       time.Time   `json:"created_at"`
+	StartedAt       *time.Time  `json:"started_at"`
+	EndedAt         *time.Time  `json:"ended_at"`
+	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
+}
+
+func (q *Queries) GetCallByRoomName(ctx context.Context, roomName *string) (GetCallByRoomNameRow, error) {
+	row := q.db.QueryRow(ctx, getCallByRoomName, roomName)
+	var i GetCallByRoomNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.CallerID,
+		&i.CalleeID,
+		&i.Status,
+		&i.RoomName,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
@@ -156,36 +186,9 @@ func (q *Queries) GetCalleeFor1to1(ctx context.Context, arg GetCalleeFor1to1Para
 	return user_id, err
 }
 
-const getRingingCallCallerID = `-- name: GetRingingCallCallerID :one
-SELECT caller_id FROM forumline_calls WHERE id = $1 AND callee_id = $2 AND status = 'ringing'
-`
-
-type GetRingingCallCallerIDParams struct {
-	ID       uuid.UUID `json:"id"`
-	CalleeID string    `json:"callee_id"`
-}
-
-func (q *Queries) GetRingingCallCallerID(ctx context.Context, arg GetRingingCallCallerIDParams) (string, error) {
-	row := q.db.QueryRow(ctx, getRingingCallCallerID, arg.ID, arg.CalleeID)
-	var caller_id string
-	err := row.Scan(&caller_id)
-	return caller_id, err
-}
-
-const hasActiveCall = `-- name: HasActiveCall :one
-SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE conversation_id = $1 AND status IN ('ringing', 'active'))
-`
-
-func (q *Queries) HasActiveCall(ctx context.Context, conversationID uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, hasActiveCall, conversationID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const isCallParticipant = `-- name: IsCallParticipant :one
 SELECT EXISTS(SELECT 1 FROM forumline_calls
-WHERE id = $1 AND (caller_id = $2 OR callee_id = $2) AND status IN ('ringing', 'active'))
+WHERE id = $1 AND (caller_id = $2 OR callee_id = $2))
 `
 
 type IsCallParticipantParams struct {
@@ -200,13 +203,16 @@ func (q *Queries) IsCallParticipant(ctx context.Context, arg IsCallParticipantPa
 	return exists, err
 }
 
-const isUserInCall = `-- name: IsUserInCall :one
-SELECT EXISTS(SELECT 1 FROM forumline_calls WHERE (caller_id = $1 OR callee_id = $1) AND status IN ('ringing', 'active'))
+const updateCallStatus = `-- name: UpdateCallStatus :exec
+UPDATE forumline_calls SET status = $1 WHERE id = $2
 `
 
-func (q *Queries) IsUserInCall(ctx context.Context, callerID string) (bool, error) {
-	row := q.db.QueryRow(ctx, isUserInCall, callerID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+type UpdateCallStatusParams struct {
+	Status string    `json:"status"`
+	ID     uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateCallStatus(ctx context.Context, arg UpdateCallStatusParams) error {
+	_, err := q.db.Exec(ctx, updateCallStatus, arg.Status, arg.ID)
+	return err
 }

@@ -8,6 +8,7 @@ on:
       - 'services/forumline-api/**'
       - 'services/forumline-hub/**'
       - 'services/forumline-comm/**'
+      - 'services/forumline-push/**'
       - 'services/forumline-web/**'
       - 'packages/frontend/**'
       - 'packages/backend/**'
@@ -15,6 +16,7 @@ on:
       - 'deploy/docker/Dockerfile.go-forumline'
       - 'deploy/docker/Dockerfile.go-hub'
       - 'deploy/docker/Dockerfile.go-comm'
+      - 'deploy/docker/Dockerfile.go-push'
       - 'deploy/compose/forumline/**'
       - 'secrets.kdbx'
 

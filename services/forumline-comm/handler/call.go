@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"encoding/json"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	lkauth "github.com/livekit/protocol/auth"
+	"github.com/livekit/protocol/webhook"
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/services/forumline-comm/service"
@@ -106,7 +109,19 @@ func (h *CallHandler) HandleGetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := generateLiveKitToken(lk.APIKey, lk.APISecret, callID.String(), userID, h.Store, r.Context())
+	// Look up the call to get the room name
+	call, err := h.Store.GetCallByID(r.Context(), callID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "call not found"})
+		return
+	}
+
+	roomName := call.RoomName
+	if roomName == "" {
+		roomName = "call-" + callID.String() // fallback for legacy records
+	}
+
+	token, err := generateLiveKitToken(lk.APIKey, lk.APISecret, roomName, userID, h.Store, r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 		return
@@ -114,7 +129,41 @@ func (h *CallHandler) HandleGetToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"token": token, "url": lk.URL})
 }
 
-func generateLiveKitToken(apiKey, apiSecret, callID, userID string, s *store.Store, ctx context.Context) (string, error) {
+// HandleLiveKitWebhook receives and validates LiveKit webhook events.
+// LiveKit signs webhooks with the API key/secret, so no additional auth is needed.
+func (h *CallHandler) HandleLiveKitWebhook(w http.ResponseWriter, r *http.Request) {
+	lk := h.LKConfig
+	if lk == nil || lk.APIKey == "" || lk.APISecret == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "LiveKit not configured"})
+		return
+	}
+
+	keyProvider := lkauth.NewSimpleKeyProvider(lk.APIKey, lk.APISecret)
+	event, err := webhook.ReceiveWebhookEvent(r, keyProvider)
+	if err != nil {
+		log.Printf("[LiveKit Webhook] Failed to validate: %v", err)
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid webhook signature"})
+		return
+	}
+
+	room := event.GetRoom()
+	if room == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	roomName := room.GetName()
+
+	switch event.GetEvent() {
+	case "room_finished":
+		h.CallService.HandleRoomFinished(r.Context(), roomName, room)
+	case "participant_joined":
+		h.CallService.HandleParticipantJoined(r.Context(), roomName, room.GetNumParticipants())
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func generateLiveKitToken(apiKey, apiSecret, roomName, userID string, s *store.Store, ctx context.Context) (string, error) {
 	profile, _ := s.GetProfile(ctx, userID)
 	participantName := userID
 	if profile != nil {
@@ -128,7 +177,7 @@ func generateLiveKitToken(apiKey, apiSecret, callID, userID string, s *store.Sto
 	boolTrue := true
 	at := lkauth.NewAccessToken(apiKey, apiSecret)
 	grant := &lkauth.VideoGrant{
-		Room:         "call-" + callID,
+		Room:         roomName,
 		RoomJoin:     true,
 		CanPublish:   &boolTrue,
 		CanSubscribe: &boolTrue,
