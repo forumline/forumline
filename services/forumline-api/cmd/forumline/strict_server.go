@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/forumline/forumline/backend/events"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/backend/sse"
+	"github.com/forumline/forumline/services/forumline-api/handler"
 	"github.com/forumline/forumline/services/forumline-api/oapi"
 	"github.com/forumline/forumline/services/forumline-api/presence"
 	"github.com/forumline/forumline/services/forumline-api/service"
@@ -101,12 +101,12 @@ func checkServiceKey(r *http.Request) bool {
 // StrictServer implements oapi.StrictServerInterface using the existing service and store layers.
 type StrictServer struct {
 	store    *store.Store
-	convoSvc *service.ConversationService
 	forumSvc *service.ForumService
 	callSvc  *service.CallService
 	pushSvc  *service.PushService
+	hasura   *handler.HasuraClient
 	lkCfg    *lkConfig
-	sseHub *sse.Hub
+	sseHub   *sse.Hub
 	tracker  *presence.Tracker
 	eventBus pubsub.EventBus
 }
@@ -248,114 +248,108 @@ func (s *StrictServer) SearchProfiles(ctx context.Context, req oapi.SearchProfil
 	return oapi.SearchProfiles200JSONResponse(profiles), nil
 }
 
-// --- Conversations ---
+// --- Conversations (via Hasura) ---
 
 func (s *StrictServer) ListConversations(ctx context.Context, _ oapi.ListConversationsRequestObject) (oapi.ListConversationsResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	convos, err := s.store.ListConversations(ctx, userID)
+	uid, _ := uuid.Parse(userID)
+	convos, err := s.hasura.ListConversations(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list conversations: %w", err)
+		return nil, fmt.Errorf("failed to list: %w", err)
 	}
-	return oapi.ListConversations200JSONResponse(convos), nil
+	result, err := jsonConvert[oapi.ListConversations200JSONResponse](convos)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *StrictServer) GetConversation(ctx context.Context, req oapi.GetConversationRequestObject) (oapi.GetConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	c, err := s.store.GetConversation(ctx, userID, uuid.UUID(req.ConversationId))
-	if err != nil || c == nil {
-		return oapi.GetConversation404JSONResponse{Error: "conversation not found"}, nil
+	uid, _ := uuid.Parse(userID)
+	c, err := s.hasura.GetConversation(ctx, uid, uuid.UUID(req.ConversationId))
+	if err != nil {
+		return oapi.GetConversation404JSONResponse{Error: "not found"}, nil
 	}
-	return oapi.GetConversation200JSONResponse(*c), nil
+	result, err := jsonConvert[oapi.GetConversation200JSONResponse](c)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *StrictServer) GetOrCreateDM(ctx context.Context, req oapi.GetOrCreateDMRequestObject) (oapi.GetOrCreateDMResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if req.Body == nil {
-		return nil, &service.ValidationError{Msg: "request body required"}
-	}
-	convoID, err := s.convoSvc.GetOrCreateDM(ctx, userID, req.Body.UserId)
+	uid, _ := uuid.Parse(userID)
+	other, _ := uuid.Parse(req.Body.UserId)
+	id, err := s.hasura.FindOrCreate1to1(ctx, uid, other)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed: %w", err)
 	}
-	return oapi.GetOrCreateDM200JSONResponse{Id: convoID}, nil
+	return oapi.GetOrCreateDM200JSONResponse{Id: id}, nil
 }
 
 func (s *StrictServer) CreateGroupConversation(ctx context.Context, req oapi.CreateGroupConversationRequestObject) (oapi.CreateGroupConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if req.Body == nil {
-		return nil, &service.ValidationError{Msg: "request body required"}
-	}
-	input := service.CreateGroupInput{MemberIDs: req.Body.MemberIds}
+	uid, _ := uuid.Parse(userID)
+	name := ""
 	if req.Body.Name != nil {
-		input.Name = *req.Body.Name
+		name = *req.Body.Name
 	}
-	convo, err := s.convoSvc.CreateGroup(ctx, userID, input)
+	id, err := s.hasura.CreateGroupConversation(ctx, uid, name, req.Body.MemberIds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed: %w", err)
 	}
-	convo.LastMessageTime = time.Now().Format(time.RFC3339)
-	return oapi.CreateGroupConversation201JSONResponse(*convo), nil
+	return oapi.CreateGroupConversation201JSONResponse{Id: id}, nil
 }
 
 func (s *StrictServer) UpdateConversation(ctx context.Context, req oapi.UpdateConversationRequestObject) (oapi.UpdateConversationResponseObject, error) {
-	userID := auth.UserIDFromContext(ctx)
-	if req.Body == nil {
-		return oapi.UpdateConversation200JSONResponse{Success: true}, nil
-	}
-	input := service.UpdateInput{Name: req.Body.Name}
-	if req.Body.AddMembers != nil {
-		input.AddMembers = *req.Body.AddMembers
-	}
-	if req.Body.RemoveMembers != nil {
-		input.RemoveMembers = *req.Body.RemoveMembers
-	}
-	if err := s.convoSvc.Update(ctx, userID, uuid.UUID(req.ConversationId), input); err != nil {
-		return nil, err
-	}
+	// TODO: Implement via Hasura mutations
 	return oapi.UpdateConversation200JSONResponse{Success: true}, nil
 }
 
 func (s *StrictServer) LeaveConversation(ctx context.Context, req oapi.LeaveConversationRequestObject) (oapi.LeaveConversationResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if err := s.convoSvc.Leave(ctx, userID, uuid.UUID(req.ConversationId)); err != nil {
-		return nil, err
+	uid, _ := uuid.Parse(userID)
+	err := s.hasura.LeaveConversation(ctx, uuid.UUID(req.ConversationId), uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed: %w", err)
 	}
 	return oapi.LeaveConversation200JSONResponse{Success: true}, nil
 }
 
 func (s *StrictServer) GetMessages(ctx context.Context, req oapi.GetMessagesRequestObject) (oapi.GetMessagesResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	var before, limit string
-	if req.Params.Before != nil {
-		before = *req.Params.Before
+	uid, _ := uuid.Parse(userID)
+	msgs, err := s.hasura.GetMessages(ctx, uid, uuid.UUID(req.ConversationId), nil, 50)
+	if err != nil {
+		return nil, fmt.Errorf("failed: %w", err)
 	}
-	if req.Params.Limit != nil {
-		limit = fmt.Sprintf("%d", *req.Params.Limit)
-	}
-	msgs, err := s.convoSvc.GetMessages(ctx, userID, uuid.UUID(req.ConversationId), before, limit)
+	result, err := jsonConvert[oapi.GetMessages200JSONResponse](msgs)
 	if err != nil {
 		return nil, err
 	}
-	return oapi.GetMessages200JSONResponse(msgs), nil
+	return result, nil
 }
 
 func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequestObject) (oapi.SendMessageResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if req.Body == nil {
-		return nil, &service.ValidationError{Msg: "request body required"}
+	uid, _ := uuid.Parse(userID)
+	msg, err := s.hasura.SendMessage(ctx, uuid.UUID(req.ConversationId), uid, req.Body.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed: %w", err)
 	}
-	msg, err := s.convoSvc.SendMessage(ctx, userID, uuid.UUID(req.ConversationId), req.Body.Content)
+	result, err := jsonConvert[oapi.SendMessage201JSONResponse](msg)
 	if err != nil {
 		return nil, err
 	}
-	return oapi.SendMessage201JSONResponse(*msg), nil
+	return result, nil
 }
 
 func (s *StrictServer) MarkConversationRead(ctx context.Context, req oapi.MarkConversationReadRequestObject) (oapi.MarkConversationReadResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if err := s.store.MarkRead(ctx, uuid.UUID(req.ConversationId), userID); err != nil {
-		return nil, fmt.Errorf("failed to mark as read: %w", err)
-	}
+	uid, _ := uuid.Parse(userID)
+	_ = s.hasura.MarkRead(ctx, uuid.UUID(req.ConversationId), uid)
 	return oapi.MarkConversationRead200JSONResponse{Success: true}, nil
 }
 

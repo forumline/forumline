@@ -103,7 +103,7 @@ func (h *ForumHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		Tags:         body.Tags,
 	})
 	if err != nil {
-		writeServiceError(w, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to register forum"})
 		return
 	}
 

@@ -1,7 +1,5 @@
 package service
 
-import "strings"
-
 // ValidationError indicates the caller provided invalid input (HTTP 400).
 type ValidationError struct {
 	Msg string
@@ -29,7 +27,3 @@ type ForbiddenError struct {
 }
 
 func (e *ForbiddenError) Error() string { return e.Msg }
-
-func trimString(s string) string {
-	return strings.TrimSpace(s)
-}

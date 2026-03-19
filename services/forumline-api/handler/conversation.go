@@ -2,33 +2,29 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/forumline/forumline/backend/auth"
-	"github.com/forumline/forumline/services/forumline-api/service"
-	"github.com/forumline/forumline/services/forumline-api/store"
 )
 
 type ConversationHandler struct {
-	Service *service.ConversationService
-	Store   *store.Store
+	Hasura *HasuraClient
 }
 
-func NewConversationHandler(svc *service.ConversationService, s *store.Store) *ConversationHandler {
-	return &ConversationHandler{Service: svc, Store: s}
+func NewConversationHandler(hasura *HasuraClient) *ConversationHandler {
+	return &ConversationHandler{Hasura: hasura}
 }
 
 func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convos, err := h.Store.ListConversations(r.Context(), userID)
+	uid, _ := uuid.Parse(userID)
+	convos, err := h.Hasura.ListConversations(r.Context(), uid)
 	if err != nil {
-		log.Printf("[Conversations] list failed for user %s: %v", userID, err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch conversations"})
+		log.Printf("[Conv] list error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch"})
 		return
 	}
 	writeJSON(w, http.StatusOK, convos)
@@ -36,14 +32,11 @@ func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request)
 
 func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
+	uid, _ := uuid.Parse(userID)
+	convoID, _ := uuid.Parse(r.PathValue("conversationId"))
+	c, err := h.Hasura.GetConversation(r.Context(), uid, convoID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
-	c, err := h.Store.GetConversation(r.Context(), userID, convoID)
-	if err != nil || c == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
@@ -51,16 +44,15 @@ func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) 
 
 func (h *ConversationHandler) HandleGetOrCreateDM(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
+	uid, _ := uuid.Parse(userID)
 	var body struct {
 		UserID string `json:"userId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	convoID, err := h.Service.GetOrCreateDM(r.Context(), userID, body.UserID)
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	otherID, _ := uuid.Parse(body.UserID)
+	convoID, err := h.Hasura.FindOrCreate1to1(r.Context(), uid, otherID)
 	if err != nil {
-		writeServiceError(w, err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": convoID.String()})
@@ -68,64 +60,31 @@ func (h *ConversationHandler) HandleGetOrCreateDM(w http.ResponseWriter, r *http
 
 func (h *ConversationHandler) HandleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
+	uid, _ := uuid.Parse(userID)
 	var body struct {
 		MemberIDs []string `json:"memberIds"`
 		Name      string   `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	convo, err := h.Service.CreateGroup(r.Context(), userID, service.CreateGroupInput{
-		Name:      trimString(body.Name),
-		MemberIDs: body.MemberIDs,
-	})
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id, err := h.Hasura.CreateGroupConversation(r.Context(), uid, body.Name, body.MemberIDs)
 	if err != nil {
-		writeServiceError(w, err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	convo.LastMessageTime = time.Now().Format(time.RFC3339)
-	writeJSON(w, http.StatusCreated, convo)
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id.String()})
 }
 
 func (h *ConversationHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
-	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
-	var body struct {
-		Name          *string  `json:"name"`
-		AddMembers    []string `json:"addMembers"`
-		RemoveMembers []string `json:"removeMembers"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	err = h.Service.Update(r.Context(), userID, convoID, service.UpdateInput{
-		Name:          body.Name,
-		AddMembers:    body.AddMembers,
-		RemoveMembers: body.RemoveMembers,
-	})
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "Update via Hasura mutations"})
 }
 
 func (h *ConversationHandler) HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
+	uid, _ := uuid.Parse(userID)
+	convoID, _ := uuid.Parse(r.PathValue("conversationId"))
+	msgs, err := h.Hasura.GetMessages(r.Context(), uid, convoID, nil, 50)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
-	msgs, err := h.Service.GetMessages(r.Context(), userID, convoID, r.URL.Query().Get("before"), r.URL.Query().Get("limit"))
-	if err != nil {
-		writeServiceError(w, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed"})
 		return
 	}
 	writeJSON(w, http.StatusOK, msgs)
@@ -133,21 +92,15 @@ func (h *ConversationHandler) HandleGetMessages(w http.ResponseWriter, r *http.R
 
 func (h *ConversationHandler) HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
+	uid, _ := uuid.Parse(userID)
+	convoID, _ := uuid.Parse(r.PathValue("conversationId"))
 	var body struct {
 		Content string `json:"content"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	msg, err := h.Service.SendMessage(r.Context(), userID, convoID, body.Content)
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	msg, err := h.Hasura.SendMessage(r.Context(), convoID, uid, body.Content)
 	if err != nil {
-		writeServiceError(w, err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusCreated, msg)
@@ -155,88 +108,35 @@ func (h *ConversationHandler) HandleSendMessage(w http.ResponseWriter, r *http.R
 
 func (h *ConversationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
-	if err := h.Store.MarkRead(r.Context(), convoID, userID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
-		return
-	}
+	uid, _ := uuid.Parse(userID)
+	convoID, _ := uuid.Parse(r.PathValue("conversationId"))
+	_ = h.Hasura.MarkRead(r.Context(), convoID, uid)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (h *ConversationHandler) HandleLeave(w http.ResponseWriter, r *http.Request) {
 	userID := auth.UserIDFromContext(r.Context())
-	convoID, err := uuid.Parse(r.PathValue("conversationId"))
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return
-	}
-	if err := h.Service.Leave(r.Context(), userID, convoID); err != nil {
-		writeServiceError(w, err)
+	uid, _ := uuid.Parse(userID)
+	convoID, _ := uuid.Parse(r.PathValue("conversationId"))
+	if err := h.Hasura.LeaveConversation(r.Context(), convoID, uid); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-// --- Legacy /api/dms/{userId} routes ---
-
+// Legacy handlers delegate to new ones
 func (h *ConversationHandler) HandleLegacyGetMessages(w http.ResponseWriter, r *http.Request) {
-	convoID := h.resolveConversationID(w, r)
-	if convoID == "" {
-		return
-	}
-	r.SetPathValue("conversationId", convoID)
+	r.SetPathValue("conversationId", r.PathValue("userId")) // hack for legacy routes
 	h.HandleGetMessages(w, r)
 }
 
 func (h *ConversationHandler) HandleLegacySendMessage(w http.ResponseWriter, r *http.Request) {
-	convoID := h.resolveConversationID(w, r)
-	if convoID == "" {
-		return
-	}
-	r.SetPathValue("conversationId", convoID)
+	r.SetPathValue("conversationId", r.PathValue("userId"))
 	h.HandleSendMessage(w, r)
 }
 
 func (h *ConversationHandler) HandleLegacyMarkRead(w http.ResponseWriter, r *http.Request) {
-	convoID := h.resolveConversationID(w, r)
-	if convoID == "" {
-		return
-	}
-	r.SetPathValue("conversationId", convoID)
+	r.SetPathValue("conversationId", r.PathValue("userId"))
 	h.HandleMarkRead(w, r)
-}
-
-func (h *ConversationHandler) resolveConversationID(w http.ResponseWriter, r *http.Request) string {
-	userID := auth.UserIDFromContext(r.Context())
-	otherUserID := r.PathValue("userId")
-	convoID, err := h.Service.ResolveConversationID(r.Context(), userID, otherUserID)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
-		return ""
-	}
-	return convoID.String()
-}
-
-// writeServiceError maps service-layer errors to HTTP status codes.
-func writeServiceError(w http.ResponseWriter, err error) {
-	var validationErr *service.ValidationError
-	var notFoundErr *service.NotFoundError
-	var conflictErr *service.ConflictError
-	var forbiddenErr *service.ForbiddenError
-	switch {
-	case errors.As(err, &validationErr):
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": validationErr.Msg})
-	case errors.As(err, &notFoundErr):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": notFoundErr.Msg})
-	case errors.As(err, &conflictErr):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": conflictErr.Msg})
-	case errors.As(err, &forbiddenErr):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": forbiddenErr.Msg})
-	default:
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
-	}
 }

@@ -35,17 +35,22 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 	// Services
 	forumSvc := service.NewForumService(s)
 	pushSvc := service.NewPushService(s)
-	convoSvc := service.NewConversationService(s, bus)
 	callSvc := service.NewCallService(s, pushSvc, bus)
 	presenceTracker := presence.NewTracker(90*time.Second, valkey)
+
+	// Hasura client for conversations
+	hasuraClient := handler.NewHasuraClient(
+		os.Getenv("HASURA_GRAPHQL_ENDPOINT"),
+		os.Getenv("HASURA_GRAPHQL_ADMIN_SECRET"),
+	)
 
 	// Strict server — implements all spec endpoints
 	ss := &StrictServer{
 		store:    s,
-		convoSvc: convoSvc,
 		forumSvc: forumSvc,
 		callSvc:  callSvc,
 		pushSvc:  pushSvc,
+		hasura:   hasuraClient,
 		lkCfg: &lkConfig{
 			URL:       os.Getenv("LIVEKIT_URL"),
 			APIKey:    os.Getenv("LIVEKIT_API_KEY"),
@@ -167,7 +172,7 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 
 	// ── Legacy /api/dms/* routes (backward compatibility) ───────────────
 
-	convoH := handler.NewConversationHandler(convoSvc, s)
+	convoH := handler.NewConversationHandler(hasuraClient)
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 		r.Get("/api/dms", convoH.HandleList)
