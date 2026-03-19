@@ -1,46 +1,41 @@
 /**
  * @module presence
  *
- * Ref-counted presence system for DM online/offline status.
- * Sends periodic heartbeats to mark the current user as online and polls
- * the status of tracked users (1:1 DM conversation partners).
+ * Reactive presence system for DM online/offline status.
+ * Uses nanostores `onMount` for automatic lifecycle — heartbeats and polling
+ * start when the first subscriber attaches and stop when the last unsubscribes.
  *
  * @example
  * ```ts
- * PresenceTracker.setTrackedUsers(['user-123', 'user-456']);
- * const stopTracking = PresenceTracker.start();
- * PresenceTracker.onUpdate((online) => {
+ * setTrackedUsers(['user-123', 'user-456']);
+ * const unsub = $onlineUsers.subscribe((online) => {
  *   console.log('user-123 is', online['user-123'] ? 'online' : 'offline');
  * });
- * // later: stopTracking() when the DM view unmounts
+ * // later: unsub() when the DM view unmounts
  * ```
  */
 
+import { map, onMount } from 'nanostores';
 import { ForumlineAPI } from './client.js';
 
 const HEARTBEAT_MS = 30000;
 const POLL_MS = 30000;
 
 type OnlineMap = Record<string, boolean>;
-type UpdateListener = (onlineUsers: OnlineMap) => void;
-type Unsubscribe = () => void;
 
-let onlineUsers: OnlineMap = {};
+// ── Atoms ──────────────────────────────────────────────────────────────
+
+/** Reactive map of user ID → online status. */
+export const $onlineUsers = map<OnlineMap>({});
+
+// ── Internal state ─────────────────────────────────────────────────────
+
 let trackedUserIds: string[] = [];
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-let refCount = 0;
-const updateListeners = new Set<UpdateListener>();
+let mounted = false;
 
-function _notify(): void {
-  for (const fn of updateListeners) {
-    try {
-      fn(onlineUsers);
-    } catch (e) {
-      console.error('[PresenceTracker]', e);
-    }
-  }
-}
+// ── Internals ──────────────────────────────────────────────────────────
 
 function _sendHeartbeat(): void {
   ForumlineAPI.presenceHeartbeat().catch(() => {});
@@ -51,103 +46,68 @@ async function _pollPresence(): Promise<void> {
   try {
     const result = await ForumlineAPI.getPresenceStatus(trackedUserIds);
     if (!result) return;
-    let changed = false;
     const newOnline: OnlineMap = {};
     for (const uid of trackedUserIds) {
       const val = result[uid];
       const isOn =
         typeof val === 'boolean' ? val : (val && (val as { online: boolean }).online) || false;
       newOnline[uid] = isOn;
-      if (onlineUsers[uid] !== isOn) changed = true;
     }
-    onlineUsers = newOnline;
-    if (changed) _notify();
+    $onlineUsers.set(newOnline);
   } catch {
     // silently ignore polling errors
   }
 }
 
-/**
- * Start presence tracking. Begins sending heartbeats and polling tracked users.
- * Ref-counted — safe to call from multiple components.
- * @returns Unsubscribe function that decrements the ref count and stops tracking when it hits zero.
- */
-function start(): Unsubscribe {
-  refCount++;
-  if (refCount === 1) {
-    _sendHeartbeat();
-    void _pollPresence();
-    heartbeatTimer = setInterval(_sendHeartbeat, HEARTBEAT_MS);
-    pollTimer = setInterval(_pollPresence, POLL_MS);
-  }
-  return () => stop();
+function _startTimers(): void {
+  _sendHeartbeat();
+  void _pollPresence();
+  heartbeatTimer = setInterval(_sendHeartbeat, HEARTBEAT_MS);
+  pollTimer = setInterval(_pollPresence, POLL_MS);
 }
 
-/**
- * Decrement the ref count. When it reaches zero, stops all timers
- * and clears tracked state.
- */
-function stop(): void {
-  refCount--;
-  if (refCount <= 0) {
-    refCount = 0;
-    if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
-    onlineUsers = {};
-    trackedUserIds = [];
-  }
+function _stopTimers(): void {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
+
+// ── Lifecycle: auto-start on first subscriber ──────────────────────────
+
+onMount($onlineUsers, () => {
+  mounted = true;
+  _startTimers();
+  return () => {
+    mounted = false;
+    _stopTimers();
+    trackedUserIds = [];
+    $onlineUsers.set({});
+  };
+});
+
+// ── Actions ────────────────────────────────────────────────────────────
 
 /**
  * Set which user IDs to poll for online status.
  * Triggers an immediate poll if tracking is active.
- * @param userIds - Array of user IDs (typically 1:1 DM conversation partners).
  */
-function setTrackedUsers(userIds: string[]): void {
+export function setTrackedUsers(userIds: string[]): void {
   trackedUserIds = userIds || [];
-  if (refCount > 0 && trackedUserIds.length) void _pollPresence();
+  if (mounted && trackedUserIds.length) void _pollPresence();
 }
 
-/**
- * Check if a specific user is currently online.
- * @param userId - User ID to check.
- * @returns `true` if the user was reported online in the last poll.
- */
-function isOnline(userId: string): boolean {
-  return !!onlineUsers[userId];
-}
-
-/**
- * Register a callback that fires whenever online/offline status changes.
- * Receives the full `{ [userId]: boolean }` map.
- * @returns Unsubscribe function.
- */
-function onUpdate(callback: UpdateListener): Unsubscribe {
-  updateListeners.add(callback);
-  return () => updateListeners.delete(callback);
+/** Check if a specific user is currently online. */
+export function isOnline(userId: string): boolean {
+  return !!$onlineUsers.get()[userId];
 }
 
 /** Pause heartbeats and polling (e.g. when the app is backgrounded). */
-function pause(): void {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
-  }
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+export function pause(): void {
+  _stopTimers();
 }
 
 /** Resume heartbeats and polling after a {@link pause}. */
-function resume(): void {
-  if (refCount > 0) {
+export function resume(): void {
+  if (mounted) {
     if (!heartbeatTimer) {
       _sendHeartbeat();
       heartbeatTimer = setInterval(_sendHeartbeat, HEARTBEAT_MS);
@@ -159,8 +119,27 @@ function resume(): void {
   }
 }
 
+// ── Backward-compatible namespace export ───────────────────────────────
+
 /**
  * Ref-counted presence tracker for DM online/offline indicators.
- * Sends heartbeats every 30s and polls tracked user status every 30s.
+ *
+ * For reactive subscriptions, use `$onlineUsers.subscribe()` directly —
+ * lifecycle is automatic (heartbeats start on first subscriber).
+ *
+ * @deprecated Prefer `$onlineUsers` atom and standalone functions.
  */
-export const PresenceTracker = { start, stop, setTrackedUsers, isOnline, onUpdate, pause, resume };
+export const PresenceTracker = {
+  /** @deprecated Subscribe to `$onlineUsers` instead — lifecycle is automatic. */
+  start() { return $onlineUsers.subscribe(() => {}); },
+  /** @deprecated Unsubscribe from `$onlineUsers` instead. */
+  stop() { /* no-op — lifecycle managed by nanostores */ },
+  setTrackedUsers,
+  isOnline,
+  /** @deprecated Subscribe to `$onlineUsers` instead. */
+  onUpdate(callback: (onlineUsers: OnlineMap) => void) {
+    return $onlineUsers.subscribe(callback);
+  },
+  pause,
+  resume,
+};

@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@forumline/protocol": "workspace:*",
+    "nanostores": "^1.2.0",
     "openapi-fetch": "^0.13.5"
   },
   "peerDependencies": {

@@ -1,4 +1,4 @@
-import { ForumDiscoveryAPI, ForumlineAPI, ForumStore } from '@forumline/client-sdk';
+import { ForumDiscoveryAPI, ForumlineAPI, ForumStore, $forums } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
 import { showWebview } from '../api/forum-webview.js';
 import { escapeHtml } from '../lib/markdown.js';
@@ -18,7 +18,7 @@ let discoveryLoading = false;
 let discoverySearchTimeout = null;
 
 function renderDiscoverCard(f, showJoined) {
-  const isJoined = ForumStore.forums.some(rf => rf.domain === f.domain);
+  const isJoined = $forums.get().some(rf => rf.domain === f.domain);
   const iconUrl = f.icon_url
     ? f.icon_url.startsWith('/')
       ? (f.web_base || '') + f.icon_url
@@ -153,7 +153,7 @@ export function renderDiscover() {
       if (e.target.closest('.join-btn')) return;
       const domain = card.dataset.domain;
       if (!domain) return;
-      const isJoined = ForumStore.forums.some(f => f.domain === domain);
+      const isJoined = $forums.get().some(f => f.domain === domain);
       if (isJoined) {
         ForumStore.switchForum(domain);
       } else {

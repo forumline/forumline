@@ -1,4 +1,4 @@
-import { DmStore, ForumlineAPI, ForumStore, PresenceTracker } from '@forumline/client-sdk';
+import { $conversations, $dmInitialLoad, $dmLoadError, $forums, fetchConversations, ForumlineAPI, ForumStore, isOnline, setTrackedUsers } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
 import { escapeHtml } from '../lib/markdown.js';
 import { $, plural } from '../lib/utils.js';
@@ -74,7 +74,7 @@ export function renderForumList() {
   const el = $('forumList');
   if (!el) return;
 
-  const forums = ForumStore.forums;
+  const forums = $forums.get();
   const currentForum = store.currentForum;
 
   el.innerHTML = forums
@@ -161,7 +161,7 @@ export function initDragAndDrop() {
       e.preventDefault();
       item.classList.remove('drag-over');
       if (draggedEl && draggedEl !== item) {
-        const forums = ForumStore.forums;
+        const forums = $forums.get();
         const fromId = draggedEl.dataset.forum;
         const toId = item.dataset.forum;
         const fromIdx = forums.findIndex(f => (f.id || f.domain) === fromId);
@@ -184,15 +184,15 @@ export function renderDmList() {
 
   // Use real API data when authenticated, fall back to mock data
   if (ForumlineAPI.isAuthenticated()) {
-    const conversations = DmStore.getConversations();
+    const conversations = $conversations.get();
     const myId = ForumlineAPI.getUserId();
 
-    if (DmStore.isInitialLoad()) {
+    if ($dmInitialLoad.get()) {
       el.innerHTML = '<div class="dm-item dm-loading">Loading conversations...</div>';
       return;
     }
 
-    if (DmStore.hasError()) {
+    if ($dmLoadError.get()) {
       el.innerHTML = '<div class="dm-item dm-loading">Failed to load conversations</div>';
       return;
     }
@@ -227,15 +227,15 @@ export function renderDmList() {
           trackedIds.push(others[0].id);
         }
 
-        const isOnline =
-          !c.isGroup && others.length === 1 && PresenceTracker.isOnline(others[0].id);
+        const peerOnline =
+          !c.isGroup && others.length === 1 && isOnline(others[0].id);
 
         const escapedName = escapeHtml(displayName);
         return `
         <div class="dm-item ${currentDm === c.id ? 'active' : ''}" data-dm="${c.id}" tabindex="0" role="listitem" aria-label="${escapedName}${hasUnread ? ', unread message' : ''}">
           <div class="dm-avatar-wrap">
             <img src="${convoAvatar}" alt="" onerror="this.style.display='none'">
-            ${isOnline ? '<span class="dm-online-dot"></span>' : ''}
+            ${peerOnline ? '<span class="dm-online-dot"></span>' : ''}
           </div>
           <div class="dm-item-info">
             <div class="dm-item-name">${escapedName}</div>
@@ -249,7 +249,7 @@ export function renderDmList() {
 
     // Update presence tracked users
     if (trackedIds.length > 0) {
-      PresenceTracker.setTrackedUsers(trackedIds);
+      setTrackedUsers(trackedIds);
     }
 
     el.querySelectorAll('.dm-item').forEach(item => {
@@ -357,7 +357,7 @@ function initNewDmModal() {
             closeNewDmModal();
             try {
               const convoId = await ForumlineAPI.getOrCreateDM(userId);
-              await DmStore.fetchConversations();
+              await fetchConversations();
               renderDmList();
               _deps.showDm(convoId);
             } catch (err) {

@@ -2,130 +2,96 @@
  * @module dm-store
  *
  * Reactive conversation list with real-time SSE updates and polling fallback.
- * Ref-counted — multiple UI components can call {@link DmStore.startUpdates}
- * and the SSE subscription stays alive until the last one unsubscribes.
+ * Uses nanostores `onMount` for automatic lifecycle — SSE subscription opens
+ * when the first subscriber attaches and closes when the last unsubscribes.
  *
  * @example
  * ```ts
- * const stopUpdates = DmStore.startUpdates();
- * DmStore.onChanged(() => renderConversationList(DmStore.getConversations()));
- * // later: stopUpdates() when the DM view unmounts
+ * // Subscribe to trigger SSE connection (auto-cleanup on unsubscribe)
+ * const unsub = $conversations.subscribe((convos) => renderList(convos));
+ * // later: unsub() when the DM view unmounts
  * ```
  */
 
+import { atom, onMount } from 'nanostores';
 import { type Conversation, ForumlineAPI } from './client.js';
 import { EventStream } from './event-stream.js';
 
-type ChangeListener = () => void;
-type Unsubscribe = () => void;
+// ── Atoms ──────────────────────────────────────────────────────────────
 
-let conversations: Conversation[] = [];
-let initialLoad = true;
-let loadError = false;
-let unreadCount = 0;
-let sseUnsub: Unsubscribe | null = null;
-let sseDebounce: ReturnType<typeof setTimeout> | null = null;
-let pollInterval: ReturnType<typeof setInterval> | null = null;
-let refCount = 0;
-const changeListeners = new Set<ChangeListener>();
+/** Reactive list of DM conversations (sorted by last message time). */
+export const $conversations = atom<Conversation[]>([]);
 
-/** Get the current list of DM conversations (sorted by last message time). */
-function getConversations(): Conversation[] {
-  return conversations;
-}
+/** Total unread count across all conversations. */
+export const $dmUnreadCount = atom(0);
 
-/** Get the total number of unread messages across all conversations. */
-function getUnreadCount(): number {
-  return unreadCount;
-}
+/** `true` while the initial fetch is in progress. */
+export const $dmInitialLoad = atom(true);
 
-/** Returns `true` if the initial fetch hasn't completed yet. */
-function isInitialLoad(): boolean {
-  return initialLoad;
-}
+/** `true` if the initial fetch failed. */
+export const $dmLoadError = atom(false);
 
-/** Returns `true` if the initial fetch failed. */
-function hasError(): boolean {
-  return loadError;
-}
+// ── Fetch logic ────────────────────────────────────────────────────────
 
-function _notify(): void {
-  for (const fn of changeListeners) fn();
-}
-
-/**
- * Register a callback that fires whenever the conversation list changes
- * (new message, read status, initial load, etc.).
- * @returns Unsubscribe function.
- */
-function onChanged(fn: ChangeListener): Unsubscribe {
-  changeListeners.add(fn);
-  return () => changeListeners.delete(fn);
-}
-
-/** Force a fresh fetch of all conversations from the server. */
-async function fetchConversations(): Promise<void> {
+export async function fetchConversations(): Promise<void> {
   if (!ForumlineAPI.isAuthenticated()) return;
   try {
     const data = await ForumlineAPI.getConversations();
-    conversations = data || [];
-    unreadCount = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-    initialLoad = false;
-    loadError = false;
-    _notify();
+    $conversations.set(data || []);
+    $dmUnreadCount.set((data || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0));
+    $dmInitialLoad.set(false);
+    $dmLoadError.set(false);
   } catch {
-    if (initialLoad) {
-      loadError = true;
-      initialLoad = false;
-      _notify();
+    if ($dmInitialLoad.get()) {
+      $dmLoadError.set(true);
+      $dmInitialLoad.set(false);
     }
   }
 }
 
-/**
- * Start real-time conversation updates (SSE + 30s polling fallback).
- * Ref-counted: safe to call from multiple components. The SSE connection
- * opens on the first call and closes when the last unsubscribe fires.
- *
- * @returns Unsubscribe function — call when the component unmounts.
- */
-function startUpdates(): Unsubscribe {
-  refCount++;
-  if (refCount === 1) {
-    void fetchConversations();
-    sseUnsub = EventStream.subscribeDm(() => {
-      if (sseDebounce) clearTimeout(sseDebounce);
-      sseDebounce = setTimeout(fetchConversations, 200);
-    });
-    pollInterval = setInterval(fetchConversations, 30000);
-  }
+// ── Lifecycle: auto-start SSE + polling on first subscriber ────────────
+
+onMount($conversations, () => {
+  void fetchConversations();
+
+  let sseDebounce: ReturnType<typeof setTimeout> | null = null;
+  const sseUnsub = EventStream.subscribeDm(() => {
+    if (sseDebounce) clearTimeout(sseDebounce);
+    sseDebounce = setTimeout(fetchConversations, 200);
+  });
+  const pollInterval = setInterval(fetchConversations, 30000);
+
   return () => {
-    refCount--;
-    if (refCount === 0) {
-      sseUnsub?.();
-      sseUnsub = null;
-      if (sseDebounce) {
-        clearTimeout(sseDebounce);
-        sseDebounce = null;
-      }
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-    }
+    sseUnsub();
+    if (sseDebounce) clearTimeout(sseDebounce);
+    clearInterval(pollInterval);
   };
-}
+});
+
+// ── Backward-compatible namespace export ───────────────────────────────
 
 /**
- * Reactive DM conversation store. Keeps the conversation list in sync
- * with the server via SSE events and periodic polling.
+ * Reactive DM conversation store.
+ *
+ * For reactive subscriptions, use the atoms directly:
+ * - `$conversations` — conversation list (subscribing auto-starts SSE)
+ * - `$dmUnreadCount` — total unread badge count
+ * - `$dmInitialLoad` / `$dmLoadError` — loading state
+ *
+ * @deprecated Prefer atoms directly. This object is kept for migration.
  */
 export const DmStore = {
-  getConversations,
-  getUnreadCount,
-  isInitialLoad,
-  hasError,
+  getConversations(): Conversation[] { return $conversations.get(); },
+  getUnreadCount(): number { return $dmUnreadCount.get(); },
+  isInitialLoad(): boolean { return $dmInitialLoad.get(); },
+  hasError(): boolean { return $dmLoadError.get(); },
   fetchConversations,
-  startUpdates,
-  onChanged,
+  /** @deprecated Subscribe to `$conversations` instead — lifecycle is automatic. */
+  startUpdates() {
+    return $conversations.subscribe(() => {});
+  },
+  /** @deprecated Subscribe to `$conversations` instead. */
+  onChanged(fn: () => void) {
+    return $conversations.subscribe(fn);
+  },
 };

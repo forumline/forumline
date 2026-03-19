@@ -1,9 +1,10 @@
 import {
   CallManager,
-  DmStore,
+  $conversations,
+  fetchConversations,
   EventStream,
   ForumlineAPI,
-  PresenceTracker,
+  isOnline,
 } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
 import { escapeHtml, renderMarkdown } from '../lib/markdown.js';
@@ -78,7 +79,7 @@ export function showDm(dmId) {
     const myId = ForumlineAPI.getUserId();
 
     // Try to get metadata from DmStore cache first
-    const cached = DmStore.getConversations().find(c => c.id === dmId);
+    const cached = $conversations.get().find(c => c.id === dmId);
     if (cached) {
       _currentConvoMeta = cached;
       const others = (cached.members || []).filter(m => m.id !== myId);
@@ -97,7 +98,7 @@ export function showDm(dmId) {
       // Use PresenceTracker to set online indicator for 1:1 conversations
       const otherForPresence = !cached.isGroup && others.length === 1 ? others[0].id : null;
       $('dmOnline').style.display =
-        otherForPresence && PresenceTracker.isOnline(otherForPresence) ? 'block' : 'none';
+        otherForPresence && isOnline(otherForPresence) ? 'block' : 'none';
       // Show call button for 1:1 conversations only
       const callBtn = $('dmCallBtn');
       if (callBtn) callBtn.classList.toggle('hidden', !otherForPresence);
@@ -132,7 +133,7 @@ export function showDm(dmId) {
         const onlineEl = $('dmOnline');
         if (onlineEl)
           onlineEl.style.display =
-            otherPresence && PresenceTracker.isOnline(otherPresence) ? 'block' : 'none';
+            otherPresence && isOnline(otherPresence) ? 'block' : 'none';
         // Show call button for 1:1 conversations
         const callBtnFresh = $('dmCallBtn');
         if (callBtnFresh) callBtnFresh.classList.toggle('hidden', !otherPresence);
@@ -303,7 +304,7 @@ async function _fetchAndRenderMessages(dmId, el, isInitial) {
     // Mark as read
     if (msgs.length > 0) {
       ForumlineAPI.markRead(dmId)
-        .then(() => DmStore.fetchConversations())
+        .then(() => fetchConversations())
         .catch((e) => console.error('[DM] mark-read failed:', e));
     }
   } catch (err) {

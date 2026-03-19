@@ -12,13 +12,17 @@ import './styles/components.css';
 // API modules (from @forumline/client-sdk)
 import {
   CallManager,
-  DmStore,
+  $conversations,
   EventStream,
   ForumlineAPI,
   ForumlineAuth,
   ForumStore,
+  $forums,
+  $activeForum,
   NativeBridge,
-  PresenceTracker,
+  $onlineUsers,
+  pausePresence,
+  resumePresence,
   PushNotifications,
 } from '@forumline/client-sdk';
 // UI modules that extend the SDK with DOM rendering
@@ -95,7 +99,7 @@ const wrappedShowHome = opts => {
 
 const wrappedShowForum = (id, opts) => {
   // Check if this is a real forum (from ForumStore) — use webview instead of mock forum view
-  const realForum = ForumStore.forums.find(f => f.id === id || f.domain === id);
+  const realForum = $forums.get().find(f => f.id === id || f.domain === id);
   if (realForum) {
     ForumStore.switchForum(realForum.domain);
     if (!opts?.skipHistory) pushState({ view: 'forum', forumId: id });
@@ -146,7 +150,7 @@ const wrappedShowNewThread = opts => {
 
 // ========== AUTH STATE MANAGEMENT ==========
 let _authHasRendered = false;
-let _dmStoreStopUpdates = null;
+let _realtimeUnsubs = null;
 
 function _updateUserDisplay(session) {
   if (!session || !session.user) return;
@@ -184,35 +188,40 @@ function _updateUserDisplay(session) {
   if (replyAvatar) replyAvatar.src = avatarUrl(seed);
 }
 
-function _startDmStoreIfAuth() {
-  if (ForumlineAPI.isAuthenticated() && !_dmStoreStopUpdates) {
-    _dmStoreStopUpdates = DmStore.startUpdates();
-    DmStore.onChanged(() => renderDmList());
-    PresenceTracker.start();
-    PresenceTracker.onUpdate(() => renderDmList());
+function _startRealtimeIfAuth() {
+  if (ForumlineAPI.isAuthenticated() && !_realtimeUnsubs) {
+    // Subscribe to atoms — nanostores onMount auto-starts SSE + polling
+    const unsubConvos = $conversations.subscribe(() => renderDmList());
+    const unsubOnline = $onlineUsers.subscribe(() => renderDmList());
 
     // In-app DM notification: toast + sound when a message arrives
     // and the user isn't currently viewing that conversation
-    EventStream.subscribeDm(event => {
+    const unsubDmToast = EventStream.subscribeDm(event => {
       const myId = ForumlineAPI.getUserId();
       if (event.sender_id === myId) return; // don't notify on own messages
       if (store.currentView === 'dm' && store.currentDm === event.conversation_id) return;
-      const convo = DmStore.getConversations().find(c => c.id === event.conversation_id);
+      const convos = $conversations.get();
+      const convo = convos.find(c => c.id === event.conversation_id);
       const senderName = convo
         ? (convo.members || []).find(m => m.id === event.sender_id)?.displayName || convo.name || 'Someone'
         : 'Someone';
       showToast(`${senderName} sent you a message`);
       if (navigator.setAppBadge) navigator.setAppBadge();
     });
+
+    _realtimeUnsubs = () => {
+      unsubConvos();
+      unsubOnline();
+      unsubDmToast();
+    };
   }
 }
 
-function _stopDmStore() {
-  if (_dmStoreStopUpdates) {
-    _dmStoreStopUpdates();
-    _dmStoreStopUpdates = null;
+function _stopRealtime() {
+  if (_realtimeUnsubs) {
+    _realtimeUnsubs();
+    _realtimeUnsubs = null;
   }
-  PresenceTracker.stop();
 }
 
 // Auth state change handler
@@ -241,7 +250,7 @@ ForumlineAuth.onAuthStateChange((event, session) => {
       _updateUserDisplay(session);
       _authHasRendered = true;
 
-      _startDmStoreIfAuth();
+      _startRealtimeIfAuth();
       startNotificationUpdates();
       ForumStore.loadCache();
       ForumStore.syncFromServer(ForumlineAPI.getToken()).then(() => {
@@ -257,7 +266,7 @@ ForumlineAuth.onAuthStateChange((event, session) => {
             if (navigator.setAppBadge) navigator.setAppBadge();
           }
         });
-        checkUrlParams({ showDm: wrappedShowDm, showForum: wrappedShowForum, ForumStore, DmStore });
+        checkUrlParams();
       });
 
       // Ensure profile exists in backend (auto-provisions on first login)
@@ -274,7 +283,7 @@ ForumlineAuth.onAuthStateChange((event, session) => {
     }
   } else if (event === 'SIGNED_OUT') {
     ForumlineAPI.configure({ accessToken: null, userId: null });
-    _stopDmStore();
+    _stopRealtime();
     CallManager.destroyCallManager();
     clearIdentityProfile();
     _authHasRendered = false;
@@ -285,9 +294,9 @@ ForumlineAuth.onAuthStateChange((event, session) => {
 // ========== WINDOW LIFECYCLE ==========
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
-    PresenceTracker.pause();
+    pausePresence();
   } else {
-    PresenceTracker.resume();
+    resumePresence();
   }
 });
 
@@ -558,7 +567,7 @@ $('webviewLeaveBtn')?.addEventListener('click', async () => {
     }
   } else {
     // Leave
-    const forum = ForumStore.activeForum;
+    const forum = $activeForum.get();
     if (!forum) return;
     if (confirm(`Leave ${forum.name}? You can rejoin later.`)) {
       ForumStore.leaveForum(forum.domain);
@@ -569,7 +578,7 @@ $('webviewLeaveBtn')?.addEventListener('click', async () => {
 });
 
 $('webviewMuteBtn')?.addEventListener('click', () => {
-  const forum = ForumStore.activeForum;
+  const forum = $activeForum.get();
   if (!forum) return;
   const willMute = !forum.muted;
   ForumStore.toggleMute(forum.domain);
@@ -587,8 +596,8 @@ renderDmList();
 renderActivityFeed();
 renderBookmarks();
 
-// Re-render sidebar when ForumStore memberships change
-ForumStore.subscribe(() => renderForumList());
+// Re-render sidebar when forum memberships change
+$forums.subscribe(() => renderForumList());
 
 // Announcement banner dismiss
 const bannerDismissed = localStorage.getItem('forumline-banner-dismissed');

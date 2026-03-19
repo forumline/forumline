@@ -12,7 +12,7 @@ export type {
   GetMessagesOpts,
 } from './client.js';
 export { ForumlineAPI } from './client.js';
-export { DmStore } from './dm-store.js';
+export { DmStore, $conversations, $dmUnreadCount, $dmInitialLoad, $dmLoadError, fetchConversations } from './dm-store.js';
 export type {
   CallListener,
   CallSignal,
@@ -32,11 +32,11 @@ export type {
 } from './forum-discovery.js';
 export { ForumDiscoveryAPI, ForumRegistrationAPI } from './forum-discovery.js';
 export type { ForumMembership, ForumUnreadCounts } from './forum-store.js';
-export { ForumStore } from './forum-store.js';
+export { ForumStore, $forums, $activeForum, $activePath, $unreadCounts } from './forum-store.js';
 export type { ProfileUpdateData, UserProfile } from './identity.js';
 export { Identity } from './identity.js';
 export type { CallInfo, NativeBridgeHandlers } from './native-bridge.js';
 export { NativeBridge } from './native-bridge.js';
-export { PresenceTracker } from './presence.js';
+export { PresenceTracker, $onlineUsers, setTrackedUsers, isOnline, pause as pausePresence, resume as resumePresence } from './presence.js';
 export type { NotificationClickData } from './push.js';
 export { PushNotifications } from './push.js';

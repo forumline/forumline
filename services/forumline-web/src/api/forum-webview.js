@@ -4,7 +4,7 @@
 // forum via postMessage. The forum exchanges it for a local session — zero
 // clicks, zero redirects, seamless.
 
-import { ForumStore } from '@forumline/client-sdk';
+import { ForumStore, $forums, $activeForum, $activePath } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
 import { showErrorBanner } from '../components/error-banner.js';
 import { showToast } from '../components/toast.js';
@@ -42,7 +42,7 @@ export function showWebview(forum, path) {
   // Toggle Leave/Join button based on membership
   var leaveBtn = document.getElementById('webviewLeaveBtn');
   var muteBtn = document.getElementById('webviewMuteBtn');
-  var isMember = ForumStore.forums.some(f => f.domain === forum.domain);
+  var isMember = $forums.get().some(f => f.domain === forum.domain);
   if (leaveBtn) {
     leaveBtn.textContent = isMember ? 'Leave' : 'Join';
     leaveBtn.title = isMember ? 'Leave forum' : 'Join forum';
@@ -51,7 +51,7 @@ export function showWebview(forum, path) {
   }
   if (muteBtn) muteBtn.style.display = isMember ? '' : 'none';
 
-  const accessToken = ForumStore._accessToken;
+  const accessToken = ForumStore.getAccessToken();
   const iframe = document.createElement('iframe');
   iframe.src = forum.web_base + (path || '');
   iframe.title = forum.name + ' forum';
@@ -156,11 +156,10 @@ export function destroyWebview() {
   if (s) s.classList.add('hidden');
 }
 
-// Subscribe to ForumStore changes to auto-manage webview
-ForumStore.subscribe(store => {
-  const active = store.activeForum;
+// React to active forum changes to auto-manage webview
+$activeForum.subscribe(active => {
   if (active && active.domain !== _currentWebviewDomain) {
-    showWebview(active, store.activePath);
+    showWebview(active, $activePath.get());
   } else if (!active && _currentWebviewDomain) {
     destroyWebview();
   }

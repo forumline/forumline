@@ -1,6 +1,6 @@
 // ========== BROWSER HISTORY MANAGEMENT ==========
 
-import { ForumStore } from '@forumline/client-sdk';
+import { ForumStore, $forums } from '@forumline/client-sdk';
 import store from './state/store.js';
 
 let nav = {};
@@ -52,7 +52,7 @@ function navigateToState(state) {
     nav.showHome({ skipHistory: true });
   } else if (state.view === 'forum' && state.forumId) {
     // Check if this is a real forum (has a domain) — use webview
-    if (state.isReal || ForumStore.forums.some(f => f.domain === state.forumId)) {
+    if (state.isReal || $forums.get().some(f => f.domain === state.forumId)) {
       ForumStore.switchForum(state.forumId);
     } else {
       nav.showForum(state.forumId, { skipHistory: true });

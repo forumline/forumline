@@ -1,4 +1,4 @@
-import { ForumlineAPI, ForumStore } from '@forumline/client-sdk';
+import { ForumlineAPI, $forums } from '@forumline/client-sdk';
 import { avatarUrl } from '../lib/avatar.js';
 import { $ } from '../lib/utils.js';
 import store from '../state/store.js';
@@ -21,7 +21,7 @@ function timeAgo(timestamp) {
 
 function updateForumsJoinedStat() {
   const el = $('statForumsJoined');
-  if (el) el.textContent = ForumStore.forums.length;
+  if (el) el.textContent = $forums.get().length;
 }
 
 function renderNetworkStats() {
@@ -35,7 +35,7 @@ function renderNetworkStats() {
 }
 
 // Update forums count when memberships sync
-ForumStore.subscribe(() => updateForumsJoinedStat());
+$forums.subscribe(() => updateForumsJoinedStat());
 
 export function renderActivityFeed() {
   const el = $('activityFeed');
