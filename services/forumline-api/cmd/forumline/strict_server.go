@@ -15,7 +15,6 @@ import (
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/events"
-	"github.com/forumline/forumline/backend/httpkit"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/services/forumline-api/oapi"
@@ -107,8 +106,7 @@ type StrictServer struct {
 	callSvc  *service.CallService
 	pushSvc  *service.PushService
 	lkCfg    *lkConfig
-	dmRL     *httpkit.ValkeyRateLimiter
-	sseHub   *sse.Hub
+	sseHub *sse.Hub
 	tracker  *presence.Tracker
 	eventBus pubsub.EventBus
 }
@@ -343,9 +341,6 @@ func (s *StrictServer) GetMessages(ctx context.Context, req oapi.GetMessagesRequ
 
 func (s *StrictServer) SendMessage(ctx context.Context, req oapi.SendMessageRequestObject) (oapi.SendMessageResponseObject, error) {
 	userID := auth.UserIDFromContext(ctx)
-	if s.dmRL != nil && !s.dmRL.Allow(userID) {
-		return nil, &service.ValidationError{Msg: "rate limit exceeded"}
-	}
 	if req.Body == nil {
 		return nil, &service.ValidationError{Msg: "request body required"}
 	}

@@ -116,17 +116,18 @@ func TestCORSMiddleware_Preflight(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", testAppOrigin)
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("handler should not be called for OPTIONS")
+		t.Fatal("handler should not be called for OPTIONS preflight")
 	}))
 
 	req := httptest.NewRequestWithContext(context.Background(), "OPTIONS", "/test", nil)
 	req.Header.Set("Origin", testAppOrigin)
+	req.Header.Set("Access-Control-Request-Method", "GET")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want %d", rr.Code, http.StatusNoContent)
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
 	if got := rr.Header().Get("Access-Control-Max-Age"); got != "86400" {
 		t.Errorf("Max-Age = %q, want %q", got, "86400")
@@ -145,8 +146,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 	expected := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "DENY",
-		"X-XSS-Protection":      "1; mode=block",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
 	}
 	for header, want := range expected {
 		if got := rr.Header().Get(header); got != want {
@@ -155,84 +155,10 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
-func TestRateLimiter_BasicLimiting(t *testing.T) {
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    3,
-		window:   time.Minute,
-	}
+func TestIPRateLimit_Blocks(t *testing.T) {
+	t.Setenv("TRUST_PROXY", "false")
 
-	for i := 0; i < 3; i++ {
-		if !rl.Allow("192.168.1.1") {
-			t.Fatalf("request %d should be allowed", i+1)
-		}
-	}
-	if rl.Allow("192.168.1.1") {
-		t.Fatal("4th request should be rejected")
-	}
-}
-
-func TestRateLimiter_DifferentIPs(t *testing.T) {
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   time.Minute,
-	}
-
-	if !rl.Allow("10.0.0.1") {
-		t.Fatal("first IP should be allowed")
-	}
-	if !rl.Allow("10.0.0.2") {
-		t.Fatal("different IP should be allowed")
-	}
-}
-
-func TestRateLimiter_WindowExpiry(t *testing.T) {
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   10 * time.Millisecond,
-	}
-
-	rl.Allow("1.1.1.1")
-	if rl.Allow("1.1.1.1") {
-		t.Fatal("should be rate limited")
-	}
-
-	time.Sleep(15 * time.Millisecond)
-	if !rl.Allow("1.1.1.1") {
-		t.Fatal("should be allowed after window expires")
-	}
-}
-
-func TestRateLimiter_Cleanup(t *testing.T) {
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   10 * time.Millisecond,
-	}
-
-	rl.Allow("1.1.1.1")
-	time.Sleep(15 * time.Millisecond)
-	rl.cleanup()
-
-	rl.mu.Lock()
-	_, exists := rl.requests["1.1.1.1"]
-	rl.mu.Unlock()
-
-	if exists {
-		t.Fatal("expired entry should be cleaned up")
-	}
-}
-
-func TestRateLimitMiddleware_Blocks(t *testing.T) {
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   time.Minute,
-	}
-
-	handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := IPRateLimit(1, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -253,16 +179,10 @@ func TestRateLimitMiddleware_Blocks(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddleware_TrustProxy(t *testing.T) {
+func TestIPRateLimit_TrustProxy(t *testing.T) {
 	t.Setenv("TRUST_PROXY", "true")
 
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   time.Minute,
-	}
-
-	handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := IPRateLimit(1, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -284,16 +204,10 @@ func TestRateLimitMiddleware_TrustProxy(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddleware_NoTrustProxy(t *testing.T) {
+func TestIPRateLimit_NoTrustProxy(t *testing.T) {
 	t.Setenv("TRUST_PROXY", "false")
 
-	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		limit:    1,
-		window:   time.Minute,
-	}
-
-	handler := RateLimitMiddleware(rl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := IPRateLimit(1, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

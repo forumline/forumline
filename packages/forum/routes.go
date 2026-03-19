@@ -53,11 +53,11 @@ func NewRouter(cfg *Config) http.Handler {
 
 	// Middleware
 	auth := cfg.Auth.Middleware()
-	chatRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 60, time.Minute))
-	writeRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 20, time.Minute))
-	uploadRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 5, time.Minute))
-	importRL := httpkit.UserRateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 3, time.Minute))
-	authRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(cfg.ValkeyClient, 20, time.Minute))
+	chatRL := httpkit.UserRateLimit(60, time.Minute)
+	writeRL := httpkit.UserRateLimit(20, time.Minute)
+	uploadRL := httpkit.UserRateLimit(5, time.Minute)
+	importRL := httpkit.UserRateLimit(3, time.Minute)
+	authRL := httpkit.IPRateLimit(20, time.Minute)
 
 	r := chi.NewRouter()
 

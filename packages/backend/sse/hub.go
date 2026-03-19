@@ -10,7 +10,7 @@ import (
 
 // Client represents a connected SSE client with a filter.
 type Client struct {
-	Channel    string                                 // LISTEN channel name
+	Channel    string                                 // event channel name
 	Filter     map[string]string                      // e.g. {"recipient_id": "uuid"}
 	FilterFunc func(data map[string]interface{}) bool // dynamic filter (used instead of Filter when set)
 	Send       chan []byte

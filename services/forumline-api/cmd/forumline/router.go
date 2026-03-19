@@ -39,9 +39,6 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 	callSvc := service.NewCallService(s, pushSvc, bus)
 	presenceTracker := presence.NewTracker(90*time.Second, valkey)
 
-	// Rate limiter for DMs — per-user, 30 msgs/minute
-	dmRL := httpkit.NewValkeyRateLimiter(valkey, 30, time.Minute)
-
 	// Strict server — implements all spec endpoints
 	ss := &StrictServer{
 		store:    s,
@@ -54,7 +51,6 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 			APIKey:    os.Getenv("LIVEKIT_API_KEY"),
 			APISecret: os.Getenv("LIVEKIT_API_SECRET"),
 		},
-		dmRL:     dmRL,
 		sseHub:   sseHub,
 		tracker:  presenceTracker,
 		eventBus: bus,
@@ -73,7 +69,7 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 	}
 
 	authMW := auth.Middleware
-	webhookRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkey, 100, time.Minute))
+	webhookRL := httpkit.IPRateLimit(100, time.Minute)
 
 	// ── Public routes (no auth) ──────────────────────────────────────────
 
@@ -102,7 +98,7 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 		r.Get("/api/conversations/{conversationId}", w.GetConversation)
 		r.Patch("/api/conversations/{conversationId}", w.UpdateConversation)
 		r.Get("/api/conversations/{conversationId}/messages", w.GetMessages)
-		r.Post("/api/conversations/{conversationId}/messages", w.SendMessage)
+		r.With(httpkit.UserRateLimit(30, time.Minute)).Post("/api/conversations/{conversationId}/messages", w.SendMessage)
 		r.Post("/api/conversations/{conversationId}/read", w.MarkConversationRead)
 		r.Delete("/api/conversations/{conversationId}/members/me", w.LeaveConversation)
 
@@ -176,7 +172,7 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 		r.Use(authMW)
 		r.Get("/api/dms", convoH.HandleList)
 		r.Get("/api/dms/{userId}", convoH.HandleLegacyGetMessages)
-		r.With(httpkit.UserRateLimitMiddleware(dmRL)).Post("/api/dms/{userId}", convoH.HandleLegacySendMessage)
+		r.With(httpkit.UserRateLimit(30, time.Minute)).Post("/api/dms/{userId}", convoH.HandleLegacySendMessage)
 		r.Post("/api/dms/{userId}/read", convoH.HandleLegacyMarkRead)
 	})
 

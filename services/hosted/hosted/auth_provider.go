@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/forumline/forumline/backend/auth"
+	"github.com/forumline/forumline/backend/httpkit"
 	"github.com/forumline/forumline/forum"
 	"github.com/forumline/forumline/forum/store"
 	"github.com/forumline/forumline/services/hosted/idclient"
@@ -57,7 +58,7 @@ func (p *ForumlineAuthProvider) Middleware() func(http.Handler) http.Handler {
 // Redirects to id.forumline.net to start the "Sign in with Forumline" flow.
 func (p *ForumlineAuthProvider) StartLogin(w http.ResponseWriter, r *http.Request) {
 	if p.IdentityURL == "" {
-		writeJSONHelper(w, http.StatusServiceUnavailable, map[string]string{"error": "identity service not configured"})
+		httpkit.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "identity service not configured"})
 		return
 	}
 
@@ -84,13 +85,13 @@ func (p *ForumlineAuthProvider) HandleCallback(w http.ResponseWriter, r *http.Re
 	cookies := parseCookiesHelper(r)
 	state := r.URL.Query().Get("state")
 	if state == "" || cookies[cookieState] != state {
-		writeJSONHelper(w, http.StatusBadRequest, map[string]string{"error": "state mismatch"})
+		httpkit.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "state mismatch"})
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		writeJSONHelper(w, http.StatusBadRequest, map[string]string{"error": "missing auth code"})
+		httpkit.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing auth code"})
 		return
 	}
 
@@ -134,14 +135,14 @@ func (p *ForumlineAuthProvider) TokenExchange(w http.ResponseWriter, r *http.Req
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-		writeJSONHelper(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
+		httpkit.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "token is required"})
 		return
 	}
 
 	userInfo, err := p.validateForumlineToken(r, req.Token)
 	if err != nil {
 		log.Printf("[Forumline:TokenExchange] validation failed: %v", err)
-		writeJSONHelper(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		httpkit.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 		return
 	}
 
@@ -154,11 +155,11 @@ func (p *ForumlineAuthProvider) TokenExchange(w http.ResponseWriter, r *http.Req
 	localUserID, err := p.CreateOrLinkUser(r.Context(), identity)
 	if err != nil {
 		log.Printf("[Forumline:TokenExchange] createOrLinkUser failed: %v", err)
-		writeJSONHelper(w, http.StatusInternalServerError, map[string]string{"error": "failed to create profile"})
+		httpkit.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create profile"})
 		return
 	}
 
-	writeJSONHelper(w, http.StatusOK, map[string]interface{}{
+	httpkit.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"access_token":  req.Token,
 		"local_user_id": localUserID,
 		"user": map[string]string{
@@ -175,11 +176,11 @@ func (p *ForumlineAuthProvider) GetSession(w http.ResponseWriter, r *http.Reques
 	cookies := parseCookiesHelper(r)
 	localUserID := cookies[cookieUserID]
 	if localUserID == "" {
-		writeJSONHelper(w, http.StatusOK, nil)
+		httpkit.WriteJSON(w, http.StatusOK, nil)
 		return
 	}
 
-	writeJSONHelper(w, http.StatusOK, map[string]interface{}{
+	httpkit.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"local_user_id": localUserID,
 	})
 }
@@ -187,7 +188,7 @@ func (p *ForumlineAuthProvider) GetSession(w http.ResponseWriter, r *http.Reques
 // Logout handles DELETE /api/forumline/auth/session.
 func (p *ForumlineAuthProvider) Logout(w http.ResponseWriter, r *http.Request) {
 	clearCookieHelper(w, cookieUserID)
-	writeJSONHelper(w, http.StatusOK, map[string]bool{"ok": true})
+	httpkit.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // CreateOrLinkUser creates a local forum profile for the given identity,
@@ -283,14 +284,6 @@ func (e *idError) Error() string {
 }
 
 // --- Helpers (local to main package) ---
-
-func writeJSONHelper(w http.ResponseWriter, status int, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
-}
 
 func parseCookiesHelper(r *http.Request) map[string]string {
 	cookies := make(map[string]string)
