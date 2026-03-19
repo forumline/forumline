@@ -31,6 +31,16 @@ func (h *ConversationHandler) HandleList(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch conversations"})
 		return
 	}
+
+	// Populate unread counts from JetStream.
+	for i := range convos {
+		count, err := h.Service.JSM.GetUnreadCount(convos[i].ID.String(), uint64(convos[i].LastReadSeq))
+		if err != nil {
+			log.Printf("[Conversations] unread count error for %s: %v", convos[i].ID, err)
+		}
+		convos[i].UnreadCount = count
+	}
+
 	writeJSON(w, http.StatusOK, convos)
 }
 
@@ -46,6 +56,11 @@ func (h *ConversationHandler) HandleGet(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
+
+	// Populate unread count from JetStream.
+	count, _ := h.Service.JSM.GetUnreadCount(c.ID.String(), uint64(c.LastReadSeq))
+	c.UnreadCount = count
+
 	writeJSON(w, http.StatusOK, c)
 }
 
@@ -160,7 +175,27 @@ func (h *ConversationHandler) HandleMarkRead(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Conversation not found"})
 		return
 	}
-	if err := h.Store.MarkRead(r.Context(), convoID, userID); err != nil {
+
+	// Accept optional sequence number in body; default to "mark all as read"
+	// by getting the stream's last sequence.
+	var body struct {
+		Sequence *uint64 `json:"sequence"`
+	}
+	// Body is optional — POST with empty body marks everything as read.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	var seq int64
+	if body.Sequence != nil {
+		seq = int64(*body.Sequence)
+	} else {
+		// No sequence provided — get the latest from JetStream.
+		unread, _ := h.Service.JSM.GetUnreadCount(convoID.String(), 0)
+		seq = int64(unread) // This is actually lastSeq since lastReadSeq=0
+		// Actually we need the stream's last sequence directly.
+		// GetUnreadCount(id, 0) returns lastSeq - 0 = lastSeq. Bingo.
+	}
+
+	if err := h.Store.MarkReadSeq(r.Context(), convoID, userID, seq); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
 		return
 	}
@@ -224,7 +259,13 @@ func (h *ConversationHandler) HandleLegacyMarkRead(w http.ResponseWriter, r *htt
 		return
 	}
 	userID := auth.UserIDFromContext(r.Context())
-	if err := h.Store.MarkRead(r.Context(), uuid.MustParse(convoID), userID); err != nil {
+	convoUUID := uuid.MustParse(convoID)
+
+	// Mark all as read: get the stream's last sequence.
+	unreadFromZero, _ := h.Service.JSM.GetUnreadCount(convoID, 0)
+	seq := int64(unreadFromZero)
+
+	if err := h.Store.MarkReadSeq(r.Context(), convoUUID, userID, seq); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to mark as read"})
 		return
 	}
@@ -241,3 +282,4 @@ func (h *ConversationHandler) resolveConversationID(w http.ResponseWriter, r *ht
 	}
 	return convoID.String()
 }
+

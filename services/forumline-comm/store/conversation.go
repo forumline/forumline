@@ -3,12 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/forumline/forumline/services/forumline-comm/sqlcdb"
 )
@@ -21,6 +20,7 @@ type Conversation struct {
 	LastMessage     string               `json:"lastMessage"`
 	LastMessageTime string               `json:"lastMessageTime"`
 	UnreadCount     int                  `json:"unreadCount"`
+	LastReadSeq     int64                `json:"lastReadSeq"`
 }
 
 type ConversationMember struct {
@@ -30,12 +30,15 @@ type ConversationMember struct {
 	AvatarURL   *string `json:"avatarUrl"`
 }
 
+// DirectMessage is the API response shape for DM messages.
+// With JetStream, these are constructed from pubsub.ConversationMessage.
 type DirectMessage struct {
-	ID             uuid.UUID `json:"id"`
-	ConversationID uuid.UUID `json:"conversation_id"`
+	ID             string    `json:"id"`
+	ConversationID string    `json:"conversation_id"`
 	SenderID       string    `json:"sender_id"`
 	Content        string    `json:"content"`
 	CreatedAt      time.Time `json:"created_at"`
+	Sequence       uint64    `json:"sequence"`
 }
 
 func (s *Store) ListConversations(ctx context.Context, userID string) ([]Conversation, error) {
@@ -68,7 +71,7 @@ func (s *Store) ListConversations(ctx context.Context, userID string) ([]Convers
 			ID: r.ID, IsGroup: r.IsGroup, Name: r.Name,
 			Members: members, LastMessage: r.LastMessage,
 			LastMessageTime: r.LastMessageTime.Format(time.RFC3339),
-			UnreadCount:     int(r.UnreadCount),
+			LastReadSeq:     r.LastReadSeq,
 		})
 	}
 	return conversations, nil
@@ -95,7 +98,7 @@ func (s *Store) GetConversation(ctx context.Context, userID string, conversation
 		ID: row.ID, IsGroup: row.IsGroup, Name: row.Name,
 		Members: members, LastMessage: row.LastMessage,
 		LastMessageTime: row.LastMessageTime.Format(time.RFC3339),
-		UnreadCount:     int(row.UnreadCount),
+		LastReadSeq:     row.LastReadSeq,
 	}, nil
 }
 
@@ -125,77 +128,28 @@ func (s *Store) IsConversationMember(ctx context.Context, conversationID uuid.UU
 	})
 }
 
-func (s *Store) GetMessages(ctx context.Context, conversationID uuid.UUID, before string, limitStr string) ([]DirectMessage, error) {
-	limit := 50
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-		limit = int(math.Min(float64(l), 100))
-	}
-
-	var dbMessages []sqlcdb.ForumlineDirectMessage
-
-	if before != "" {
-		beforeID, err := uuid.Parse(before)
-		if err != nil {
-			return nil, fmt.Errorf("invalid before cursor: %w", err)
-		}
-		rows, err := s.Q.GetMessagesBefore(ctx, sqlcdb.GetMessagesBeforeParams{
-			ConversationID: conversationID,
-			BeforeID:       beforeID,
-			MsgLimit:       int32(min(limit, 1000)), //nolint:gosec // bounded
-		})
-		if err != nil {
-			return nil, err
-		}
-		dbMessages = rows
-	} else {
-		rows, err := s.Q.GetMessagesLatest(ctx, sqlcdb.GetMessagesLatestParams{
-			ConversationID: conversationID,
-			Limit:          int32(min(limit, 1000)), //nolint:gosec // bounded
-		})
-		if err != nil {
-			return nil, err
-		}
-		dbMessages = rows
-	}
-
-	messages := make([]DirectMessage, len(dbMessages))
-	for i, m := range dbMessages {
-		messages[i] = DirectMessage{
-			ID:             m.ID,
-			ConversationID: m.ConversationID,
-			SenderID:       m.SenderID,
-			Content:        m.Content,
-			CreatedAt:      m.CreatedAt,
-		}
-	}
-
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
-	return messages, nil
-}
-
-func (s *Store) SendMessage(ctx context.Context, conversationID uuid.UUID, senderID, content string) (*DirectMessage, error) {
-	row, err := s.Q.SendMessage(ctx, sqlcdb.SendMessageParams{
+// TouchConversationWithMessage updates the denormalized last-message columns.
+func (s *Store) TouchConversationWithMessage(ctx context.Context, conversationID uuid.UUID, senderID, content string, messageAt time.Time) error {
+	return s.Q.TouchConversationWithMessage(ctx, sqlcdb.TouchConversationWithMessageParams{
+		Content:        &content,
+		SenderID:       &senderID,
+		MessageAt:      &messageAt,
 		ConversationID: conversationID,
-		SenderID:       senderID,
-		Content:        content,
 	})
-	if err != nil {
-		return nil, err
-	}
-	_ = s.Q.TouchConversation(ctx, conversationID)
-	return &DirectMessage{
-		ID:             row.ID,
-		ConversationID: row.ConversationID,
-		SenderID:       row.SenderID,
-		Content:        row.Content,
-		CreatedAt:      row.CreatedAt,
-	}, nil
 }
 
-func (s *Store) MarkRead(ctx context.Context, conversationID uuid.UUID, userID string) error {
-	return s.Q.MarkRead(ctx, sqlcdb.MarkReadParams{
+// MarkReadSeq stores the JetStream sequence number of the last read message.
+func (s *Store) MarkReadSeq(ctx context.Context, conversationID uuid.UUID, userID string, seq int64) error {
+	return s.Q.MarkReadSeq(ctx, sqlcdb.MarkReadSeqParams{
+		LastReadSeq:    pgtype.Int8{Int64: seq, Valid: true},
+		ConversationID: conversationID,
+		UserID:         userID,
+	})
+}
+
+// GetMemberLastReadSeq returns the last_read_seq for a member.
+func (s *Store) GetMemberLastReadSeq(ctx context.Context, conversationID uuid.UUID, userID string) (int64, error) {
+	return s.Q.GetMemberLastReadSeq(ctx, sqlcdb.GetMemberLastReadSeqParams{
 		ConversationID: conversationID,
 		UserID:         userID,
 	})

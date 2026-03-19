@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS forumline_conversations (
   is_group BOOLEAN NOT NULL DEFAULT false,
   name TEXT,
   created_by TEXT REFERENCES forumline_profiles(id),
+  last_message_content TEXT,
+  last_message_sender_id TEXT,
+  last_message_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -58,6 +61,7 @@ CREATE TABLE IF NOT EXISTS forumline_conversation_members (
   user_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_read_at TIMESTAMPTZ NOT NULL DEFAULT '1970-01-01',
+  last_read_seq BIGINT DEFAULT 0,
   PRIMARY KEY (conversation_id, user_id)
 );
 
@@ -71,14 +75,6 @@ CREATE TABLE IF NOT EXISTS forumline_calls (
   started_at TIMESTAMPTZ,
   ended_at TIMESTAMPTZ,
   duration_seconds INTEGER,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS forumline_direct_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID NOT NULL REFERENCES forumline_conversations(id) ON DELETE CASCADE,
-  sender_id TEXT NOT NULL REFERENCES forumline_profiles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

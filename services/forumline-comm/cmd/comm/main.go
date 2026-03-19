@@ -69,6 +69,13 @@ func main() {
 	defer bus.Close()
 	var eventBus pubsub.EventBus = bus
 
+	jsm, err := pubsub.NewJetStreamManager(natsURL)
+	if err != nil {
+		log.Fatalf("failed to init JetStream: %v", err)
+	}
+	defer jsm.Close()
+	log.Println("NATS JetStream manager initialized")
+
 	wmLogger := watermill.NewStdLogger(false, false)
 	wmRouter, err := message.NewRouter(message.RouterConfig{}, wmLogger)
 	if err != nil {
@@ -96,7 +103,7 @@ func main() {
 
 	log.Println("realtime: Watermill event bus active")
 
-	convoSvc := service.NewConversationService(s, eventBus)
+	convoSvc := service.NewConversationService(s, eventBus, jsm)
 	lkCfg := handler.NewLiveKitConfigFromEnv()
 	var lkClient *service.LiveKitClient
 	if lkCfg.URL != "" && lkCfg.APIKey != "" && lkCfg.APISecret != "" {

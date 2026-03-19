@@ -1,34 +1,21 @@
 -- name: ListConversations :many
 SELECT
     c.id, c.is_group, c.name,
-    COALESCE(m.content, '') AS last_message,
-    COALESCE(m.created_at, c.created_at) AS last_message_time,
-    (SELECT count(*) FROM forumline_direct_messages dm2
-     WHERE dm2.conversation_id = c.id
-       AND dm2.sender_id != @user_id
-       AND dm2.created_at > cm.last_read_at)::int AS unread_count
+    COALESCE(c.last_message_content, '') AS last_message,
+    COALESCE(c.last_message_at, c.created_at) AS last_message_time,
+    COALESCE(cm.last_read_seq, 0)::bigint AS last_read_seq
 FROM forumline_conversations c
 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = @user_id
-LEFT JOIN LATERAL (
-    SELECT content, created_at FROM forumline_direct_messages
-    WHERE conversation_id = c.id
-    ORDER BY created_at DESC LIMIT 1
-) m ON true
-ORDER BY COALESCE(m.created_at, c.created_at) DESC
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
 LIMIT 100;
 
 -- name: GetConversation :one
 SELECT c.id, c.is_group, c.name,
-    COALESCE(m.content, '') AS last_message,
-    COALESCE(m.created_at, c.created_at) AS last_message_time,
-    (SELECT count(*) FROM forumline_direct_messages dm2
-     WHERE dm2.conversation_id = c.id AND dm2.sender_id != @user_id AND dm2.created_at > cm.last_read_at)::int AS unread_count
+    COALESCE(c.last_message_content, '') AS last_message,
+    COALESCE(c.last_message_at, c.created_at) AS last_message_time,
+    COALESCE(cm.last_read_seq, 0)::bigint AS last_read_seq
 FROM forumline_conversations c
 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = @user_id
-LEFT JOIN LATERAL (
-    SELECT content, created_at FROM forumline_direct_messages
-    WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
-) m ON true
 WHERE c.id = @conversation_id;
 
 -- name: FetchConversationMembers :many
@@ -43,28 +30,17 @@ SELECT user_id FROM forumline_conversation_members WHERE conversation_id = $1;
 -- name: IsConversationMember :one
 SELECT EXISTS(SELECT 1 FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2);
 
--- name: GetMessagesBefore :many
-SELECT dm.id, dm.conversation_id, dm.sender_id, dm.content, dm.created_at
-FROM forumline_direct_messages dm
-WHERE dm.conversation_id = @conversation_id AND dm.created_at < (SELECT dm2.created_at FROM forumline_direct_messages dm2 WHERE dm2.id = @before_id)
-ORDER BY dm.created_at DESC LIMIT @msg_limit;
+-- name: TouchConversationWithMessage :exec
+UPDATE forumline_conversations
+SET updated_at = now(),
+    last_message_content = @content,
+    last_message_sender_id = @sender_id,
+    last_message_at = @message_at
+WHERE id = @conversation_id;
 
--- name: GetMessagesLatest :many
-SELECT id, conversation_id, sender_id, content, created_at
-FROM forumline_direct_messages
-WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT $2;
-
--- name: SendMessage :one
-INSERT INTO forumline_direct_messages (conversation_id, sender_id, content)
-VALUES ($1, $2, $3)
-RETURNING id, conversation_id, sender_id, content, created_at;
-
--- name: TouchConversation :exec
-UPDATE forumline_conversations SET updated_at = now() WHERE id = $1;
-
--- name: MarkRead :exec
-UPDATE forumline_conversation_members SET last_read_at = now()
-WHERE conversation_id = $1 AND user_id = $2;
+-- name: MarkReadSeq :exec
+UPDATE forumline_conversation_members SET last_read_seq = $1
+WHERE conversation_id = $2 AND user_id = $3;
 
 -- name: Find1to1Conversation :one
 SELECT c.id FROM forumline_conversations c
@@ -100,3 +76,8 @@ DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_i
 
 -- name: LeaveConversation :exec
 DELETE FROM forumline_conversation_members WHERE conversation_id = $1 AND user_id = $2;
+
+-- name: GetMemberLastReadSeq :one
+SELECT COALESCE(last_read_seq, 0)::bigint AS last_read_seq
+FROM forumline_conversation_members
+WHERE conversation_id = @conversation_id AND user_id = @user_id;

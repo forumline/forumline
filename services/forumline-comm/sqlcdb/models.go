@@ -17,6 +17,7 @@ type ForumlineCall struct {
 	CallerID        string      `json:"caller_id"`
 	CalleeID        string      `json:"callee_id"`
 	Status          string      `json:"status"`
+	RoomName        *string     `json:"room_name"`
 	StartedAt       *time.Time  `json:"started_at"`
 	EndedAt         *time.Time  `json:"ended_at"`
 	DurationSeconds pgtype.Int4 `json:"duration_seconds"`
@@ -24,27 +25,23 @@ type ForumlineCall struct {
 }
 
 type ForumlineConversation struct {
-	ID        uuid.UUID `json:"id"`
-	IsGroup   bool      `json:"is_group"`
-	Name      *string   `json:"name"`
-	CreatedBy *string   `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                  uuid.UUID  `json:"id"`
+	IsGroup             bool       `json:"is_group"`
+	Name                *string    `json:"name"`
+	CreatedBy           *string    `json:"created_by"`
+	LastMessageContent  *string    `json:"last_message_content"`
+	LastMessageSenderID *string    `json:"last_message_sender_id"`
+	LastMessageAt       *time.Time `json:"last_message_at"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type ForumlineConversationMember struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	UserID         string    `json:"user_id"`
-	JoinedAt       time.Time `json:"joined_at"`
-	LastReadAt     time.Time `json:"last_read_at"`
-}
-
-type ForumlineDirectMessage struct {
-	ID             uuid.UUID `json:"id"`
-	ConversationID uuid.UUID `json:"conversation_id"`
-	SenderID       string    `json:"sender_id"`
-	Content        string    `json:"content"`
-	CreatedAt      time.Time `json:"created_at"`
+	ConversationID uuid.UUID   `json:"conversation_id"`
+	UserID         string      `json:"user_id"`
+	JoinedAt       time.Time   `json:"joined_at"`
+	LastReadAt     time.Time   `json:"last_read_at"`
+	LastReadSeq    pgtype.Int8 `json:"last_read_seq"`
 }
 
 type ForumlineForum struct {

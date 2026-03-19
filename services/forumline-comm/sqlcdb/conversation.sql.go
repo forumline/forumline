@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addConversationMembers = `-- name: AddConversationMembers :exec
@@ -108,16 +109,11 @@ func (q *Queries) Find1to1Conversation(ctx context.Context, arg Find1to1Conversa
 
 const getConversation = `-- name: GetConversation :one
 SELECT c.id, c.is_group, c.name,
-    COALESCE(m.content, '') AS last_message,
-    COALESCE(m.created_at, c.created_at) AS last_message_time,
-    (SELECT count(*) FROM forumline_direct_messages dm2
-     WHERE dm2.conversation_id = c.id AND dm2.sender_id != $1 AND dm2.created_at > cm.last_read_at)::int AS unread_count
+    COALESCE(c.last_message_content, '') AS last_message,
+    COALESCE(c.last_message_at, c.created_at) AS last_message_time,
+    COALESCE(cm.last_read_seq, 0)::bigint AS last_read_seq
 FROM forumline_conversations c
 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-LEFT JOIN LATERAL (
-    SELECT content, created_at FROM forumline_direct_messages
-    WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
-) m ON true
 WHERE c.id = $2
 `
 
@@ -132,7 +128,7 @@ type GetConversationRow struct {
 	Name            *string   `json:"name"`
 	LastMessage     string    `json:"last_message"`
 	LastMessageTime time.Time `json:"last_message_time"`
-	UnreadCount     int32     `json:"unread_count"`
+	LastReadSeq     int64     `json:"last_read_seq"`
 }
 
 func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams) (GetConversationRow, error) {
@@ -144,7 +140,7 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 		&i.Name,
 		&i.LastMessage,
 		&i.LastMessageTime,
-		&i.UnreadCount,
+		&i.LastReadSeq,
 	)
 	return i, err
 }
@@ -173,80 +169,22 @@ func (q *Queries) GetConversationMemberIDs(ctx context.Context, conversationID u
 	return items, nil
 }
 
-const getMessagesBefore = `-- name: GetMessagesBefore :many
-SELECT dm.id, dm.conversation_id, dm.sender_id, dm.content, dm.created_at
-FROM forumline_direct_messages dm
-WHERE dm.conversation_id = $1 AND dm.created_at < (SELECT dm2.created_at FROM forumline_direct_messages dm2 WHERE dm2.id = $2)
-ORDER BY dm.created_at DESC LIMIT $3
+const getMemberLastReadSeq = `-- name: GetMemberLastReadSeq :one
+SELECT COALESCE(last_read_seq, 0)::bigint AS last_read_seq
+FROM forumline_conversation_members
+WHERE conversation_id = $1 AND user_id = $2
 `
 
-type GetMessagesBeforeParams struct {
+type GetMemberLastReadSeqParams struct {
 	ConversationID uuid.UUID `json:"conversation_id"`
-	BeforeID       uuid.UUID `json:"before_id"`
-	MsgLimit       int32     `json:"msg_limit"`
+	UserID         string    `json:"user_id"`
 }
 
-func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforeParams) ([]ForumlineDirectMessage, error) {
-	rows, err := q.db.Query(ctx, getMessagesBefore, arg.ConversationID, arg.BeforeID, arg.MsgLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ForumlineDirectMessage{}
-	for rows.Next() {
-		var i ForumlineDirectMessage
-		if err := rows.Scan(
-			&i.ID,
-			&i.ConversationID,
-			&i.SenderID,
-			&i.Content,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getMessagesLatest = `-- name: GetMessagesLatest :many
-SELECT id, conversation_id, sender_id, content, created_at
-FROM forumline_direct_messages
-WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT $2
-`
-
-type GetMessagesLatestParams struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	Limit          int32     `json:"limit"`
-}
-
-func (q *Queries) GetMessagesLatest(ctx context.Context, arg GetMessagesLatestParams) ([]ForumlineDirectMessage, error) {
-	rows, err := q.db.Query(ctx, getMessagesLatest, arg.ConversationID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ForumlineDirectMessage{}
-	for rows.Next() {
-		var i ForumlineDirectMessage
-		if err := rows.Scan(
-			&i.ID,
-			&i.ConversationID,
-			&i.SenderID,
-			&i.Content,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetMemberLastReadSeq(ctx context.Context, arg GetMemberLastReadSeqParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getMemberLastReadSeq, arg.ConversationID, arg.UserID)
+	var last_read_seq int64
+	err := row.Scan(&last_read_seq)
+	return last_read_seq, err
 }
 
 const insert1to1Members = `-- name: Insert1to1Members :exec
@@ -329,20 +267,12 @@ func (q *Queries) LeaveConversation(ctx context.Context, arg LeaveConversationPa
 const listConversations = `-- name: ListConversations :many
 SELECT
     c.id, c.is_group, c.name,
-    COALESCE(m.content, '') AS last_message,
-    COALESCE(m.created_at, c.created_at) AS last_message_time,
-    (SELECT count(*) FROM forumline_direct_messages dm2
-     WHERE dm2.conversation_id = c.id
-       AND dm2.sender_id != $1
-       AND dm2.created_at > cm.last_read_at)::int AS unread_count
+    COALESCE(c.last_message_content, '') AS last_message,
+    COALESCE(c.last_message_at, c.created_at) AS last_message_time,
+    COALESCE(cm.last_read_seq, 0)::bigint AS last_read_seq
 FROM forumline_conversations c
 JOIN forumline_conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-LEFT JOIN LATERAL (
-    SELECT content, created_at FROM forumline_direct_messages
-    WHERE conversation_id = c.id
-    ORDER BY created_at DESC LIMIT 1
-) m ON true
-ORDER BY COALESCE(m.created_at, c.created_at) DESC
+ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
 LIMIT 100
 `
 
@@ -352,7 +282,7 @@ type ListConversationsRow struct {
 	Name            *string   `json:"name"`
 	LastMessage     string    `json:"last_message"`
 	LastMessageTime time.Time `json:"last_message_time"`
-	UnreadCount     int32     `json:"unread_count"`
+	LastReadSeq     int64     `json:"last_read_seq"`
 }
 
 func (q *Queries) ListConversations(ctx context.Context, userID string) ([]ListConversationsRow, error) {
@@ -370,7 +300,7 @@ func (q *Queries) ListConversations(ctx context.Context, userID string) ([]ListC
 			&i.Name,
 			&i.LastMessage,
 			&i.LastMessageTime,
-			&i.UnreadCount,
+			&i.LastReadSeq,
 		); err != nil {
 			return nil, err
 		}
@@ -382,18 +312,19 @@ func (q *Queries) ListConversations(ctx context.Context, userID string) ([]ListC
 	return items, nil
 }
 
-const markRead = `-- name: MarkRead :exec
-UPDATE forumline_conversation_members SET last_read_at = now()
-WHERE conversation_id = $1 AND user_id = $2
+const markReadSeq = `-- name: MarkReadSeq :exec
+UPDATE forumline_conversation_members SET last_read_seq = $1
+WHERE conversation_id = $2 AND user_id = $3
 `
 
-type MarkReadParams struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	UserID         string    `json:"user_id"`
+type MarkReadSeqParams struct {
+	LastReadSeq    pgtype.Int8 `json:"last_read_seq"`
+	ConversationID uuid.UUID   `json:"conversation_id"`
+	UserID         string      `json:"user_id"`
 }
 
-func (q *Queries) MarkRead(ctx context.Context, arg MarkReadParams) error {
-	_, err := q.db.Exec(ctx, markRead, arg.ConversationID, arg.UserID)
+func (q *Queries) MarkReadSeq(ctx context.Context, arg MarkReadSeqParams) error {
+	_, err := q.db.Exec(ctx, markReadSeq, arg.LastReadSeq, arg.ConversationID, arg.UserID)
 	return err
 }
 
@@ -411,37 +342,29 @@ func (q *Queries) RemoveConversationMembers(ctx context.Context, arg RemoveConve
 	return err
 }
 
-const sendMessage = `-- name: SendMessage :one
-INSERT INTO forumline_direct_messages (conversation_id, sender_id, content)
-VALUES ($1, $2, $3)
-RETURNING id, conversation_id, sender_id, content, created_at
+const touchConversationWithMessage = `-- name: TouchConversationWithMessage :exec
+UPDATE forumline_conversations
+SET updated_at = now(),
+    last_message_content = $1,
+    last_message_sender_id = $2,
+    last_message_at = $3
+WHERE id = $4
 `
 
-type SendMessageParams struct {
-	ConversationID uuid.UUID `json:"conversation_id"`
-	SenderID       string    `json:"sender_id"`
-	Content        string    `json:"content"`
+type TouchConversationWithMessageParams struct {
+	Content        *string    `json:"content"`
+	SenderID       *string    `json:"sender_id"`
+	MessageAt      *time.Time `json:"message_at"`
+	ConversationID uuid.UUID  `json:"conversation_id"`
 }
 
-func (q *Queries) SendMessage(ctx context.Context, arg SendMessageParams) (ForumlineDirectMessage, error) {
-	row := q.db.QueryRow(ctx, sendMessage, arg.ConversationID, arg.SenderID, arg.Content)
-	var i ForumlineDirectMessage
-	err := row.Scan(
-		&i.ID,
-		&i.ConversationID,
-		&i.SenderID,
-		&i.Content,
-		&i.CreatedAt,
+func (q *Queries) TouchConversationWithMessage(ctx context.Context, arg TouchConversationWithMessageParams) error {
+	_, err := q.db.Exec(ctx, touchConversationWithMessage,
+		arg.Content,
+		arg.SenderID,
+		arg.MessageAt,
+		arg.ConversationID,
 	)
-	return i, err
-}
-
-const touchConversation = `-- name: TouchConversation :exec
-UPDATE forumline_conversations SET updated_at = now() WHERE id = $1
-`
-
-func (q *Queries) TouchConversation(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, touchConversation, id)
 	return err
 }
 

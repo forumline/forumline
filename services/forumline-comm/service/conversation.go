@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,10 +18,11 @@ import (
 type ConversationService struct {
 	Store    *store.Store
 	EventBus pubsub.EventBus
+	JSM      *pubsub.JetStreamManager
 }
 
-func NewConversationService(s *store.Store, bus pubsub.EventBus) *ConversationService {
-	return &ConversationService{Store: s, EventBus: bus}
+func NewConversationService(s *store.Store, bus pubsub.EventBus, jsm *pubsub.JetStreamManager) *ConversationService {
+	return &ConversationService{Store: s, EventBus: bus, JSM: jsm}
 }
 
 func (cs *ConversationService) GetOrCreateDM(ctx context.Context, userID, otherUserID string) (uuid.UUID, error) {
@@ -36,7 +39,17 @@ func (cs *ConversationService) GetOrCreateDM(ctx context.Context, userID, otherU
 	if !exists {
 		return uuid.UUID{}, &NotFoundError{Msg: "user not found"}
 	}
-	return cs.Store.FindOrCreate1to1Conversation(ctx, userID, otherUserID)
+	convoID, err := cs.Store.FindOrCreate1to1Conversation(ctx, userID, otherUserID)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	// Ensure JetStream stream exists for this conversation.
+	if err := cs.JSM.EnsureConversationStream(convoID.String()); err != nil {
+		log.Printf("[dm] failed to ensure JetStream stream for %s: %v", convoID, err)
+	}
+
+	return convoID, nil
 }
 
 type CreateGroupInput struct {
@@ -68,6 +81,11 @@ func (cs *ConversationService) CreateGroup(ctx context.Context, userID string, i
 	convoID, err := cs.Store.CreateGroupConversation(ctx, input.Name, userID, allMembers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create group: %w", err)
+	}
+
+	// Ensure JetStream stream exists for this conversation.
+	if err := cs.JSM.EnsureConversationStream(convoID.String()); err != nil {
+		log.Printf("[dm] failed to ensure JetStream stream for group %s: %v", convoID, err)
 	}
 
 	profiles, _ := cs.Store.FetchProfilesByIDs(ctx, allMembers)
@@ -126,12 +144,43 @@ func (cs *ConversationService) Update(ctx context.Context, userID string, conver
 	return nil
 }
 
-func (cs *ConversationService) GetMessages(ctx context.Context, userID string, conversationID uuid.UUID, before, limit string) ([]store.DirectMessage, error) {
+func (cs *ConversationService) GetMessages(ctx context.Context, userID string, conversationID uuid.UUID, before, limitStr string) ([]store.DirectMessage, error) {
 	isMember, _ := cs.Store.IsConversationMember(ctx, conversationID, userID)
 	if !isMember {
 		return nil, &NotFoundError{Msg: "conversation not found"}
 	}
-	return cs.Store.GetMessages(ctx, conversationID, before, limit)
+
+	limit := 50
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = int(math.Min(float64(l), 100))
+	}
+
+	var beforeSeq uint64
+	if before != "" {
+		parsed, err := strconv.ParseUint(before, 10, 64)
+		if err != nil {
+			return nil, &ValidationError{Msg: "invalid before cursor"}
+		}
+		beforeSeq = parsed
+	}
+
+	msgs, err := cs.JSM.GetMessages(ctx, conversationID.String(), limit, beforeSeq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages: %w", err)
+	}
+
+	result := make([]store.DirectMessage, len(msgs))
+	for i, m := range msgs {
+		result[i] = store.DirectMessage{
+			ID:             m.ID,
+			ConversationID: conversationID.String(),
+			SenderID:       m.SenderID,
+			Content:        m.Content,
+			CreatedAt:      m.CreatedAt,
+			Sequence:       m.Sequence,
+		}
+	}
+	return result, nil
 }
 
 func (cs *ConversationService) SendMessage(ctx context.Context, userID string, conversationID uuid.UUID, content string) (*store.DirectMessage, error) {
@@ -143,18 +192,44 @@ func (cs *ConversationService) SendMessage(ctx context.Context, userID string, c
 	if content == "" || len(content) > 2000 {
 		return nil, &ValidationError{Msg: "message must be 1-2000 characters"}
 	}
-	msg, err := cs.Store.SendMessage(ctx, conversationID, userID, content)
-	if err != nil {
-		return nil, err
+
+	now := time.Now()
+	msgID := uuid.New().String()
+
+	jsMsg := &pubsub.ConversationMessage{
+		ID:        msgID,
+		SenderID:  userID,
+		Content:   content,
+		CreatedAt: now,
 	}
 
+	seq, err := cs.JSM.PublishMessage(conversationID.String(), jsMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to publish message: %w", err)
+	}
+
+	// Update denormalized last-message columns in Postgres.
+	if err := cs.Store.TouchConversationWithMessage(ctx, conversationID, userID, content, now); err != nil {
+		log.Printf("[dm] failed to touch conversation %s: %v", conversationID, err)
+	}
+
+	msg := &store.DirectMessage{
+		ID:             msgID,
+		ConversationID: conversationID.String(),
+		SenderID:       userID,
+		Content:        content,
+		CreatedAt:      now,
+		Sequence:       seq,
+	}
+
+	// Fire SSE events via the fire-and-forget Watermill bus.
 	if cs.EventBus != nil {
 		memberIDs, _ := cs.Store.GetConversationMemberIDs(ctx, conversationID)
 		if pubErr := events.Publish(cs.EventBus, ctx, "dm_changes", events.DmEvent{
-			ConversationID: msg.ConversationID,
+			ConversationID: conversationID,
 			SenderID:       msg.SenderID,
 			MemberIDs:      memberIDs,
-			ID:             msg.ID,
+			ID:             uuid.MustParse(msg.ID),
 			Content:        msg.Content,
 			CreatedAt:      msg.CreatedAt.Format(time.RFC3339Nano),
 		}); pubErr != nil {
@@ -162,7 +237,7 @@ func (cs *ConversationService) SendMessage(ctx context.Context, userID string, c
 		}
 
 		if pubErr := events.Publish(cs.EventBus, ctx, "push_dm", events.PushDmEvent{
-			ConversationID: msg.ConversationID,
+			ConversationID: conversationID,
 			SenderID:       msg.SenderID,
 			MemberIDs:      memberIDs,
 			Content:        msg.Content,
