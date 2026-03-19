@@ -14,15 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Use applies middleware to a handler, wrapping in right-to-left order.
-func Use(h http.HandlerFunc, mws ...func(http.Handler) http.Handler) http.Handler {
-	var handler http.Handler = h
-	for i := len(mws) - 1; i >= 0; i-- {
-		handler = mws[i](handler)
-	}
-	return handler
-}
-
 // CORSMiddleware handles CORS for the API.
 // Supports exact origins and wildcard subdomain patterns like "https://*.forumline.net".
 func CORSMiddleware(next http.Handler) http.Handler {

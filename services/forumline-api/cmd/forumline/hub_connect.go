@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 
 	"connectrpc.com/connect"
+	"github.com/go-chi/chi/v5"
+
 	hubv1 "github.com/forumline/forumline/rpc/forumline/hub/v1"
 	"github.com/forumline/forumline/rpc/forumline/hub/v1/hubv1connect"
 	"github.com/forumline/forumline/rpc/servicekey"
@@ -47,13 +48,16 @@ func (h *hubConnectServer) RegisterForum(
 	return connect.NewResponse(&hubv1.RegisterForumResponse{Created: true}), nil
 }
 
-// mountHubService registers the HubService Connect handler on the given mux.
+// mountHubService registers the HubService Connect handler on the chi router.
 // Requests must carry the correct INTERNAL_SERVICE_KEY header.
-func mountHubService(mux *http.ServeMux, forumSvc *service.ForumService) {
+func mountHubService(r chi.Router, forumSvc *service.ForumService) {
 	key := os.Getenv("INTERNAL_SERVICE_KEY")
 	path, handler := hubv1connect.NewHubServiceHandler(
 		&hubConnectServer{forumSvc: forumSvc},
 		connect.WithInterceptors(servicekey.NewServerInterceptor(key)),
 	)
-	mux.Handle(path, handler)
+	// Connect RPC uses prefix matching. Register with a catch-all param so
+	// chi routes /forumline.hub.v1.HubService/RegisterForum etc. to the
+	// handler. chi preserves r.URL.Path so Connect can read the method name.
+	r.Handle(path+"{method}", handler)
 }

@@ -25,6 +25,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/forumline/forumline/backend/httpkit"
 	"github.com/forumline/forumline/services/forumline-id/oapi"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
@@ -415,14 +417,19 @@ func main() {
 		},
 	}
 
+	r := chi.NewRouter()
+	r.Use(httpkit.SecurityHeaders)
+	r.Use(httpkit.CORSMiddleware)
+	r.Use(injectRequest)
+
+	// oapi-codegen routes use a stdlib mux (pattern syntax: "METHOD /path")
 	mux := http.NewServeMux()
 	strictHandler := oapi.NewStrictHandler(server, nil)
 	oapi.HandlerFromMux(strictHandler, mux)
+	r.Handle("/{rest...}", mux)
+	r.Handle("/", mux)
 
-	var handler http.Handler = mux
-	handler = injectRequest(handler)
-	handler = httpkit.CORSMiddleware(handler)
-	handler = httpkit.SecurityHeaders(handler)
+	var handler http.Handler = r
 
 	port := os.Getenv("PORT")
 	if port == "" {

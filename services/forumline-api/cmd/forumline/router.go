@@ -5,8 +5,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/httpkit"
+	"github.com/forumline/forumline/backend/metrics"
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/services/forumline-api/handler"
@@ -17,13 +20,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// use applies middleware to a handler, wrapping in right-to-left order.
-func use(h http.HandlerFunc, mws ...func(http.Handler) http.Handler) http.Handler {
-	return httpkit.Use(h, mws...)
-}
+func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub.EventBus) chi.Router {
+	r := chi.NewRouter()
 
-func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub.EventBus) *http.ServeMux {
-	mux := http.NewServeMux()
+	// Global middleware (must be before any route registration)
+	r.Use(httpkit.SecurityHeaders)
+	r.Use(httpkit.CORSMiddleware)
+	r.Use(metrics.Middleware("forumline_api"))
+
+	// Inject *http.Request into context for all requests — strict server
+	// methods need it for service-key auth and Zitadel header forwarding.
+	r.Use(withHTTPRequest)
 
 	// Services
 	forumSvc := service.NewForumService(s)
@@ -65,110 +72,117 @@ func newRouter(s *store.Store, sseHub *sse.Hub, valkey *redis.Client, bus pubsub
 		},
 	}
 
-	// Middleware
 	authMW := auth.Middleware
-
-	// Rate limiter middleware for webhook endpoints (per-IP, 100 req/min)
 	webhookRL := httpkit.RateLimitMiddleware(httpkit.NewValkeyRateLimiter(valkey, 100, time.Minute))
 
-	// withReq injects the *http.Request into the context for service-key auth endpoints.
-	withReq := withHTTPRequest
+	// ── Public routes (no auth) ──────────────────────────────────────────
 
-	// --- Spec routes via StrictServer ---
+	r.Get("/api/health", w.GetHealth)
+	r.Get("/metrics", metrics.Handler().ServeHTTP)
+	r.Get("/api/forums", w.ListForums)
+	r.Get("/api/forums/tags", w.ListForumTags)
+	r.Post("/api/auth/logout", w.Logout)
 
-	// Health check (no auth)
-	mux.Handle("GET /api/health", withReq(http.HandlerFunc(w.GetHealth)))
+	// ── Authenticated routes ─────────────────────────────────────────────
 
-	// Auth routes
-	mux.Handle("GET /api/auth/session", withReq(use(w.GetSession, authMW)))
-	mux.Handle("POST /api/auth/logout", withReq(http.HandlerFunc(w.Logout)))
+	r.Group(func(r chi.Router) {
+		r.Use(authMW)
 
-	// Identity
-	mux.Handle("GET /api/identity", withReq(use(w.GetIdentity, authMW)))
-	mux.Handle("PUT /api/identity", withReq(use(w.UpdateIdentity, authMW)))
-	mux.Handle("DELETE /api/identity", withReq(use(w.DeleteIdentity, authMW)))
-	mux.Handle("GET /api/profiles/search", withReq(use(w.SearchProfiles, authMW)))
+		// Auth & Identity
+		r.Get("/api/auth/session", w.GetSession)
+		r.Get("/api/identity", w.GetIdentity)
+		r.Put("/api/identity", w.UpdateIdentity)
+		r.Delete("/api/identity", w.DeleteIdentity)
+		r.Get("/api/profiles/search", w.SearchProfiles)
 
-	// Conversations
-	mux.Handle("GET /api/conversations", withReq(use(w.ListConversations, authMW)))
-	mux.Handle("POST /api/conversations", withReq(use(w.CreateGroupConversation, authMW)))
-	mux.Handle("POST /api/conversations/dm", withReq(use(w.GetOrCreateDM, authMW)))
-	mux.Handle("GET /api/conversations/{conversationId}", withReq(use(w.GetConversation, authMW)))
-	mux.Handle("PATCH /api/conversations/{conversationId}", withReq(use(w.UpdateConversation, authMW)))
-	mux.Handle("GET /api/conversations/{conversationId}/messages", withReq(use(w.GetMessages, authMW)))
-	mux.Handle("POST /api/conversations/{conversationId}/messages", withReq(use(w.SendMessage, authMW)))
-	mux.Handle("POST /api/conversations/{conversationId}/read", withReq(use(w.MarkConversationRead, authMW)))
-	mux.Handle("DELETE /api/conversations/{conversationId}/members/me", withReq(use(w.LeaveConversation, authMW)))
+		// Conversations
+		r.Get("/api/conversations", w.ListConversations)
+		r.Post("/api/conversations", w.CreateGroupConversation)
+		r.Post("/api/conversations/dm", w.GetOrCreateDM)
+		r.Get("/api/conversations/{conversationId}", w.GetConversation)
+		r.Patch("/api/conversations/{conversationId}", w.UpdateConversation)
+		r.Get("/api/conversations/{conversationId}/messages", w.GetMessages)
+		r.Post("/api/conversations/{conversationId}/messages", w.SendMessage)
+		r.Post("/api/conversations/{conversationId}/read", w.MarkConversationRead)
+		r.Delete("/api/conversations/{conversationId}/members/me", w.LeaveConversation)
 
-	// Forums
-	mux.Handle("GET /api/forums", withReq(http.HandlerFunc(w.ListForums)))
-	mux.Handle("GET /api/forums/tags", withReq(http.HandlerFunc(w.ListForumTags)))
-	mux.Handle("GET /api/forums/recommended", withReq(use(w.GetRecommendedForums, authMW)))
-	mux.Handle("GET /api/forums/owned", withReq(use(w.GetOwnedForums, authMW)))
-	mux.Handle("POST /api/forums", withReq(use(w.RegisterForum, authMW)))
-	mux.Handle("DELETE /api/forums", withReq(use(w.DeleteForum, authMW)))
+		// Forums (auth-required)
+		r.Get("/api/forums/recommended", w.GetRecommendedForums)
+		r.Get("/api/forums/owned", w.GetOwnedForums)
+		r.Post("/api/forums", w.RegisterForum)
+		r.Delete("/api/forums", w.DeleteForum)
 
-	// Memberships
-	mux.Handle("GET /api/memberships", withReq(use(w.GetMemberships, authMW)))
-	mux.Handle("POST /api/memberships", withReq(use(w.UpdateMembershipAuth, authMW)))
-	mux.Handle("PUT /api/memberships", withReq(use(w.ToggleMembershipMute, authMW)))
-	mux.Handle("POST /api/memberships/join", withReq(use(w.JoinForum, authMW)))
-	mux.Handle("DELETE /api/memberships", withReq(use(w.LeaveForum, authMW)))
+		// Memberships
+		r.Get("/api/memberships", w.GetMemberships)
+		r.Post("/api/memberships", w.UpdateMembershipAuth)
+		r.Put("/api/memberships", w.ToggleMembershipMute)
+		r.Post("/api/memberships/join", w.JoinForum)
+		r.Delete("/api/memberships", w.LeaveForum)
 
-	// Notifications
-	mux.Handle("GET /api/notifications", withReq(use(w.GetNotifications, authMW)))
-	mux.Handle("GET /api/notifications/unread", withReq(use(w.GetUnreadCount, authMW)))
-	mux.Handle("POST /api/notifications/read", withReq(use(w.MarkNotificationRead, authMW)))
-	mux.Handle("POST /api/notifications/read-all", withReq(use(w.MarkAllNotificationsRead, authMW)))
+		// Notifications
+		r.Get("/api/notifications", w.GetNotifications)
+		r.Get("/api/notifications/unread", w.GetUnreadCount)
+		r.Post("/api/notifications/read", w.MarkNotificationRead)
+		r.Post("/api/notifications/read-all", w.MarkAllNotificationsRead)
 
-	// Activity
-	mux.Handle("GET /api/activity", withReq(use(w.GetActivity, authMW)))
+		// Activity
+		r.Get("/api/activity", w.GetActivity)
 
-	// Presence
-	mux.Handle("POST /api/presence/heartbeat", withReq(use(w.PresenceHeartbeat, authMW)))
-	mux.Handle("GET /api/presence/status", withReq(use(w.GetPresenceStatus, authMW)))
+		// Presence
+		r.Post("/api/presence/heartbeat", w.PresenceHeartbeat)
+		r.Get("/api/presence/status", w.GetPresenceStatus)
 
-	// Calls
-	mux.Handle("POST /api/calls", withReq(use(w.InitiateCall, authMW)))
-	mux.Handle("POST /api/calls/{callId}/respond", withReq(use(w.RespondToCall, authMW)))
-	mux.Handle("POST /api/calls/{callId}/end", withReq(use(w.EndCall, authMW)))
-	mux.Handle("POST /api/calls/{callId}/token", withReq(use(w.GetCallToken, authMW)))
+		// Calls
+		r.Post("/api/calls", w.InitiateCall)
+		r.Post("/api/calls/{callId}/respond", w.RespondToCall)
+		r.Post("/api/calls/{callId}/end", w.EndCall)
+		r.Post("/api/calls/{callId}/token", w.GetCallToken)
 
-	// Push subscriptions (subscribe/unsubscribe)
-	mux.Handle("POST /api/push", withReq(use(w.ManagePushSubscription, authMW)))
+		// Push subscriptions
+		r.Post("/api/push", w.ManagePushSubscription)
+	})
 
-	// Webhooks (service key auth checked inside StrictServer, rate-limited)
-	mux.Handle("POST /api/webhooks/notification", withReq(use(w.WebhookNotification, webhookRL)))
-	mux.Handle("POST /api/webhooks/notifications", withReq(use(w.WebhookNotificationBatch, webhookRL)))
+	// ── Webhooks (rate-limited, service key auth inside handler) ─────────
 
-	// --- Routes NOT in the spec ---
+	r.Group(func(r chi.Router) {
+		r.Use(webhookRL)
+		r.Post("/api/webhooks/notification", w.WebhookNotification)
+		r.Post("/api/webhooks/notifications", w.WebhookNotificationBatch)
+	})
 
-	// Events stream (SSE — direct handler, bypasses strict server for HTTP flushing)
+	// ── SSE stream (auth, direct handler — bypasses strict server for HTTP flushing) ──
+
 	eventsH := handler.NewEventsHandler(sseHub)
-	mux.Handle("GET /api/events/stream", use(eventsH.HandleStream, authMW))
+	r.With(authMW).Get("/api/events/stream", eventsH.HandleStream)
 
-	// Forum admin (service key auth, not in spec)
+	// ── Forum admin (service key auth, not in spec) ─────────────────────
+
 	forumH := handler.NewForumHandler(s, forumSvc)
-	mux.HandleFunc("PUT /api/forums/screenshot", forumH.HandleUpdateScreenshot)
-	mux.HandleFunc("PUT /api/forums/icon", forumH.HandleUpdateIcon)
-	mux.HandleFunc("PUT /api/forums/health", forumH.HandleUpdateHealth)
-	mux.HandleFunc("GET /api/forums/all", forumH.HandleListAll)
+	r.Put("/api/forums/screenshot", forumH.HandleUpdateScreenshot)
+	r.Put("/api/forums/icon", forumH.HandleUpdateIcon)
+	r.Put("/api/forums/health", forumH.HandleUpdateHealth)
+	r.Get("/api/forums/all", forumH.HandleListAll)
 
-	// Push (not in spec — config is public, notify uses service key auth)
+	// ── Push (not in spec — config is public, notify uses service key auth) ──
+
 	pushH := handler.NewPushHandler(s, pushSvc)
-	mux.HandleFunc("GET /api/push/config", pushH.HandleConfig)
-	mux.HandleFunc("POST /api/push/notify", pushH.HandleNotify)
+	r.Get("/api/push/config", pushH.HandleConfig)
+	r.Post("/api/push/notify", pushH.HandleNotify)
 
-	// Legacy /api/dms/* routes (backward compatibility)
+	// ── Legacy /api/dms/* routes (backward compatibility) ───────────────
+
 	convoH := handler.NewConversationHandler(convoSvc, s)
-	mux.Handle("GET /api/dms", use(convoH.HandleList, authMW))
-	mux.Handle("GET /api/dms/{userId}", use(convoH.HandleLegacyGetMessages, authMW))
-	mux.Handle("POST /api/dms/{userId}", use(convoH.HandleLegacySendMessage, authMW,
-		httpkit.UserRateLimitMiddleware(dmRL)))
-	mux.Handle("POST /api/dms/{userId}/read", use(convoH.HandleLegacyMarkRead, authMW))
+	r.Group(func(r chi.Router) {
+		r.Use(authMW)
+		r.Get("/api/dms", convoH.HandleList)
+		r.Get("/api/dms/{userId}", convoH.HandleLegacyGetMessages)
+		r.With(httpkit.UserRateLimitMiddleware(dmRL)).Post("/api/dms/{userId}", convoH.HandleLegacySendMessage)
+		r.Post("/api/dms/{userId}/read", convoH.HandleLegacyMarkRead)
+	})
 
-	// Internal Connect RPC services (service-to-service, not browser-facing)
-	mountHubService(mux, forumSvc)
+	// ── Internal Connect RPC services (service-to-service, not browser-facing) ──
 
-	return mux
+	mountHubService(r, forumSvc)
+
+	return r
 }

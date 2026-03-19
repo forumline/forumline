@@ -21,8 +21,8 @@ import (
 
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/db"
-	"github.com/forumline/forumline/backend/httpkit"
-	"github.com/forumline/forumline/backend/metrics"
+
+
 	"github.com/forumline/forumline/backend/pubsub"
 	"github.com/forumline/forumline/backend/sse"
 	"github.com/forumline/forumline/backend/valkey"
@@ -134,18 +134,11 @@ func main() {
 
 	log.Println("realtime: Watermill event bus active")
 
-	// Router
+	// Router (chi) — global middleware is applied inside newRouter()
 	router := newRouter(s, sseHub, valkeyClient, eventBus)
-	router.Handle("GET /metrics", metrics.Handler())
-
-	// Wrap with global middleware
-	var handler http.Handler = router
-	handler = metrics.Middleware("forumline_api")(handler)
-	handler = httpkit.CORSMiddleware(handler)
-	handler = httpkit.SecurityHeaders(handler)
 
 	// Static file serving (SPA fallback)
-	handler = spaHandler(handler)
+	handler := spaHandler(router)
 
 	port := os.Getenv("PORT")
 	if port == "" {

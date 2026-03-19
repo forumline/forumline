@@ -33,6 +33,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/forumline/forumline/backend/auth"
 	"github.com/forumline/forumline/backend/db"
 	"github.com/forumline/forumline/backend/httpkit"
@@ -154,9 +156,16 @@ func main() {
 		SiteCache:        siteCache,
 	}
 
-	// Build the main router.
-	// Platform API routes are served on all domains (filtered by path prefix).
-	// Forum routes are served with tenant middleware (Host-based routing).
+	// Build the main router (chi for global middleware, stdlib mux for routes).
+	r := chi.NewRouter()
+
+	// Global middleware
+	r.Use(httpkit.SecurityHeaders)
+	r.Use(httpkit.CORSMiddleware)
+	r.Use(metrics.Middleware("hosted"))
+
+	// All route registrations use a stdlib mux (platform routes, Connect RPC,
+	// and oapi-codegen all expect *http.ServeMux patterns like "GET /path").
 	mux := http.NewServeMux()
 
 	// Prometheus metrics (no tenant context)
@@ -170,7 +179,6 @@ func main() {
 	})
 
 	// Platform API endpoints (no tenant context needed)
-	// Handlers directly implements oapi.ServerInterface — no adapter needed.
 	plat.RegisterRoutes(mux, platformHandlers)
 
 	// Internal Connect RPC services (service-to-service, not browser-facing)
@@ -253,12 +261,12 @@ func main() {
 		getForumRouter(tenant).ServeHTTP(w, r)
 	})))
 
-	// Global middleware
-	var handler http.Handler = mux
-	handler = metrics.Middleware("hosted")(handler)
-	handler = httpkit.CORSMiddleware(handler)
-	handler = httpkit.SecurityHeaders(handler)
-	handler = spaHandler(handler, store, siteCache)
+	// Mount the stdlib mux inside the chi router (catches all paths)
+	r.Handle("/{rest...}", mux)
+	r.Handle("/", mux)
+
+	// SPA handler wraps the chi router
+	handler := spaHandler(r, store, siteCache)
 
 	port := os.Getenv("PORT")
 	if port == "" {
